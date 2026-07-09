@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use App\Libraries\WhatsAppMetaApi;
 use App\Models\WaInboxMessage;
 use App\Models\WhatsappSetting;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -69,21 +71,85 @@ class WhatsAppNotifier
 
         $api = WhatsAppGatewayResolver::make($gateway);
         if (WhatsAppGatewayResolver::isMeta($gateway)) {
+            $templateName = self::templateName($event);
             $response = $api->sendTemplate(
                 WhatsAppGatewayResolver::sender($gateway),
                 $number,
-                self::templateName($event),
+                $templateName,
                 array_values($parameters),
                 self::templateLanguage($event)
             );
 
-            // Simpan isi pesan versi teks (bukan payload template) agar terbaca di inbox.
-            self::logOutbound($gateway, $number, $message, 'template:'.self::templateName($event), $response);
+            // Catat ke inbox dengan teks template Meta asli (parameter sudah terisi)
+            // agar tampilan inbox = pesan yang benar-benar diterima pelanggan.
+            $inboxBody = self::renderTemplateBody($gateway, $templateName, array_values($parameters)) ?? $message;
+            self::logOutbound($gateway, $number, $inboxBody, 'template:'.$templateName, $response);
 
             return $response;
         }
 
         return $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $number, $message);
+    }
+
+    /**
+     * Render body template Meta dengan parameter terisi, untuk dicatat ke inbox.
+     * Definisi template diambil dari Graph API dan di-cache 6 jam agar tidak
+     * memanggil API tiap kirim. Gagal ambil (offline/token) -> null, pemanggil
+     * fallback ke teks pesan lama.
+     */
+    private static function renderTemplateBody(WhatsappSetting $gateway, string $templateName, array $parameters): ?string
+    {
+        try {
+            $body = self::templateBodyText($gateway, $templateName);
+            if ($body === null) {
+                return null;
+            }
+
+            foreach ($parameters as $i => $value) {
+                $body = str_replace('{{'.($i + 1).'}}', (string) $value, $body);
+            }
+
+            return $body;
+        } catch (\Throwable $e) {
+            Log::warning("Gagal render template {$templateName} untuk inbox: {$e->getMessage()}");
+
+            return null;
+        }
+    }
+
+    private static function templateBodyText(WhatsappSetting $gateway, string $templateName): ?string
+    {
+        $cacheKey = 'wa_meta_tpl_body:'.$gateway->id.':'.$templateName;
+
+        $body = Cache::remember($cacheKey, now()->addHours(6), function () use ($gateway, $templateName) {
+            $wabaId = WhatsAppGatewayResolver::metaWabaId($gateway);
+            if ($wabaId === '') {
+                return '';
+            }
+
+            $result = WhatsAppGatewayResolver::make($gateway)->templates($wabaId);
+            foreach ((array) data_get($result, 'data', []) as $tpl) {
+                if (($tpl['name'] ?? '') !== $templateName) {
+                    continue;
+                }
+                foreach ((array) ($tpl['components'] ?? []) as $component) {
+                    if (strtoupper((string) ($component['type'] ?? '')) === 'BODY') {
+                        return (string) ($component['text'] ?? '');
+                    }
+                }
+            }
+
+            // Template tidak ditemukan di Meta -> coba definisi bawaan aplikasi.
+            foreach (WhatsAppMetaApi::defaultTemplateDefinitions() as $def) {
+                if (($def['name'] ?? '') === $templateName) {
+                    return (string) ($def['body'] ?? '');
+                }
+            }
+
+            return '';
+        });
+
+        return $body !== '' ? $body : null;
     }
 
     /**
