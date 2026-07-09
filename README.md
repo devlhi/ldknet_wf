@@ -133,6 +133,29 @@ php artisan storage:link
 
 Saat ini upload logo **tidak** memakai disk itu, jadi `storage:link` opsional. Jalankan hanya bila nanti menambah fitur upload yang pakai `Storage::disk('public')`. Symlink ini otomatis di-ignore git (`/public/storage` sudah ada di `.gitignore`), jadi wajib dijalankan ulang di tiap server baru bila dipakai.
 
+## Export Laporan (Excel & PDF)
+
+### Excel
+
+File Excel **tidak disimpan di server**. Saat tombol export ditekan, file di-generate dengan PhpSpreadsheet lalu langsung di-*stream* sebagai unduhan (`response()->streamDownload()` → `php://output`), jadi file tersimpan di folder **Downloads browser** masing-masing user, bukan di folder aplikasi.
+
+Karena tidak menulis ke disk, tidak perlu folder khusus atau izin tulis tambahan untuk export. Nama file yang dihasilkan:
+
+| Menu | Nama file |
+| --- | --- |
+| Laporan Tagihan | `laporan_tagihan.xlsx` |
+| Laporan Arus Kas | `laporan_arus_kas.xlsx` |
+| Data Pelanggan | `data_pelanggan.xlsx` |
+| Pelanggan Baru | `data_pelanggan_baru.xlsx` |
+
+> Nilai sel ditulis sebagai teks eksplisit (`setCellValueExplicit` TYPE_STRING) untuk mencegah formula/CSV injection.
+
+### PDF
+
+Tidak ada export PDF sisi server. Beberapa tombol di halaman laporan memakai ikon `fa-file-pdf`, tetapi fungsinya tetap **export Excel** (`.xlsx`) — ikon saja, bukan output PDF.
+
+Satu-satunya keluaran PDF adalah **cetak invoice pelanggan** ([guest/invoice/detail.blade.php](resources/views/guest/invoice/detail.blade.php)) yang memakai `window.print()`. User bisa memilih **Save as PDF** dari dialog cetak browser; hasilnya juga tidak disimpan di server.
+
 ## Konfigurasi Payment Gateway
 
 Setelah login sebagai admin, buka menu **Payment Gateway**:
