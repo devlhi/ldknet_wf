@@ -113,6 +113,82 @@ php artisan serve
 
 Buka `http://localhost:8000` (atau domain Laragon `http://landaknet-laravel.test`).
 
+## Deployment di cPanel / Server Production
+
+Panduan ini berdasarkan deployment nyata di server cPanel (AlmaLinux/CentOS). Masalah paling umum: **403 Forbidden — "Server unable to read htaccess file"** karena file di-clone sebagai `root` sehingga tidak bisa dibaca web server.
+
+### 1. Clone & install (sebagai root atau via SSH)
+
+```bash
+cd /home/NAMAUSER
+git clone https://github.com/devlhi/ldknet_wf.git public_html
+cd public_html
+composer install --no-dev --optimize-autoloader
+cp .env.example .env
+php artisan key:generate
+# edit .env: APP_URL, DB_*, APP_ENV=production, APP_DEBUG=false
+php artisan migrate        # aman — hanya menambah tabel baru
+```
+
+> **npm/Node.js TIDAK dibutuhkan** — lewati `npm install` / `npm run build` (lihat catatan di atas).
+
+### 2. Perbaiki ownership & permission (WAJIB bila clone sebagai root)
+
+Di cPanel, semua file **harus dimiliki user akun cPanel** (bukan `root`, bukan `www-data`):
+
+```bash
+cd /home/NAMAUSER
+
+chown -R NAMAUSER:NAMAUSER public_html
+find public_html -type d -exec chmod 755 {} \;
+find public_html -type f -exec chmod 644 {} \;
+chmod -R 775 public_html/storage public_html/bootstrap/cache
+mkdir -p public_html/public/data/absensi
+chown -R NAMAUSER:NAMAUSER public_html/public/data/absensi
+chmod -R 775 public_html/public/assets/logo public_html/public/data/absensi
+```
+
+> Ganti `NAMAUSER` dengan user akun cPanel (contoh: `landakne`).
+> Folder `public/data/absensi` tidak ikut di git, jadi wajib dibuat manual (`mkdir -p`).
+
+### 3. Arahkan document root ke folder `public/`
+
+**Opsi A (disarankan)** — ubah document root domain di WHM/cPanel ke `/home/NAMAUSER/public_html/public`.
+
+**Opsi B** — bila document root tidak bisa diubah, buat file `.htaccess` di root `public_html`:
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+```
+
+```bash
+chown NAMAUSER:NAMAUSER public_html/.htaccess
+chmod 644 public_html/.htaccess
+```
+
+### 4. Bersihkan cache & verifikasi
+
+```bash
+su NAMAUSER -c "cd /home/NAMAUSER/public_html && php artisan optimize:clear"
+```
+
+Buka domain di browser — halaman login harus tampil. Bila masih error, cek `storage/logs/laravel.log`.
+
+### Update aplikasi di production
+
+```bash
+cd /home/NAMAUSER/public_html
+git pull
+composer install --no-dev --optimize-autoloader   # bila composer.lock berubah
+php artisan migrate                                # aman, hanya menambah
+php artisan optimize:clear
+chown -R NAMAUSER:NAMAUSER .                       # bila pull dijalankan sebagai root
+```
+
 ## Upload Logo & Storage Symlink
 
 **Upload logo TIDAK butuh symlink.** Logo yang diupload lewat menu **Pengaturan** disimpan langsung ke folder publik `public/assets/logo/` (lihat `SettingController.php`), yang sudah bisa diakses web. Jadi setelah clone, upload logo langsung jalan tanpa setup tambahan.
