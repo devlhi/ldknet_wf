@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guard: skip bila tabel sudah ada (DB legacy / rename file migrasi).
+        if (Schema::hasTable('nms_devices')) {
+            return;
+        }
+
         Schema::create('nms_devices', function (Blueprint $table) {
             $table->id();
             $table->string('nama', 100);

@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guard: skip bila tabel sudah ada (DB legacy / rename file migrasi).
+        if (Schema::hasTable('nms_sla_settings')) {
+            return;
+        }
+
         Schema::create('nms_sla_settings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('device_id')->constrained('nms_devices')->cascadeOnDelete();

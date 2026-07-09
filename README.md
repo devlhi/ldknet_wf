@@ -9,7 +9,7 @@ Aplikasi billing & manajemen pelanggan ISP berbasis **Laravel 12** — migrasi d
 | PHP | 8.2+ |
 | Composer | 2.x |
 | MySQL / MariaDB | 5.7+ / 10.4+ |
-| Node.js & NPM | 18+ (untuk build asset Vite) |
+| Node.js & NPM | 18+ — **opsional**, hanya untuk pengembangan asset Vite. **Tidak dibutuhkan di production** |
 | Ekstensi PHP | `curl`, `mbstring`, `openssl`, `pdo_mysql`, `bcmath`, `gd`, `zip` |
 
 > Disarankan pakai **Laragon** (Windows) atau **Valet/Sail** — sudah menyediakan PHP + MySQL + Composer.
@@ -31,7 +31,13 @@ composer install
 
 > `vendor/` sengaja tidak ikut di repo, jadi langkah ini wajib.
 
-### 3. Install & build asset frontend
+### 3. Install & build asset frontend (OPSIONAL — bisa dilewati di production)
+
+Semua halaman aplikasi (admin, server, customer, guest) memakai asset statis yang **sudah jadi** di `public/assets/` — tidak perlu di-build. Vite hanya dipakai oleh halaman `welcome.blade.php` bawaan Laravel yang **tidak punya route** (tidak pernah tampil).
+
+Jadi di **production tanpa Node.js/npm, langkah ini boleh dilewati** — aplikasi tetap jalan penuh.
+
+Jalankan hanya jika mengembangkan asset Vite secara lokal:
 
 ```bash
 npm install

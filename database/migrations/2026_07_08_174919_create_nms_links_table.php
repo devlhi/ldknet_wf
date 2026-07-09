@@ -8,6 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guard: skip bila tabel sudah ada. Catatan: bila migrasi ini pernah
+        // GAGAL di tengah (tabel terbentuk tanpa foreign key), hapus dulu
+        // tabel kosongnya: DROP TABLE nms_links; lalu jalankan ulang migrate.
+        if (Schema::hasTable('nms_links')) {
+            return;
+        }
+
         Schema::create('nms_links', function (Blueprint $table) {
             $table->id();
             $table->foreignId('device_a_id')->constrained('nms_devices')->cascadeOnDelete();
