@@ -125,6 +125,16 @@ chmod -R 775 public/assets/logo
 chown -R www-data:www-data public/assets/logo   # sesuaikan user web server
 ```
 
+> **User web server berbeda per distro/panel** — `www-data` hanya ada di Debian/Ubuntu.
+> Cek user yang benar dengan: `ps aux | grep -E 'nginx|httpd|php-fpm' | grep -v grep | awk '{print $1}' | sort -u`
+>
+> | Lingkungan | User umum |
+> |---|---|
+> | Debian / Ubuntu | `www-data` |
+> | CentOS / RHEL / AlmaLinux | `apache` atau `nginx` |
+> | cPanel / WHM | user akun cPanel (mis. `namauser:namauser`) |
+> | aaPanel / BT Panel | `www` |
+
 > Di Windows/Laragon biasanya sudah writable, tidak perlu chmod.
 
 ### Kapan `storage:link` diperlukan?
@@ -158,7 +168,7 @@ Di Linux/production:
 ```bash
 mkdir -p public/data/absensi
 chmod -R 775 public/data/absensi
-chown -R www-data:www-data public/data/absensi   # sesuaikan user web server
+chown -R www-data:www-data public/data/absensi   # sesuaikan user web server (lihat tabel di atas)
 ```
 
 Fitur absensi saat ini **tidak membutuhkan** `php artisan storage:link`, karena file selfie disimpan langsung ke `public/data/absensi`. Jika nanti upload absensi dipindah ke `storage/app/public/absensi`, barulah jalankan:
