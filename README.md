@@ -72,7 +72,32 @@ Buat database kosong bernama `landaknet` (bila belum ada), lalu:
 php artisan migrate
 ```
 
-Migrasi otomatis melewati tabel yang sudah ada di DB legacy, jadi aman dijalankan pada database yang sudah terisi.
+Migrasi otomatis melewati tabel yang sudah ada di DB legacy (guard `hasTable`), jadi aman dijalankan pada database yang sudah terisi — `migrate` hanya **menambah** tabel baru, tidak menimpa/menghapus data lama.
+
+### ⚠️ PERINGATAN: Migrasi di Database Production
+
+`php artisan migrate` **aman** (hanya menambah tabel baru). Tapi perintah berikut **MENGHAPUS DATA** — jangan pernah dijalankan di production:
+
+| Perintah | Efek |
+|----------|------|
+| `migrate:fresh` | DROP semua tabel lalu buat ulang → **data hilang total** |
+| `migrate:refresh` | rollback semua + migrate ulang → data hilang |
+| `migrate:reset` | rollback semua (semua `down()` = DROP tabel) |
+| `migrate:rollback` | jalankan `down()` terakhir → DROP tabel |
+| `db:wipe` | hapus seluruh isi database |
+
+**Prosedur aman sebelum migrate di production:**
+
+```bash
+# 1. Backup database dulu (WAJIB)
+mysqldump -u root -p landaknet > backup_landaknet_$(date +%Y%m%d).sql
+
+# 2. Dry-run: lihat SQL yang AKAN jalan tanpa mengeksekusi
+php artisan migrate --pretend
+
+# 3. Baru jalankan
+php artisan migrate
+```
 
 ### 6. Jalankan aplikasi
 
