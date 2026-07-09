@@ -93,6 +93,7 @@
                                                             <option disabled value="" selected>Pilih Salah satu</option>
                                                             <option value="admin">Admin</option>
                                                             <option value="finance">Finance </option>
+                                                            <option value="technician">Technician (Karyawan)</option>
                                                         </select>
                                                     </div>
                                                 </div>

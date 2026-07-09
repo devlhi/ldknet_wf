@@ -237,3 +237,81 @@ body.modal-open .card > .card-title {
 .vertical-collpsed .vertical-menu #sidebar-menu ul li a {
     margin: 1px .4rem;
 }
+
+/* =========================================================
+   Spinner loading tabel — GLOBAL
+   Dipakai semua halaman ber-DataTables & tabel AJAX manual.
+   Gaya sama dengan halaman Customer: overlay kecil di area
+   tabel (bukan layar penuh) + ring biru modern.
+   ========================================================= */
+
+/* Ring spinner reusable */
+.an-dt-ring {
+    display: inline-block;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 3px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-right-color: #3b82f6;
+    animation: anDtSpin .8s linear infinite;
+    vertical-align: middle;
+}
+.an-dt-ring.sm { width: 18px; height: 18px; border-width: 2px; }
+.an-dt-ring.lg { width: 34px; height: 34px; border-width: 4px; }
+
+@keyframes anDtSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Overlay bawaan DataTables (processing:true) untuk SEMUA tabel */
+.dataTables_wrapper {
+    position: relative;
+}
+.dataTables_wrapper .dataTables_processing {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, .72);
+    backdrop-filter: blur(1px);
+    color: #334155;
+    font-weight: 600;
+    font-size: .9rem;
+    z-index: 5;
+    box-shadow: none;
+    border: 0;
+}
+
+/* Overlay reusable untuk tabel AJAX manual (non-DataTables /
+   client-side rows.add). Dipasang via helper JS anTableLoading(). */
+.an-table-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, .72);
+    backdrop-filter: blur(1px);
+    color: #334155;
+    font-weight: 600;
+    font-size: .9rem;
+    z-index: 6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .an-dt-ring { animation: none; }
+}

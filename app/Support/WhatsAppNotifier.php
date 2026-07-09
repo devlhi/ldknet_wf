@@ -76,7 +76,9 @@ class WhatsAppNotifier
         if ($gateway && WhatsAppGatewayResolver::isMeta($gateway)) {
             $templates = WhatsAppGatewayResolver::metaSettings($gateway)['templates'] ?? [];
 
-            return (string) ($templates[$event] ?? $event);
+            // Event yang belum dipetakan di setting gateway (mis. isolir/buka_isolir)
+            // fallback ke nama template default, bukan ke nama event mentah.
+            return (string) ($templates[$event] ?? self::DEFAULT_TEMPLATE_NAMES[$event] ?? $event);
         }
 
         return self::DEFAULT_TEMPLATE_NAMES[$event] ?? $event;

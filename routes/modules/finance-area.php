@@ -13,6 +13,7 @@ Route::middleware(['auth', 'level:finance'])->prefix('finance')->group(function 
     Route::get('/', [AdminController::class, 'index']);
     Route::get('dashboard', [AdminController::class, 'index']);
     Route::get('dashboard/transactions', [AdminController::class, 'transactions']);
+    Route::get('dashboard/mikrotik', [AdminController::class, 'mikrotikStats']);
 
     Route::get('cash-flows/category', [FinanceController::class, 'cashflowsCategory']);
     Route::post('cash-flows/category/add', [FinanceController::class, 'cashflowsCategoryAdd']);

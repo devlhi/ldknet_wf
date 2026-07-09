@@ -236,7 +236,23 @@
             refreshConversations(data.conversations || []);
             updateWindowStatus(data.can_reply_text);
         })
-        .catch(function () {});
+        .catch(function () { setConnStatus(false); });
+    }
+
+    function setConnStatus(online) {
+        var dot = document.getElementById('metaConnDot');
+        var text = document.getElementById('metaConnText');
+        var wrap = document.getElementById('metaConnStatus');
+        if (!dot || !text || !wrap) return;
+        if (online) {
+            dot.classList.add('online'); dot.classList.remove('offline');
+            wrap.classList.add('text-success'); wrap.classList.remove('text-danger');
+            text.textContent = 'Terhubung ke Meta Webhook';
+        } else {
+            dot.classList.add('offline'); dot.classList.remove('online');
+            wrap.classList.add('text-danger'); wrap.classList.remove('text-success');
+            text.textContent = 'Koneksi terputus';
+        }
     }
 
     function updateWindowStatus(canReply) {

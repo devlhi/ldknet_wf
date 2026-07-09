@@ -175,7 +175,9 @@
         $(document).ready(function() {
             // Inisialisasi datatables saat halaman dimuat pertama kali
             var table = $('#datatable-invoices').DataTable({
+                processing: true,
                 language: {
+                    processing: '<span class="an-dt-ring"></span> Memuat...',
                     emptyTable: 'Tidak ada data invoice',
                     zeroRecords: 'Data tidak ditemukan',
                     info: 'Menampilkan _START_ - _END_ dari _TOTAL_ invoice',
@@ -273,7 +275,13 @@
                         render: function(data, type, row) {
 
                             if (row.status === 'Unpaid') {
-                                return '<a href="' + base_url + 'admin/finance/invoice/edit/' + row.code + '" class="btn btn-sm btn-primary"><i class="uil uil-edit"></i> <strong>Edit Data</strong></a>';
+                                var confirmUrl = base_url + 'admin/finance/invoice/edit/' + row.code;
+                                var payUrl = base_url + 'admin/finance/invoice/bayar/' + row.code;
+
+                                return '<div class="d-flex gap-1 flex-wrap">' +
+                                    '<a href="' + confirmUrl + '" class="btn btn-sm btn-warning"><i class="uil uil-check-circle"></i> <strong>Konfirmasi Pembayaran</strong></a>' +
+                                    '<a href="' + payUrl + '" class="btn btn-sm btn-primary"><i class="uil uil-credit-card"></i> <strong>Bayar Online</strong></a>' +
+                                    '</div>';
                             } else {
                                 return ''; // atau kembalikan string kosong jika tidak ada tindakan untuk status lain
                             }
@@ -283,16 +291,14 @@
                 ]
             });
 
-            var preloader = $('#preloader');
+            // Spinner lokal tabel, sama seperti halaman Customer (bukan preloader layar penuh).
+            function tableLoading(show) {
+                if (typeof table.processing === 'function') {
+                    table.processing(show);
+                    return;
+                }
 
-            // Fungsi untuk menampilkan loading screen
-            function showLoading() {
-                preloader.show();
-            }
-
-            // Fungsi untuk menyembunyikan spinner loading
-            function hideLoading() {
-                preloader.hide();
+                $('#datatable-invoices_processing').css('display', show ? 'flex' : 'none');
             }
 
             // Fungsi untuk mengambil data tanpa filter saat halaman dimuat pertama kali
@@ -301,12 +307,18 @@
                     url: '{{ url('finance/invoice/filter/getdata') }}',
                     type: 'POST',
                     dataType: 'json',
+                    beforeSend: function() {
+                        tableLoading(true);
+                    },
                     success: function(data) {
                         // Isi tabel dengan data tanpa filter
                         table.rows.add(data).draw();
                     },
                     error: function(xhr, status, error) {
                         console.error(error);
+                    },
+                    complete: function() {
+                        tableLoading(false);
                     }
                 });
             }

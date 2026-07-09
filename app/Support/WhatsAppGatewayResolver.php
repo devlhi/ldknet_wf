@@ -134,6 +134,8 @@ class WhatsAppGatewayResolver
                 'pengingat' => 'notif_pengingat',
                 'terbayar' => 'notif_tagihan_terbayar',
                 'pelanggan_baru' => 'notif_daftar_berhasil',
+                'isolir' => 'notif_isolir',
+                'buka_isolir' => 'notif_buka_isolir',
             ],
         ];
     }

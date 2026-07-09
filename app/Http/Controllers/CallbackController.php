@@ -80,9 +80,13 @@ class CallbackController extends Controller
         $order = Order::where('idpel', $invoice->idpel)->first();
         $tgl2 = date('Y-m-d', strtotime('+1 month', strtotime((string) $invoice->expdate)));
 
+        // Tangkap status Isolir sebelum transaksi mengubahnya ke Active, dipakai
+        // untuk memutuskan kirim notifikasi "buka isolir" setelah pembayaran.
+        $wasIsolir = $order && $order->status === 'Isolir';
+
         // Buka isolir di router bila pelanggan sedang Isolir (port dari CI4:
         // pembayaran online sebelumnya tidak mengembalikan profil normal).
-        if ($order && $order->status === 'Isolir') {
+        if ($wasIsolir) {
             $this->reconnectRouter($order, $invoice->package);
         }
 
@@ -124,7 +128,7 @@ class CallbackController extends Controller
         });
 
         if ($committed) {
-            $this->sendPaidNotification($invoice, $order);
+            $this->sendPaidNotification($invoice, $order, $wasIsolir);
         }
 
         return response()->json(['success' => true]);
@@ -170,7 +174,11 @@ class CallbackController extends Controller
         $order = Order::where('idpel', $invoice->idpel)->first();
         $tgl2 = date('Y-m-d', strtotime('+1 month', strtotime((string) $invoice->expdate)));
 
-        if ($order && $order->status === 'Isolir') {
+        // Tangkap status Isolir sebelum transaksi mengubahnya ke Active, dipakai
+        // untuk memutuskan kirim notifikasi "buka isolir" setelah pembayaran.
+        $wasIsolir = $order && $order->status === 'Isolir';
+
+        if ($wasIsolir) {
             $this->reconnectRouter($order, $invoice->package);
         }
 
@@ -208,7 +216,7 @@ class CallbackController extends Controller
         });
 
         if ($committed) {
-            $this->sendPaidNotification($invoice, $order);
+            $this->sendPaidNotification($invoice, $order, $wasIsolir);
         }
 
         return response('SUCCESS', 200);
@@ -288,7 +296,7 @@ class CallbackController extends Controller
      * Kirim notifikasi "tagihan terbayar" via WhatsApp + email Brevo. Semua
      * dibungkus try/catch agar kegagalan notif tidak mempengaruhi status callback.
      */
-    private function sendPaidNotification(Invoice $invoice, ?Order $order): void
+    private function sendPaidNotification(Invoice $invoice, ?Order $order, bool $wasIsolir = false): void
     {
         $template = TemplateMessage::all()->last();
         $message = $template->notif_tagihan_terbayar ?? '';
@@ -297,6 +305,10 @@ class CallbackController extends Controller
 
         $idpel = $invoice->idpel;
         $code = $invoice->code;
+        // Template Meta notif_tagihan_terbayar butuh 4 parameter [id_pelanggan, no_invoice, link, paket];
+        // paket diambil dari invoice (fallback order->paket) agar jumlah parameter cocok — Meta menolak
+        // pesan bila jumlahnya tidak sama dengan definisi template.
+        $package = $invoice->package ?: ($order->paket ?? '-');
 
         $message = str_replace(['{id_pelanggan}', '{nomor_invoice}', '{link_web}'], [$idpel, $code, $baseUrl], $message);
         $pesanemail = str_replace(['{id_pelanggan}', '{nomor_invoice}', '{link_web}'], [$idpel, $code, $baseUrl], $pesanemail);
@@ -304,9 +316,26 @@ class CallbackController extends Controller
         $nomor = $order->nomor ?? '';
         if ($nomor !== '') {
             try {
-                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomor, $message, [$idpel, $code, $baseUrl]);
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomor, $message, [$idpel, $code, $baseUrl, $package]);
             } catch (\Throwable $e) {
                 Log::warning("Gagal kirim WhatsApp terbayar (callback) #{$code} ({$idpel}): {$e->getMessage()}");
+            }
+
+            if ($wasIsolir) {
+                try {
+                    $nama = $order->nama ?? $invoice->nama;
+                    $bukaMessage = "Layanan Internet Anda Telah Aktif Kembali\n\nNama: {$nama}\nID Pelanggan: {$idpel}\nPaket: {$package}\nTerima kasih atas pembayaran Anda.\nLink: {$baseUrl}\n\nSalam Hangat\n\nANNORTY NET";
+
+                    // Template Meta notif_buka_isolir: [nama, id_pelanggan, paket, link]
+                    WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_BUKA_ISOLIR, $nomor, $bukaMessage, [
+                        $nama,
+                        $idpel,
+                        $package,
+                        $baseUrl,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("Gagal kirim WhatsApp buka isolir (callback) #{$code} ({$idpel}): {$e->getMessage()}");
+                }
             }
         }
 

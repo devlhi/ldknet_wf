@@ -54,7 +54,7 @@ class WhatsAppInboxController extends Controller
             'messages' => $messages,
             'customer' => $customer,
             'lastIncomingAt' => $lastIncomingAt,
-            'canReplyText' => $lastIncomingAt ? now()->diffInHours($lastIncomingAt) < 24 : false,
+            'canReplyText' => $lastIncomingAt ? $lastIncomingAt->diffInHours(now()) < 24 : false,
         ] + $this->websiteData());
     }
 
@@ -78,7 +78,7 @@ class WhatsAppInboxController extends Controller
                 ->latest('created_at')
                 ->first()?->created_at;
 
-            $canReplyText = $lastIncomingAt ? now()->diffInHours($lastIncomingAt) < 24 : false;
+            $canReplyText = $lastIncomingAt ? $lastIncomingAt->diffInHours(now()) < 24 : false;
         }
 
         return response()->json([
@@ -118,7 +118,7 @@ class WhatsAppInboxController extends Controller
             ->latest('created_at')
             ->first()?->created_at;
 
-        if (! $lastIncomingAt || now()->diffInHours($lastIncomingAt) >= 24) {
+        if (! $lastIncomingAt || $lastIncomingAt->diffInHours(now()) >= 24) {
             return back()->with('auth_errors', ['Balasan teks bebas hanya bisa dikirim dalam 24 jam sejak pesan terakhir user. Gunakan template message untuk percakapan lama.']);
         }
 

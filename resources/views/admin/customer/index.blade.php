@@ -216,44 +216,6 @@
             font-weight: 600;
             color: #64748b;
         }
-        /* Indikator loading DataTables — overlay kecil di area tabel, bukan layar penuh */
-        #datatable-customers_wrapper {
-            position: relative;
-        }
-        #datatable-customers_wrapper .dataTables_processing {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            background: rgba(255, 255, 255, .72);
-            backdrop-filter: blur(1px);
-            color: #334155;
-            font-weight: 600;
-            font-size: .9rem;
-            z-index: 5;
-            box-shadow: none;
-        }
-        #datatable-customers_wrapper .dataTables_processing .an-dt-ring {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            border: 3px solid #e2e8f0;
-            border-top-color: #3b82f6;
-            border-right-color: #3b82f6;
-            animation: anDtSpin .8s linear infinite;
-        }
-        @keyframes anDtSpin {
-            to { transform: rotate(360deg); }
-        }
     </style>
 @endsection
 

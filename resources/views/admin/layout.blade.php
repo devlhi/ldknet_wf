@@ -74,7 +74,9 @@
                             <i class="uil-angle-down d-none d-xl-inline-block font-size-15"></i>
                         </button>
                         <div class="dropdown-menu dropdown-menu-end">
-                            <a class="dropdown-item d-block" href="{{ url('admin/account') }}"><i class="uil uil-cog font-size-18 align-middle me-1 text-muted"></i> <span class="align-middle"> Pengaturan</span></a>
+                            @if (auth()->user()->level !== 'technician')
+                                <a class="dropdown-item d-block" href="{{ url('admin/account') }}"><i class="uil uil-cog font-size-18 align-middle me-1 text-muted"></i> <span class="align-middle"> Pengaturan</span></a>
+                            @endif
                             <a class="dropdown-item" href="{{ url('auth/logout') }}"><i class="uil uil-sign-out-alt font-size-18 align-middle me-1 text-muted"></i> <span class="align-middle">Keluar</span></a>
                         </div>
                     </div>
@@ -114,6 +116,21 @@
                 <div id="sidebar-menu">
                     <ul class="metismenu list-unstyled" id="side-menu">
                         <li class="menu-title">Menu</li>
+
+                        @if (auth()->user()->level === 'technician')
+                            <li>
+                                <a href="{{ url('karyawan/absensi') }}" class="waves-effect">
+                                    <i class="uil-calendar-alt"></i>
+                                    <span>Absensi</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ url('karyawan/absensi/history') }}" class="waves-effect">
+                                    <i class="uil-history"></i>
+                                    <span>Riwayat Absensi</span>
+                                </a>
+                            </li>
+                        @else
 
                         <li>
                             <a href="{{ url('admin/dashboard') }}" class="waves-effect">
@@ -362,6 +379,26 @@
                                 <li><a href="{{ url('server/voucher/template/message') }}">Template Message</a></li>
                             </ul>
                         </li>
+
+                        @if (in_array(auth()->user()->level, ['admin', 'developer']))
+                            <li class="menu-title">HRD / Karyawan</li>
+
+                            <li>
+                                <a href="{{ url('admin/karyawan') }}" class="waves-effect">
+                                    <i class="uil-user-square"></i>
+                                    <span>Data Karyawan</span>
+                                </a>
+                            </li>
+
+                            <li>
+                                <a href="{{ url('admin/absensi/rekap') }}" class="waves-effect">
+                                    <i class="uil-calendar-alt"></i>
+                                    <span>Rekap Absensi</span>
+                                </a>
+                            </li>
+                        @endif
+
+                        @endif
 
                     </ul>
                 </div>

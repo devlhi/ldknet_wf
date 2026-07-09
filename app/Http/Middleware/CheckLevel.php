@@ -23,10 +23,21 @@ class CheckLevel
             return redirect('auth/login');
         }
 
+        // Karyawan (technician) yang dinonaktifkan admin langsung diputus sesi
+        // pada request berikutnya, tidak menunggu logout manual.
+        if ($user->level === 'technician' && ! $user->isActive()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect('auth/login')->with('auth_errors', ['Akun anda nonaktif, hubungi Admin']);
+        }
+
         if (! in_array($user->level, $levels)) {
             return match ($user->level) {
                 'developer', 'admin' => redirect('admin'),
                 'finance' => redirect('finance'),
+                'technician' => redirect('karyawan/absensi'),
                 default => redirect('user'),
             };
         }

@@ -16,6 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'level' => CheckLevel::class,
         ]);
 
+        // Webhook & payment callback dipanggil server eksternal (Meta, Tripay, dll)
+        // tanpa token CSRF, jadi harus dikecualikan agar tidak ditolak 419.
+        $middleware->validateCsrfTokens(except: [
+            'webhook/*',
+            'callback/*',
+        ]);
+
         $middleware->redirectGuestsTo('/auth/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {

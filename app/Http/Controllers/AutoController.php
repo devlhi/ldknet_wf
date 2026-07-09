@@ -12,12 +12,38 @@ use App\Models\TemplateMessage;
 use App\Support\WhatsAppNotifier;
 use DateTime;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 
 class AutoController extends Controller
 {
     public function updatestatus()
     {
-        Order::whereRaw('DATEDIFF(CURDATE(), expdate) >= 1')->where('status', 'Active')->update(['status' => 'Isolir']);
+        // Kirim notifikasi WhatsApp tepat saat transisi Active -> Isolir (bukan di
+        // isolir() yang looping tiap cron, agar tidak spam). Update per baris supaya
+        // status hanya berubah setelah percobaan notif; kegagalan WA tidak menghalangi.
+        foreach (Order::whereRaw('DATEDIFF(CURDATE(), expdate) >= 1')->where('status', 'Active')->get() as $order) {
+            $nomor = (string) ($order->nomor ?? '');
+            if ($nomor !== '') {
+                try {
+                    $jatuhTempo = tanggal_indo(date('Y-m-d', strtotime((string) $order->expdate)));
+                    $link = url('/');
+                    $message = "Layanan Internet Anda Dinonaktifkan Sementara\n\nNama: {$order->nama}\nID Pelanggan: {$order->idpel}\nJatuh Tempo: {$jatuhTempo}\nMohon segera lakukan pembayaran untuk mengaktifkan kembali layanan.\nLink: {$link}\nPaket: {$order->paket}\n\nSalam Hangat\n\nANNORTY NET";
+
+                    // Template Meta notif_isolir: [nama, id_pelanggan, jatuh_tempo, link, paket]
+                    WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_ISOLIR, $nomor, $message, [
+                        $order->nama,
+                        $order->idpel,
+                        $jatuhTempo,
+                        $link,
+                        $order->paket,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("Gagal kirim WhatsApp isolir ({$order->idpel}): {$e->getMessage()}");
+                }
+            }
+
+            Order::where('id', $order->id)->where('status', 'Active')->update(['status' => 'Isolir']);
+        }
     }
 
     public function isolir()

@@ -477,7 +477,7 @@ class FinanceController extends Controller
                             return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
                         }
 
-                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya);
+                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
 
                         $apiInstance = $this->brevoApiInstance($key, $name, $email);
 
@@ -539,7 +539,7 @@ class FinanceController extends Controller
                             return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
                         }
 
-                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya);
+                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
 
                         $apiInstance = $this->brevoApiInstance($key, $name, $email);
 
@@ -580,7 +580,7 @@ class FinanceController extends Controller
                     return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
                 }
 
-                [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya);
+                [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
 
                 $apiInstance = $this->brevoApiInstance($key, $name, $email);
 
@@ -1428,14 +1428,15 @@ class FinanceController extends Controller
     // ulang di brevoApiInstance().
     // =========================================================
 
-    private function preparePaidNotification($idpel, $code, $nomornya): array
+    private function preparePaidNotification($idpel, $code, $nomornya, bool $wasIsolir = false): array
     {
         $templateMessage = TemplateMessage::all()->last();
         $message = $templateMessage->notif_tagihan_terbayar ?? '';
         $pesanemail = $templateMessage->notif_tagihan_terbayar_email ?? '';
 
         $base_url = url('/').'/';
-        $package = Order::where('idpel', $idpel)->first()?->paket ?? '-';
+        $order = Order::where('idpel', $idpel)->first();
+        $package = $order?->paket ?? '-';
 
         $message = str_replace('{id_pelanggan}', $idpel, $message);
         $message = str_replace('{nomor_invoice}', $code, $message);
@@ -1445,10 +1446,31 @@ class FinanceController extends Controller
         $pesanemail = str_replace('{link_web}', $base_url, $pesanemail);
         $pesanemail = str_replace('{nomor_invoice}', $code, $pesanemail);
 
-        try {
-            WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomornya, $message, [$idpel, $code, $base_url, $package]);
-        } catch (\Throwable $e) {
-            Log::warning("Gagal kirim WhatsApp terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
+        if ((string) $nomornya !== '') {
+            try {
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomornya, $message, [$idpel, $code, $base_url, $package]);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal kirim WhatsApp terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
+            }
+
+            // Kirim notifikasi buka isolir bila pembayaran ini mengaktifkan kembali
+            // pelanggan yang sebelumnya Isolir.
+            if ($wasIsolir) {
+                try {
+                    $nama = $order?->nama ?? '';
+                    $bukaMessage = "Layanan Internet Anda Telah Aktif Kembali\n\nNama: {$nama}\nID Pelanggan: {$idpel}\nPaket: {$package}\nTerima kasih atas pembayaran Anda.\nLink: {$base_url}\n\nSalam Hangat\n\nANNORTY NET";
+
+                    // Template Meta notif_buka_isolir: [nama, id_pelanggan, paket, link]
+                    WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_BUKA_ISOLIR, $nomornya, $bukaMessage, [
+                        $nama,
+                        $idpel,
+                        $package,
+                        $base_url,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("Gagal kirim WhatsApp buka isolir invoice #{$code} ({$idpel}): {$e->getMessage()}");
+                }
+            }
         }
 
         return [$message, $pesanemail];

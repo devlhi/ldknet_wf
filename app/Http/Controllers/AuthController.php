@@ -29,6 +29,7 @@ class AuthController extends Controller
         return match ($level) {
             'developer', 'admin' => redirect('admin/dashboard'),
             'finance' => redirect('finance/dashboard'),
+            'technician' => redirect('karyawan/absensi'),
             default => redirect('user/dashboard'),
         };
     }
@@ -65,11 +66,11 @@ class AuthController extends Controller
             return redirect('auth/login')->with('auth_errors', ['Akun anda belum diverifikasi, mohon cek email inbox / spam anda !']);
         }
 
-        if (! in_array($user->level, ['developer', 'admin', 'finance', 'user'])) {
+        if (! in_array($user->level, ['developer', 'admin', 'finance', 'user', 'technician'])) {
             return redirect('auth/login')->with('auth_errors', ['Email tidak terdaftar']);
         }
 
-        if ($user->level === 'user' && ! $user->isActive()) {
+        if (in_array($user->level, ['user', 'technician']) && ! $user->isActive()) {
             return redirect('auth/login')->with('auth_errors', ['Akun anda nonaktif, hubungi Admin']);
         }
 

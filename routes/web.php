@@ -22,6 +22,7 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::get('/', [AdminController::class, 'index']);
     Route::get('dashboard', [AdminController::class, 'index']);
     Route::get('dashboard/transactions', [AdminController::class, 'transactions']);
+    Route::get('dashboard/mikrotik', [AdminController::class, 'mikrotikStats']);
 });
 
 // Route per modul admin/server (hasil migrasi bertahap dari CI4)

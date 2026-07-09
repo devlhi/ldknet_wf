@@ -133,6 +133,36 @@ php artisan storage:link
 
 Saat ini upload logo **tidak** memakai disk itu, jadi `storage:link` opsional. Jalankan hanya bila nanti menambah fitur upload yang pakai `Storage::disk('public')`. Symlink ini otomatis di-ignore git (`/public/storage` sudah ada di `.gitignore`), jadi wajib dijalankan ulang di tiap server baru bila dipakai.
 
+## Folder Upload Absensi Karyawan
+
+Fitur **Absensi Karyawan** menyimpan foto check-in/check-out ke folder publik:
+
+```text
+public/data/absensi/
+```
+
+Folder ini harus ada dan writable oleh web server. Di Windows/Laragon biasanya cukup buat foldernya:
+
+```powershell
+mkdir public\data\absensi
+```
+
+Di Linux/production:
+
+```bash
+mkdir -p public/data/absensi
+chmod -R 775 public/data/absensi
+chown -R www-data:www-data public/data/absensi   # sesuaikan user web server
+```
+
+Fitur absensi saat ini **tidak membutuhkan** `php artisan storage:link`, karena file selfie disimpan langsung ke `public/data/absensi`. Jika nanti upload absensi dipindah ke `storage/app/public/absensi`, barulah jalankan:
+
+```bash
+php artisan storage:link
+```
+
+Lalu pastikan URL file diarahkan lewat `public/storage/absensi`. Jangan commit file foto absensi ke git.
+
 ## Export Laporan (Excel & PDF)
 
 ### Excel
