@@ -86,6 +86,8 @@ class WhatsAppInboxController extends Controller
                 'id' => $msg->id,
                 'direction' => $msg->direction,
                 'body' => $msg->body,
+                'status' => $msg->status,
+                'message_type' => $msg->message_type,
                 'created_at' => optional($msg->created_at)->format('d M H:i'),
             ])->values(),
             'can_reply_text' => $canReplyText,

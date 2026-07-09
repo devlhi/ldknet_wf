@@ -142,6 +142,14 @@
                                             <label class="form-label">Template Notif Pelanggan Baru</label>
                                             <input type="text" class="form-control" name="meta_template_pelanggan_baru" value="{{ $metaTemplates['pelanggan_baru'] ?? 'notif_daftar_berhasil' }}">
                                         </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Template Notif Isolir</label>
+                                            <input type="text" class="form-control" name="meta_template_isolir" value="{{ $metaTemplates['isolir'] ?? 'notif_isolir' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Template Notif Buka Isolir</label>
+                                            <input type="text" class="form-control" name="meta_template_buka_isolir" value="{{ $metaTemplates['buka_isolir'] ?? 'notif_buka_isolir' }}">
+                                        </div>
                                     </div>
 
                                 </div>

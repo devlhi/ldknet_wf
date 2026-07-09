@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AutoController;
+use App\Models\CronLog;
 use App\Models\CronSetting;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -18,12 +19,19 @@ Artisan::command('inspire', function () {
 try {
     if (Schema::hasTable('cron_setting')) {
         foreach (CronSetting::where('enabled', 1)->get() as $cron) {
-            Schedule::call(fn () => app()->call([app(AutoController::class), $cron->task]))
+            Schedule::call(function () use ($cron) {
+                CronLog::run($cron->task, fn () => app()->call([app(AutoController::class), $cron->task]));
+            })
                 ->dailyAt($cron->time)
                 ->name('cron_'.$cron->task)
                 ->withoutOverlapping();
         }
     }
+
+    // Heartbeat tiap menit — penanda di UI bahwa cron server benar-benar jalan.
+    Schedule::call(fn () => CronLog::touchHeartbeat())
+        ->everyMinute()
+        ->name('cron_heartbeat');
 } catch (Throwable $e) {
     // DB belum siap / tabel belum ada — abaikan agar artisan tetap jalan.
 }

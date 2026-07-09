@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AutoController;
+use App\Models\CronLog;
 use Illuminate\Support\Facades\Route;
 
 // Endpoint task legacy — kini butuh token (turunan APP_KEY) agar tidak bisa
@@ -15,7 +16,9 @@ $cronGuard = function (string $method) {
             'Invalid cron token'
         );
 
-        return app(AutoController::class)->{$method}();
+        CronLog::run($method, fn () => app(AutoController::class)->{$method}());
+
+        return response('OK');
     };
 };
 

@@ -154,6 +154,20 @@
                                         <input type="text" class="form-control" name="meta_template_pelanggan_baru" value="notif_daftar_berhasil">
                                     </div>
                                 </div>
+
+                                <div class="mb-3 row">
+                                    <label class="col-sm-3 col-form-label">Template Isolir</label>
+                                    <div class="col-sm-9">
+                                        <input type="text" class="form-control" name="meta_template_isolir" value="notif_isolir">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3 row">
+                                    <label class="col-sm-3 col-form-label">Template Buka Isolir</label>
+                                    <div class="col-sm-9">
+                                        <input type="text" class="form-control" name="meta_template_buka_isolir" value="notif_buka_isolir">
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="mb-3 row">

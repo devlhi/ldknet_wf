@@ -112,10 +112,16 @@
                                     <div class="p-3" style="max-height: 400px; overflow-y: auto;" id="chatThread" data-number="{{ $selectedNumber }}" data-last-id="{{ optional($messages->last())->id ?? 0 }}">
                                         @foreach ($messages as $msg)
                                             <div class="d-flex mb-2 {{ $msg->direction === 'out' ? 'justify-content-end' : 'justify-content-start' }}" data-message-id="{{ $msg->id }}">
-                                                <div class="p-2 rounded {{ $msg->direction === 'out' ? 'bg-primary text-white' : 'bg-light' }}" style="max-width: 70%;">
+                                                <div class="p-2 rounded {{ $msg->direction === 'out' ? ($msg->status === 'failed' ? 'bg-danger text-white' : 'bg-primary text-white') : 'bg-light' }}" style="max-width: 70%;">
+                                                    @if ($msg->direction === 'out' && str_starts_with((string) $msg->message_type, 'template'))
+                                                        <span class="badge bg-light text-dark mb-1">Notifikasi: {{ str_replace('template:', '', $msg->message_type) }}</span>
+                                                    @endif
                                                     <div style="white-space: pre-wrap; word-break: break-word;">{{ $msg->body }}</div>
                                                     <small class="{{ $msg->direction === 'out' ? 'text-white-50' : 'text-muted' }}">
                                                         {{ optional($msg->created_at)->format('d M H:i') }}
+                                                        @if ($msg->direction === 'out')
+                                                            &middot; {{ $msg->status === 'failed' ? '✗ Gagal' : '✓ Terkirim' }}
+                                                        @endif
                                                     </small>
                                                 </div>
                                             </div>
@@ -184,10 +190,17 @@
 
     function renderMessage(msg) {
         var out = msg.direction === 'out';
+        var failed = out && msg.status === 'failed';
+        var bubble = out ? (failed ? 'bg-danger text-white' : 'bg-primary text-white') : 'bg-light';
+        var isTemplate = out && (msg.message_type || '').indexOf('template') === 0;
+        var badge = isTemplate
+            ? '<span class="badge bg-light text-dark mb-1">Notifikasi: ' + escapeHtml((msg.message_type || '').replace('template:', '')) + '</span>'
+            : '';
+        var statusMark = out ? ' &middot; ' + (failed ? '✗ Gagal' : '✓ Terkirim') : '';
         return '<div class="d-flex mb-2 ' + (out ? 'justify-content-end' : 'justify-content-start') + '" data-message-id="' + msg.id + '">' +
-            '<div class="p-2 rounded ' + (out ? 'bg-primary text-white' : 'bg-light') + '" style="max-width: 70%;">' +
+            '<div class="p-2 rounded ' + bubble + '" style="max-width: 70%;">' + badge +
             '<div style="white-space: pre-wrap; word-break: break-word;">' + escapeHtml(msg.body) + '</div>' +
-            '<small class="' + (out ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(msg.created_at) + '</small>' +
+            '<small class="' + (out ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(msg.created_at) + statusMark + '</small>' +
             '</div></div>';
     }
 

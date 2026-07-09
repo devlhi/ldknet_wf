@@ -8,6 +8,24 @@
                 <div class="col-12">
                     <div class="page-title-box d-flex align-items-center justify-content-between">
                         <h4 class="mb-0">Pengaturan Cron</h4>
+                        <div>
+                            @if ($cronAlive)
+                                <span class="badge bg-success font-size-13">
+                                    <i class="uil uil-check-circle me-1"></i> Cron Aktif
+                                </span>
+                            @else
+                                <span class="badge bg-danger font-size-13">
+                                    <i class="uil uil-times-circle me-1"></i> Cron Tidak Aktif
+                                </span>
+                            @endif
+                            <small class="text-muted ms-2">
+                                @if ($lastHeartbeat)
+                                    Heartbeat terakhir: {{ $lastHeartbeat->format('d M Y H:i:s') }}
+                                @else
+                                    Belum ada heartbeat — pastikan cron job / scheduler sudah dipasang.
+                                @endif
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -88,9 +106,10 @@
                                     <table class="table table-bordered align-middle mb-0">
                                         <thead>
                                             <tr>
-                                                <th style="width:55%">Task</th>
-                                                <th style="width:25%">Waktu (setiap hari)</th>
-                                                <th style="width:20%" class="text-center">Aktif</th>
+                                                <th style="width:40%">Task</th>
+                                                <th style="width:20%">Waktu (setiap hari)</th>
+                                                <th style="width:25%">Terakhir Jalan</th>
+                                                <th style="width:15%" class="text-center">Aktif</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -104,6 +123,14 @@
                                                         <input type="time" name="time[{{ $cron->task }}]"
                                                             class="form-control form-control-sm"
                                                             value="{{ $cron->time }}" required>
+                                                    </td>
+                                                    <td>
+                                                        @php $lastRun = $lastRunByTask[$cron->task] ?? null; @endphp
+                                                        @if ($lastRun)
+                                                            <small>{{ \Illuminate\Support\Carbon::parse($lastRun)->format('d M Y H:i') }}</small>
+                                                        @else
+                                                            <small class="text-muted">Belum pernah</small>
+                                                        @endif
                                                     </td>
                                                     <td class="text-center">
                                                         <div class="form-check form-switch d-inline-block">
@@ -123,6 +150,50 @@
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="mb-3"><i class="uil uil-history me-1"></i> Riwayat Log Cron (50 terakhir)</h5>
+                            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                                <table class="table table-sm table-bordered align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:18%">Task</th>
+                                            <th style="width:10%">Status</th>
+                                            <th style="width:17%">Mulai</th>
+                                            <th style="width:17%">Selesai</th>
+                                            <th>Pesan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse ($cronLogs as $log)
+                                            <tr>
+                                                <td><small>{{ $log->task }}</small></td>
+                                                <td>
+                                                    @if ($log->status === 'success')
+                                                        <span class="badge bg-success">Sukses</span>
+                                                    @elseif ($log->status === 'failed')
+                                                        <span class="badge bg-danger">Gagal</span>
+                                                    @else
+                                                        <span class="badge bg-warning">Berjalan</span>
+                                                    @endif
+                                                </td>
+                                                <td><small>{{ $log->started_at?->format('d M Y H:i:s') }}</small></td>
+                                                <td><small>{{ $log->finished_at?->format('d M Y H:i:s') ?? '-' }}</small></td>
+                                                <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($log->message ?? '-', 150) }}</small></td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-3">
+                                                    Belum ada log. Log akan terisi setelah task cron pertama berjalan.
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -168,12 +168,16 @@ class WhatsAppGatewayResolver
     {
         $payload = substr($apiUrl, strlen('meta###'));
         $parts = array_map('rawurldecode', explode('|', $payload));
-        $templates = [
+        // Entri kosong dibuang agar blob lama (belum punya slot isolir/buka_isolir)
+        // fallback ke nama template default, bukan string kosong.
+        $templates = array_filter([
             'tagihan' => $parts[4] ?? '',
             'pengingat' => $parts[5] ?? '',
             'terbayar' => $parts[6] ?? '',
             'pelanggan_baru' => $parts[7] ?? '',
-        ];
+            'isolir' => $parts[9] ?? '',
+            'buka_isolir' => $parts[10] ?? '',
+        ], fn ($v) => $v !== '');
 
         return [
             'graph_url' => $parts[0] ?? '',
@@ -200,6 +204,8 @@ class WhatsAppGatewayResolver
             $templates['terbayar'] ?? 'notif_tagihan_terbayar',
             $templates['pelanggan_baru'] ?? 'notif_daftar_berhasil',
             $settings['phone_number_id'] ?? '',
+            $templates['isolir'] ?? 'notif_isolir',
+            $templates['buka_isolir'] ?? 'notif_buka_isolir',
         ];
 
         return 'meta###'.implode('|', array_map('rawurlencode', $parts));

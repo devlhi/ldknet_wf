@@ -466,6 +466,8 @@ class GatewayController extends Controller
                 'pengingat' => $request->post('meta_template_pengingat') ?: 'notif_pengingat',
                 'terbayar' => $request->post('meta_template_terbayar') ?: 'notif_tagihan_terbayar',
                 'pelanggan_baru' => $request->post('meta_template_pelanggan_baru') ?: 'notif_daftar_berhasil',
+                'isolir' => $request->post('meta_template_isolir') ?: 'notif_isolir',
+                'buka_isolir' => $request->post('meta_template_buka_isolir') ?: 'notif_buka_isolir',
             ],
         ];
     }

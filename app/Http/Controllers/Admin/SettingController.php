@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\AutoController;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Models\CronLog;
 use App\Models\CronSetting;
 use App\Models\Notification;
 use App\Models\Website;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class SettingController extends Controller
 {
@@ -130,11 +132,28 @@ class SettingController extends Controller
     // GET admin/setting/cron — atur jadwal cron per task (jam + on/off)
     public function cron()
     {
+        // Scheduler dianggap aktif jika heartbeat tersentuh < 5 menit lalu
+        // (heartbeat di-touch tiap menit oleh schedule:run).
+        $lastHeartbeat = CronLog::lastHeartbeat();
+        $cronAlive = $lastHeartbeat !== null && $lastHeartbeat->gt(now()->subMinutes(5));
+
+        $logs = collect();
+        $lastRunByTask = [];
+        if (Schema::hasTable('cron_log')) {
+            $logs = CronLog::orderByDesc('started_at')->limit(50)->get();
+            $lastRunByTask = CronLog::selectRaw('task, MAX(started_at) AS last_run')
+                ->groupBy('task')->pluck('last_run', 'task')->all();
+        }
+
         return view('admin.setting.cron', [
             'title' => 'Pengaturan Cron',
             'crons' => CronSetting::orderBy('id')->get(),
             'cronUrl' => url('auto/cron/'.AutoController::cronToken()),
             'cronArtisan' => base_path('artisan'),
+            'cronAlive' => $cronAlive,
+            'lastHeartbeat' => $lastHeartbeat,
+            'cronLogs' => $logs,
+            'lastRunByTask' => $lastRunByTask,
         ] + $this->websiteData());
     }
 
