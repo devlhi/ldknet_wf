@@ -1,6 +1,12 @@
 @extends('admin.layout')
 
 @section('content')
+<style>
+    .conn-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .conn-dot.online { background:#34c38f; animation: connBlink 1.2s infinite; }
+    .conn-dot.offline { background:#f46a6a; animation:none; box-shadow:none; }
+    @keyframes connBlink { 0%{box-shadow:0 0 0 0 rgba(52,195,143,0.7);} 70%{box-shadow:0 0 0 8px rgba(52,195,143,0);} 100%{box-shadow:0 0 0 0 rgba(52,195,143,0);} }
+</style>
 <div class="page-content">
     <div class="container-fluid">
         <div class="row">
@@ -21,15 +27,20 @@
                 @endif
 
                 <div class="card">
-                    <div class="card-header bg-white border-bottom">
-                        <h4 class="card-title mb-0"><i class="uil uil-whatsapp me-1"></i> WhatsApp Inbox</h4>
-                    </div>
                     @php
                         $activeGateway = \App\Support\WhatsAppGatewayResolver::active();
                         $metaActive = $activeGateway && \App\Support\WhatsAppGatewayResolver::isMeta($activeGateway);
                         $webhookRow = \Illuminate\Support\Facades\DB::table('webhook')->first();
                         $webhookOn = $webhookRow && ($webhookRow->status ?? 'off') === 'on';
+                        $connOnline = $metaActive && $webhookOn;
                     @endphp
+                    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                        <h4 class="card-title mb-0"><i class="uil uil-whatsapp me-1"></i> WhatsApp Inbox</h4>
+                        <span id="metaConnStatus" class="small fw-semibold {{ $connOnline ? 'text-success' : 'text-danger' }}">
+                            <span class="conn-dot {{ $connOnline ? 'online' : 'offline' }}" id="metaConnDot"></span>
+                            <span id="metaConnText">{{ $connOnline ? 'Terhubung ke Meta Webhook' : 'Belum terhubung' }}</span>
+                        </span>
+                    </div>
                     @if (! $metaActive || ! $webhookOn)
                         <div class="alert alert-warning m-3">
                             <strong>Inbox belum aktif.</strong> Syarat:
@@ -211,8 +222,9 @@
         fetch(pollUrl + '?number=' + encodeURIComponent(number) + '&after_id=' + lastId, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(function (r) { return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); })
         .then(function (data) {
+            setConnStatus(true);
             if (!data || !data.messages) return;
             if (data.messages.length) {
                 data.messages.forEach(function (msg) {

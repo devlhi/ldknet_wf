@@ -40,10 +40,21 @@
                                 @endphp
 
                                 <div class="alert alert-info">
-                                    <strong>Webhook Meta Production:</strong>
-                                    <code>{{ url('webhook/whatsapp/meta') }}</code><br>
-                                    <strong>Verify Token:</strong>
-                                    <code>{{ $metaSettings['verify_token'] ?? '' }}</code>
+                                    <div class="mb-2">
+                                        <strong>Callback URL (Webhook Meta):</strong>
+                                        <div class="input-group input-group-sm mt-1">
+                                            <input type="text" class="form-control" id="metaWebhookUrl" value="{{ url('webhook/whatsapp/meta') }}" readonly>
+                                            <button type="button" class="btn btn-outline-primary copy-btn" data-copy-target="metaWebhookUrl"><i class="uil uil-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <strong>Verify Token:</strong>
+                                        <div class="input-group input-group-sm mt-1">
+                                            <input type="text" class="form-control" id="metaVerifyTokenDisplay" value="{{ $metaSettings['verify_token'] ?? '' }}" readonly>
+                                            <button type="button" class="btn btn-outline-primary copy-btn" data-copy-target="metaVerifyTokenDisplay"><i class="uil uil-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted d-block mt-2">Pakai kedua nilai ini di Meta App Dashboard &rarr; WhatsApp &rarr; Configuration &rarr; Webhook. Subscribe minimal field <code>messages</code>. Meta wajib URL publik ber-HTTPS.</small>
                                 </div>
 
                                 <div class="mb-3">
@@ -202,5 +213,26 @@
     }
     providerSelect.addEventListener('change', toggleMetaHints);
     toggleMetaHints();
+
+    // Copy-to-clipboard for webhook URL & verify token
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var target = document.getElementById(btn.getAttribute('data-copy-target'));
+            if (!target) return;
+            var text = target.value;
+            var done = function() {
+                var original = btn.innerHTML;
+                btn.innerHTML = '<i class="uil uil-check"></i> Tersalin';
+                setTimeout(function() { btn.innerHTML = original; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(function() {
+                    target.select(); document.execCommand('copy'); done();
+                });
+            } else {
+                target.select(); document.execCommand('copy'); done();
+            }
+        });
+    });
 </script>
 @endsection

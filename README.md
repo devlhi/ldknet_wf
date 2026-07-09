@@ -107,6 +107,32 @@ php artisan serve
 
 Buka `http://localhost:8000` (atau domain Laragon `http://landaknet-laravel.test`).
 
+## Upload Logo & Storage Symlink
+
+**Upload logo TIDAK butuh symlink.** Logo yang diupload lewat menu **Pengaturan** disimpan langsung ke folder publik `public/assets/logo/` (lihat `SettingController.php`), yang sudah bisa diakses web. Jadi setelah clone, upload logo langsung jalan tanpa setup tambahan.
+
+Yang perlu dipastikan hanya **izin tulis** folder logo:
+
+```bash
+# Linux / production
+chmod -R 775 public/assets/logo
+chown -R www-data:www-data public/assets/logo   # sesuaikan user web server
+```
+
+> Di Windows/Laragon biasanya sudah writable, tidak perlu chmod.
+
+### Kapan `storage:link` diperlukan?
+
+Perintah symlink Laravel:
+
+```bash
+php artisan storage:link
+```
+
+...hanya dibutuhkan **jika** ada fitur yang menyimpan file upload ke `storage/app/public` (disk `public`). Symlink ini membuat `public/storage` → `storage/app/public` supaya file bisa diakses via URL.
+
+Saat ini upload logo **tidak** memakai disk itu, jadi `storage:link` opsional. Jalankan hanya bila nanti menambah fitur upload yang pakai `Storage::disk('public')`. Symlink ini otomatis di-ignore git (`/public/storage` sudah ada di `.gitignore`), jadi wajib dijalankan ulang di tiap server baru bila dipakai.
+
 ## Konfigurasi Payment Gateway
 
 Setelah login sebagai admin, buka menu **Payment Gateway**:

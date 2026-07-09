@@ -22,3 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Artefak analisis route (bukan bagian app)
+/storage/routes.json
+/storage/safe_routes.txt
+/storage/view_urls.txt
