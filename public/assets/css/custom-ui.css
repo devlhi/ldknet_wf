@@ -1,0 +1,239 @@
+/* =========================================================
+   ANNORTY NET — Custom UI
+   Efek gradient halus di POJOK KANAN-ATAS card (bukan wash
+   seluruh card). Body card tetap bersih & terbaca.
+   File terpisah dari asset vendor supaya aman di-maintain.
+   ========================================================= */
+
+:root {
+    --an-orb-1: 124, 92, 246;   /* ungu  */
+    --an-orb-2: 59, 130, 246;   /* biru  */
+    --an-stat-green: 52, 195, 143;
+    --an-stat-amber: 241, 180, 76;
+    --an-stat-red: 244, 106, 106;
+    --an-stat-blue: 80, 165, 241;
+    --an-stat-purple: 124, 92, 246;
+}
+
+/* Card jadi konteks posisi untuk glow. Tanpa overflow:hidden
+   supaya dropdown select2 / datepicker tidak terpotong. */
+.card {
+    position: relative;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+/* Glow lembut, TERKURUNG di pojok kanan-atas (± 150px).
+   Tidak menutupi seluruh card, jadi teks tetap kontras. */
+.card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    border-top-right-radius: inherit;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(circle at 100% 0%,
+        rgba(var(--an-orb-1), .22) 0%,
+        rgba(var(--an-orb-2), .10) 42%,
+        transparent 72%);
+    opacity: .9;
+    animation: anOrbFloat 10s ease-in-out infinite;
+}
+
+/* Isi card selalu di atas glow. */
+.card > .card-header,
+.card > .card-body,
+.card > .card-footer,
+.card > .card-img-overlay,
+.card > .card-title {
+    position: relative;
+    z-index: 1;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 .6rem 1.5rem rgba(var(--an-orb-2), .14);
+}
+
+/* Saat Bootstrap modal terbuka, modal CRUD lama sering masih berada
+   di dalam .card-body / table cell. z-index + transform pada card akan
+   mengunci modal di belakang backdrop. Matikan efek dekoratif card hanya
+   selama modal aktif supaya semua popup CRUD tampil solid di atas layar. */
+body.modal-open .card:hover {
+    transform: none;
+}
+
+body.modal-open .card > .card-header,
+body.modal-open .card > .card-body,
+body.modal-open .card > .card-footer,
+body.modal-open .card > .card-img-overlay,
+body.modal-open .card > .card-title {
+    z-index: auto;
+}
+
+@keyframes anOrbFloat {
+    0%, 100% { opacity: .7;  transform: translate(0, 0) scale(1); }
+    50%      { opacity: 1;   transform: translate(-6px, 6px) scale(1.08); }
+}
+
+/* ---------------------------------------------------------
+   Stat card (kartu ringkasan angka) — gaya bersih + ikon
+   dalam lingkaran lembut di pojok kanan.
+   --------------------------------------------------------- */
+.an-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+}
+.an-stat-icon.green  { color: rgb(var(--an-stat-green));  background: rgba(var(--an-stat-green), .12); }
+.an-stat-icon.amber  { color: rgb(var(--an-stat-amber));  background: rgba(var(--an-stat-amber), .14); }
+.an-stat-icon.red    { color: rgb(var(--an-stat-red));    background: rgba(var(--an-stat-red), .12); }
+.an-stat-icon.blue   { color: rgb(var(--an-stat-blue));   background: rgba(var(--an-stat-blue), .12); }
+.an-stat-icon.purple { color: rgb(var(--an-stat-purple)); background: rgba(var(--an-stat-purple), .12); }
+
+.an-stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin: 0;
+}
+.an-stat-label {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #8a94a6;
+    margin: 0 0 6px;
+}
+
+/* Hormati preferensi reduce-motion. */
+@media (prefers-reduced-motion: reduce) {
+    .card::before { animation: none; }
+    .card:hover { transform: none; }
+}
+
+/* =========================================================
+   Sidebar — Enterprise Light
+   Background terang bersih + gradient halus, menu rapi,
+   hover & active beraksen biru. Styling murni CSS
+   (tidak mengubah DOM/metisMenu).
+   ========================================================= */
+:root {
+    --an-side-bg-1: #ffffff;
+    --an-side-bg-2: #f6f8fc;
+    --an-side-border: #e9edf5;
+    --an-side-ink: #48546a;      /* teks menu       */
+    --an-side-ink-dim: #8a94a6;  /* ikon / sub      */
+    --an-side-title: #97a1b4;    /* label menu-title */
+    --an-pri: 37, 99, 235;       /* biru enterprise  */
+}
+
+/* Panel sidebar: gradient terang + garis kanan tipis + shadow lembut */
+.vertical-menu {
+    background: linear-gradient(180deg, var(--an-side-bg-1) 0%, var(--an-side-bg-2) 100%);
+    border-right: 1px solid var(--an-side-border);
+    box-shadow: 0 0 40px -28px rgba(15, 23, 42, .35);
+}
+
+/* Kotak brand: putih bersih, garis bawah tipis */
+.vertical-menu .navbar-brand-box,
+#page-topbar .navbar-brand-box {
+    background: #ffffff;
+    border-bottom: 1px solid var(--an-side-border);
+}
+
+/* Scroll area transparan mengikuti gradient */
+.vertical-menu .sidebar-menu-scroll,
+.vertical-menu [data-simplebar] {
+    background: transparent;
+}
+
+/* Label kelompok menu */
+#sidebar-menu .menu-title {
+    color: var(--an-side-title);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    padding: 1.1rem 1.5rem .45rem;
+}
+
+/* Item menu */
+#sidebar-menu ul li a {
+    color: var(--an-side-ink);
+    font-size: .875rem;
+    font-weight: 500;
+    padding: .62rem 1.5rem;
+    margin: 1px .6rem;
+    border-radius: 8px;
+    transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+#sidebar-menu ul li a i {
+    color: var(--an-side-ink-dim);
+    font-size: 1.05rem;
+    transition: color .15s ease;
+}
+
+/* Hover */
+#sidebar-menu ul li a:hover {
+    background: rgba(var(--an-pri), .08);
+    color: rgb(var(--an-pri));
+}
+#sidebar-menu ul li a:hover i {
+    color: rgb(var(--an-pri));
+}
+
+/* Item aktif (metisMenu) + aksen garis kiri */
+#sidebar-menu ul li.mm-active > a,
+#sidebar-menu ul li a.active,
+#sidebar-menu ul li a.mm-active {
+    background: rgba(var(--an-pri), .1);
+    color: rgb(var(--an-pri));
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 0 rgb(var(--an-pri));
+}
+#sidebar-menu ul li.mm-active > a i,
+#sidebar-menu ul li a.active i,
+#sidebar-menu ul li a.mm-active i {
+    color: rgb(var(--an-pri));
+}
+
+/* Panah dropdown */
+#sidebar-menu ul li a.has-arrow:after {
+    color: var(--an-side-ink-dim);
+}
+
+/* Submenu: indentasi rapi + hover halus */
+#sidebar-menu .sub-menu {
+    background: transparent;
+}
+#sidebar-menu .sub-menu li a {
+    font-size: .82rem;
+    padding: .48rem 1.5rem .48rem 3.1rem;
+    margin: 0 .6rem;
+    color: var(--an-side-ink-dim);
+}
+#sidebar-menu .sub-menu li a:hover,
+#sidebar-menu .sub-menu li.mm-active > a,
+#sidebar-menu .sub-menu li a.active {
+    background: rgba(var(--an-pri), .07);
+    color: rgb(var(--an-pri));
+    box-shadow: none;
+}
+
+/* Scrollbar simplebar tipis */
+.vertical-menu .simplebar-scrollbar:before {
+    background: rgba(100, 116, 139, .35);
+    border-radius: 999px;
+}
+
+/* Sidebar collapsed (icon-only) tetap rapi */
+.vertical-collpsed .vertical-menu #sidebar-menu ul li a {
+    margin: 1px .4rem;
+}
