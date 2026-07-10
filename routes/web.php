@@ -9,12 +9,15 @@ Route::get('/', [AuthController::class, 'index']);
 // Authentication
 Route::prefix('auth')->group(function () {
     Route::get('login', [AuthController::class, 'index'])->name('login');
-    Route::post('auth', [AuthController::class, 'auth']);
+    // Rate-limit: cegah brute-force password (per IP).
+    Route::post('auth', [AuthController::class, 'auth'])->middleware('throttle:10,1');
     Route::get('logout', [AuthController::class, 'logout']);
     Route::get('forgot', [AuthController::class, 'forgot']);
-    Route::post('sendforgot', [AuthController::class, 'sendforgot']);
+    // Rate-limit: cegah spam email reset password.
+    Route::post('sendforgot', [AuthController::class, 'sendforgot'])->middleware('throttle:5,10');
     Route::get('reset-password/{token}', [AuthController::class, 'resetpassword']);
-    Route::post('reset-password/{token}/update', [AuthController::class, 'updateResetPassword']);
+    // Rate-limit: cegah brute-force token reset.
+    Route::post('reset-password/{token}/update', [AuthController::class, 'updateResetPassword'])->middleware('throttle:10,10');
 });
 
 // Admin

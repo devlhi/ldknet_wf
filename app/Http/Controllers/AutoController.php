@@ -26,7 +26,12 @@ class AutoController extends Controller
             if ($nomor !== '') {
                 try {
                     $jatuhTempo = tanggal_indo(date('Y-m-d', strtotime((string) $order->expdate)));
-                    $link = url('/');
+                    // Referensi bayar: kode invoice Unpaid kalau ada, kalau tidak pakai
+                    // ID Pelanggan (selalu ada). Halaman /tagihan/{ref} resolve keduanya,
+                    // jadi tombol dinamis {{1}} tidak pernah kosong (Meta tidak menolak).
+                    $unpaidInvoice = Invoice::where('idpel', $order->idpel)->where('status', 'Unpaid')->orderByDesc('id')->first();
+                    $payRef = $unpaidInvoice?->code ?? $order->idpel;
+                    $link = url('tagihan/'.$payRef);
                     $message = "Layanan Internet Anda Dinonaktifkan Sementara\n\nNama: {$order->nama}\nID Pelanggan: {$order->idpel}\nJatuh Tempo: {$jatuhTempo}\nMohon segera lakukan pembayaran untuk mengaktifkan kembali layanan.\nLink: {$link}\nPaket: {$order->paket}\n\nSalam Hangat\n\nANNORTY NET";
 
                     // Template Meta notif_isolir: [nama, id_pelanggan, jatuh_tempo, link, paket]
@@ -36,7 +41,7 @@ class AutoController extends Controller
                         $jatuhTempo,
                         $link,
                         $order->paket,
-                    ]);
+                    ], $payRef);
                 } catch (\Throwable $e) {
                     Log::warning("Gagal kirim WhatsApp isolir ({$order->idpel}): {$e->getMessage()}");
                 }
@@ -91,8 +96,8 @@ class AutoController extends Controller
                 $price = $service->harga + $service->harga * $service->ppn / 100;
                 if ($notification->notif_tagihan == 'on') {
                     $template = TemplateMessage::all()->last();
-                    $message = str_replace(['{id_pelanggan}', '{expdate}', '{link_web}', '{nomor_invoice}'], [$value->idpel, tanggal_indo(date('Y-m-d', strtotime($value->expdate))), url('/'), $kodebaru], $template?->notif_tagihan ?? '');
-                    WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TAGIHAN, $value->nomor, $message, [$value->nama, $value->idpel, tanggal_indo(date('Y-m-d', strtotime($value->expdate))), url('/'), $kodebaru, $value->paket]);
+                    $message = str_replace(['{id_pelanggan}', '{expdate}', '{link_web}', '{nomor_invoice}', '{link_bayar}', '{link_invoice}'], [$value->idpel, tanggal_indo(date('Y-m-d', strtotime($value->expdate))), url('/'), $kodebaru, url('tagihan/'.$kodebaru), url('invoice/'.$kodebaru)], $template?->notif_tagihan ?? '');
+                    WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TAGIHAN, $value->nomor, $message, [$value->nama, $value->idpel, tanggal_indo(date('Y-m-d', strtotime($value->expdate))), url('tagihan/'.$kodebaru), $kodebaru, $value->paket, url('invoice/'.$kodebaru)], $kodebaru);
                 }
                 Invoice::insert(['code' => $kodebaru, 'idpel' => $value->idpel, 'nama' => $value->nama, 'package' => $value->paket, 'price' => $price, 'status' => 'Unpaid', 'date' => date('Y-m-d'), 'expdate' => $value->expdate, 'account' => 'user']);
                 echo 'berhasil generate invoice<br/>';
@@ -114,8 +119,8 @@ class AutoController extends Controller
             $dayDifference = floor((strtotime($expdateFormatted) - strtotime($date)) / (60 * 60 * 24));
             $send = (($notification->notif_jatuh_tempo_h == 'on' && $expdateFormatted == $date) || ($dayDifference == 1 && $notification->notif_jatuh_tempo_h1 == 'on') || ($dayDifference == 3 && $notification->notif_jatuh_tempo_h3 == 'on') || ($dayDifference == 7 && $notification->notif_jatuh_tempo_h7 == 'on'));
             if ($send) {
-                $message = str_replace(['{expdate}', '{nomor_invoice}', '{link_web}'], [tanggal_indo($expdateFormatted), $value->code, url('/')], $template->notif_pengingat);
-                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_PENGINGAT, $order->nomor, $message, [tanggal_indo($expdateFormatted), $value->code, url('/'), $order->paket]);
+                $message = str_replace(['{expdate}', '{nomor_invoice}', '{link_web}', '{link_bayar}', '{link_invoice}'], [tanggal_indo($expdateFormatted), $value->code, url('/'), url('tagihan/'.$value->code), url('invoice/'.$value->code)], $template->notif_pengingat);
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_PENGINGAT, $order->nomor, $message, [tanggal_indo($expdateFormatted), $value->code, url('tagihan/'.$value->code), $order->paket, url('invoice/'.$value->code)], $value->code);
                 echo 'berhasil mengirimkan reminder<br/>';
             }
         }

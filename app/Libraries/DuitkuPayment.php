@@ -163,7 +163,7 @@ class DuitkuPayment
 
         $calcSignature = md5($merchantCode.$amount.$merchantOrderId.$this->apiKey);
 
-        if ($signature !== $calcSignature) {
+        if (! hash_equals($calcSignature, (string) $signature)) {
             $this->lastError = 'Invalid signature. See https://docs.duitku.com/api';
 
             return false;

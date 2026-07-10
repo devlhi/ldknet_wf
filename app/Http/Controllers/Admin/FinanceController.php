@@ -353,9 +353,12 @@ class FinanceController extends Controller
             'status' => 'required|in:Paid',
             'category' => 'required|string|max:100',
             'metode' => 'required|string|max:150',
-            'image' => 'required|mimes:png,jpg,jpeg|image|max:2048',
+            // Admin boleh konfirmasi tanpa upload bukti: bukti wajib hanya bila
+            // memilih "ya" (default form). Nilai lain -> bukti opsional.
+            'upload_bukti' => 'nullable|in:ya,tidak',
+            'image' => 'required_if:upload_bukti,ya|nullable|mimes:png,jpg,jpeg|image|max:2048',
         ], [
-            'image.required' => 'Masukan Bukti Pembayaran terlebih dahulu',
+            'image.required_if' => 'Masukan Bukti Pembayaran terlebih dahulu',
             'image.mimes' => 'Extension tidak di perbolehkan',
             'image.image' => 'File yang diperbolehkan hanya gambar',
             'image.max' => 'Ukuran bukti pembayaran maksimal 2MB',
@@ -410,9 +413,14 @@ class FinanceController extends Controller
         $idrouter = $order->id_router;
         $mode = $order->mode;
 
-        $gambar = $request->file('image');
-        $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$gambar->getClientOriginalExtension();
-        $gambar->move(public_path('data/bukti'), $filename);
+        // Bukti pembayaran opsional. Kalau tidak diupload, simpan string kosong
+        // (di laporan tampil sebagai "Tidak ada bukti").
+        $filename = '';
+        if ($request->hasFile('image')) {
+            $gambar = $request->file('image');
+            $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$gambar->getClientOriginalExtension();
+            $gambar->move(public_path('data/bukti'), $filename);
+        }
 
         if ($status == 'Paid') {
             $date = date('Y-m-d');
@@ -833,6 +841,7 @@ class FinanceController extends Controller
             $message = str_replace('{expdate}', $tglindo, $message);
             $message = str_replace('{link_web}', $base_url, $message);
             $message = str_replace('{nomor_invoice}', $kodebaru, $message);
+            $message = str_replace(['{link_bayar}', '{link_invoice}'], [url('tagihan/'.$kodebaru), url('invoice/'.$kodebaru)], $message);
 
             $pesanemail = str_replace('{nama_customer}', $user, $pesanemail);
             $pesanemail = str_replace('{id_pelanggan}', $idpel, $pesanemail);
@@ -841,7 +850,7 @@ class FinanceController extends Controller
             $pesanemail = str_replace('{nomor_invoice}', $kodebaru, $pesanemail);
 
             try {
-                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TAGIHAN, $nomornya, $message, [$user, $idpel, $tglindo, $base_url, $kodebaru, $package]);
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TAGIHAN, $nomornya, $message, [$user, $idpel, $tglindo, url('tagihan/'.$kodebaru), $kodebaru, $package, url('invoice/'.$kodebaru)], $kodebaru);
             } catch (\Throwable $e) {
                 Log::warning("Gagal kirim WhatsApp tagihan invoice #{$kodebaru} ({$idpel}): {$e->getMessage()}");
             }
@@ -1441,6 +1450,7 @@ class FinanceController extends Controller
         $message = str_replace('{id_pelanggan}', $idpel, $message);
         $message = str_replace('{nomor_invoice}', $code, $message);
         $message = str_replace('{link_web}', $base_url, $message);
+        $message = str_replace(['{link_bayar}', '{link_invoice}'], [url('tagihan/'.$code), url('invoice/'.$code)], $message);
 
         $pesanemail = str_replace('{id_pelanggan}', $idpel, $pesanemail);
         $pesanemail = str_replace('{link_web}', $base_url, $pesanemail);
@@ -1448,7 +1458,7 @@ class FinanceController extends Controller
 
         if ((string) $nomornya !== '') {
             try {
-                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomornya, $message, [$idpel, $code, $base_url, $package]);
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomornya, $message, [$idpel, $code, url('invoice/'.$code), $package]);
             } catch (\Throwable $e) {
                 Log::warning("Gagal kirim WhatsApp terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
             }

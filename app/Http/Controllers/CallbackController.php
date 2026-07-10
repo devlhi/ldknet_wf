@@ -310,13 +310,13 @@ class CallbackController extends Controller
         // pesan bila jumlahnya tidak sama dengan definisi template.
         $package = $invoice->package ?: ($order->paket ?? '-');
 
-        $message = str_replace(['{id_pelanggan}', '{nomor_invoice}', '{link_web}'], [$idpel, $code, $baseUrl], $message);
+        $message = str_replace(['{id_pelanggan}', '{nomor_invoice}', '{link_web}', '{link_bayar}', '{link_invoice}'], [$idpel, $code, $baseUrl, url('tagihan/'.$code), url('invoice/'.$code)], $message);
         $pesanemail = str_replace(['{id_pelanggan}', '{nomor_invoice}', '{link_web}'], [$idpel, $code, $baseUrl], $pesanemail);
 
         $nomor = $order->nomor ?? '';
         if ($nomor !== '') {
             try {
-                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomor, $message, [$idpel, $code, $baseUrl, $package]);
+                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_TERBAYAR, $nomor, $message, [$idpel, $code, url('invoice/'.$code), $package]);
             } catch (\Throwable $e) {
                 Log::warning("Gagal kirim WhatsApp terbayar (callback) #{$code} ({$idpel}): {$e->getMessage()}");
             }

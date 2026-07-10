@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Libraries\RouterosAPI;
 use App\Models\Invoice;
-use App\Models\Psb;
+use App\Models\Order;
 use App\Models\Report;
 use App\Models\Router;
 use App\Models\Website;
@@ -36,7 +36,9 @@ class AdminController extends Controller
             ->where('jenis_kategori', 'Pengeluaran')
             ->sum('balance');
 
-        $totalpsb = Psb::whereMonth('date', now()->month)
+        // Pelanggan baru = tabel orders (tabel psb legacy tidak terisi), konsisten
+        // dgn Finance report getFilteredDataNewCustomers().
+        $totalpsb = Order::whereMonth('date', now()->month)
             ->whereYear('date', now()->year)
             ->count();
 
@@ -56,7 +58,7 @@ class AdminController extends Controller
             ->groupBy(DB::raw('MONTH(date)'))
             ->pluck('total', 'month');
 
-        $newCustomersByMonth = Psb::selectRaw('MONTH(date) as month, COUNT(*) as total')
+        $newCustomersByMonth = Order::selectRaw('MONTH(date) as month, COUNT(*) as total')
             ->whereYear('date', now()->year)
             ->groupBy(DB::raw('MONTH(date)'))
             ->pluck('total', 'month');

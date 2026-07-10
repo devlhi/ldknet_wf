@@ -87,9 +87,22 @@
                                         </div>
                                     </div>
                                     <div class="mb-3">
+                                        <label class="form-label">Upload Bukti Pembayaran (Kwitansi)?</label>
+                                        <div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="upload_bukti" id="uploadBuktiYa" value="ya" checked>
+                                                <label class="form-check-label" for="uploadBuktiYa">Ya, upload bukti</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="upload_bukti" id="uploadBuktiTidak" value="tidak">
+                                                <label class="form-check-label" for="uploadBuktiTidak">Tidak, konfirmasi tanpa bukti</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3" id="buktiWrapper">
                                         <label class="form-label">Bukti Pembayaran ( Kwitansi ) </label>
                                         <div>
-                                            <input type="file" class="form-control" name="image" id="image"></input>
+                                            <input type="file" class="form-control" name="image" id="image" accept="image/png,image/jpeg">
                                         </div>
                                     </div>
                                     <div class="mb-3">
@@ -120,4 +133,26 @@
             </div>
         </div>
     @endforeach
+@endsection
+
+@section('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var wrapper = document.getElementById('buktiWrapper');
+            var fileInput = document.getElementById('image');
+            var radios = document.querySelectorAll('input[name="upload_bukti"]');
+            if (!wrapper || !fileInput) return;
+
+            function sync() {
+                var checked = document.querySelector('input[name="upload_bukti"]:checked');
+                var wantUpload = checked && checked.value === 'ya';
+                wrapper.style.display = wantUpload ? '' : 'none';
+                fileInput.required = wantUpload;
+                if (!wantUpload) { fileInput.value = ''; }
+            }
+
+            radios.forEach(function (r) { r.addEventListener('change', sync); });
+            sync();
+        });
+    </script>
 @endsection

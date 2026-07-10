@@ -126,6 +126,11 @@
                                         </div>
 
                                         <h6>Nama Template Meta (harus approved di Meta)</h6>
+                                        <small class="text-muted d-block mb-2">
+                                            Tersedia versi lengkap <code>_v2</code> (mis. <code>notif_tagihan_v2</code>). Setelah
+                                            template <code>_v2</code> berstatus APPROVED di Meta, ganti nama di bawah untuk memakainya.
+                                            Selama menunggu approval, biarkan nama lama agar notifikasi tetap terkirim.
+                                        </small>
                                         <div class="mb-3">
                                             <label class="form-label">Template Notif Tagihan</label>
                                             <input type="text" class="form-control" name="meta_template_tagihan" value="{{ $metaTemplates['tagihan'] ?? 'notif_tagihan' }}">

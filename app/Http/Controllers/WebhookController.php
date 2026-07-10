@@ -2708,8 +2708,33 @@ class WebhookController extends Controller
         return response('Forbidden', 403);
     }
 
+    /**
+     * Verifikasi header X-Hub-Signature-256 dari Meta (HMAC-SHA256 raw body + App
+     * Secret). Hanya dipanggil bila App Secret dikonfigurasi.
+     */
+    private function verifyMetaSignature(string $appSecret): bool
+    {
+        $header = (string) request()->header('X-Hub-Signature-256', '');
+        if (! str_starts_with($header, 'sha256=')) {
+            return false;
+        }
+
+        $expected = 'sha256='.hash_hmac('sha256', request()->getContent(), $appSecret);
+
+        return hash_equals($expected, $header);
+    }
+
     public function whatsappMeta()
     {
+        // Bila META_APP_SECRET diset, tolak payload yang signature-nya tidak cocok
+        // (mencegah webhook palsu). Fail-open kalau secret belum dikonfigurasi.
+        $appSecret = (string) config('services.whatsapp_meta.app_secret');
+        if ($appSecret !== '' && ! $this->verifyMetaSignature($appSecret)) {
+            \Log::warning('WhatsApp Meta webhook: signature X-Hub-Signature-256 tidak valid, payload ditolak');
+
+            return response()->json(['status' => 'invalid signature'], 403);
+        }
+
         $payload = request()->all();
         \Log::info('WhatsApp Meta webhook payload', $payload);
 

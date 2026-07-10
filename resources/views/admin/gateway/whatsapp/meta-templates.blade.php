@@ -92,7 +92,12 @@
                         <div class="card border mb-4">
                             <div class="card-body">
                                 <h5>Template Meta Default Aplikasi</h5>
-                                <p class="text-muted mb-3">Template ini sudah tersedia di aplikasi. Koneksi ke Meta hanya dibutuhkan saat mendaftarkan template ke WhatsApp Cloud API.</p>
+                                <p class="text-muted mb-2">Template ini sudah tersedia di aplikasi. Koneksi ke Meta hanya dibutuhkan saat mendaftarkan template ke WhatsApp Cloud API.</p>
+                                <div class="mb-3" style="max-width: 520px;">
+                                    <label class="form-label mb-1">Domain publik (untuk URL tombol Bayar)</label>
+                                    <input type="text" id="btnDomain" class="form-control form-control-sm" value="{{ rtrim(url('/'), '/') }}">
+                                    <small class="text-muted">Isi domain produksi (mis. <code>https://annortynet.com</code>) — URL tombol di bawah otomatis ikut. Jangan pakai localhost / .test saat mendaftarkan tombol ke Meta.</small>
+                                </div>
                                 <div class="table-responsive mb-4">
                                     <table class="table table-bordered table-sm">
                                         <thead>
@@ -117,7 +122,54 @@
                                                             </button>
                                                         @endforeach
                                                     </td>
-                                                    <td><pre class="mb-0" style="white-space: pre-wrap; font-family: inherit;">{{ $tpl['body'] }}</pre></td>
+                                                    <td>
+                                                    @if (! empty($tpl['header']))
+                                                        <div class="small text-muted mb-1 d-flex align-items-center">
+                                                            <strong class="me-1">Header:</strong>
+                                                            <span class="tpl-header-text">{{ $tpl['header'] }}</span>
+                                                            <button type="button" class="btn btn-sm btn-link p-0 ms-1 btn-copy-el" data-copy-target=".tpl-header-text" data-label="Header" title="Salin header saja"><i class="mdi mdi-content-copy"></i></button>
+                                                        </div>
+                                                    @endif
+
+                                                    <button type="button" class="btn btn-outline-primary btn-sm mb-1 btn-copy-message" data-label="Isi pesan">
+                                                        <i class="mdi mdi-content-copy"></i> Salin Isi Pesan
+                                                    </button>
+                                                    <pre class="tpl-body-text mb-1" style="white-space: pre-wrap; font-family: inherit;">{{ $tpl['body'] }}</pre>
+
+                                                    @if (! empty($tpl['footer']))
+                                                        <div class="small text-muted mb-1 d-flex align-items-center">
+                                                            <strong class="me-1">Footer:</strong>
+                                                            <span class="tpl-footer-text">{{ $tpl['footer'] }}</span>
+                                                            <button type="button" class="btn btn-sm btn-link p-0 ms-1 btn-copy-el" data-copy-target=".tpl-footer-text" data-label="Footer" title="Salin footer saja"><i class="mdi mdi-content-copy"></i></button>
+                                                        </div>
+                                                    @endif
+                                                    @if (! empty($tpl['button']))
+                                                        @php
+                                                            $btnPath = ltrim($tpl['button']['path'] ?? 'tagihan', '/');
+                                                            $btnDynamic = ($tpl['button']['dynamic'] ?? true) !== false;
+                                                            $btnSuffix = $btnDynamic ? '/{{1}}' : '';
+                                                            $btnInitUrl = rtrim(url($btnPath), '/').$btnSuffix;
+                                                        @endphp
+                                                        <div class="mt-2">
+                                                            <span class="badge bg-success"><i class="mdi mdi-gesture-tap-button"></i> Tombol: {{ $tpl['button']['text'] ?? 'Bayar Sekarang' }}</span>
+                                                            <span class="small text-muted">
+                                                                @if (! $btnDynamic)
+                                                                    (statis &rarr; halaman cek tagihan)
+                                                                @else
+                                                                    (dinamis &rarr; langsung ke invoice pelanggan)
+                                                                @endif
+                                                            </span>
+                                                            <div class="input-group input-group-sm mt-1" style="max-width: 520px;">
+                                                                <span class="input-group-text">URL Tombol</span>
+                                                                <input type="text" readonly class="form-control btn-url" data-path="{{ $btnPath }}" data-suffix="{{ $btnSuffix }}" value="{{ $btnInitUrl }}">
+                                                                <button class="btn btn-outline-secondary btn-copy-url" type="button" title="Salin URL tombol untuk ditempel ke Meta"><i class="mdi mdi-content-copy"></i> Salin URL</button>
+                                                            </div>
+                                                            @if ($btnDynamic)
+                                                                <small class="text-muted">Bagian kode invoice otomatis diisi Meta saat kirim.</small>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+                                                </td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
@@ -256,6 +308,60 @@ document.querySelectorAll('.btn-copy-var').forEach(function(btn) {
 document.querySelectorAll('.btn-copy-body').forEach(function(btn) {
     btn.addEventListener('click', function() {
         copyToClipboard(this.dataset.copy, 'Isi pesan');
+    });
+});
+
+// Salin isi satu komponen (header/footer) tanpa ikut label & komponen lain.
+document.querySelectorAll('.btn-copy-el').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var cell = this.closest('td');
+        var el = cell ? cell.querySelector(this.dataset.copyTarget) : null;
+        if (el) {
+            // textContent = teks asli dengan baris baru utuh, tanpa tulisan "Footer:" dsb.
+            copyToClipboard(el.textContent.replace(/\r/g, '').trim(), this.dataset.label || 'Teks');
+        }
+    });
+});
+
+// Salin isi pesan LENGKAP: header + body + footer (teks asli), tanpa label
+// tampilan "Header:"/"Footer:". Footer IKUT tercopy.
+document.querySelectorAll('.btn-copy-message').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var cell = this.closest('td');
+        if (!cell) return;
+        var parts = [];
+        ['.tpl-header-text', '.tpl-body-text', '.tpl-footer-text'].forEach(function(sel) {
+            var el = cell.querySelector(sel);
+            if (el) {
+                var t = el.textContent.replace(/\r/g, '').trim();
+                if (t) parts.push(t);
+            }
+        });
+        copyToClipboard(parts.join('\n\n'), btn.dataset.label || 'Isi pesan');
+    });
+});
+
+// URL tombol Bayar: ikut domain yang diisi (default APP_URL). Suffix {{1}}
+// diambil dari data-suffix (dirender server) agar tidak bentrok sintaks Blade.
+function refreshBtnUrls() {
+    var dEl = document.getElementById('btnDomain');
+    if (!dEl) return;
+    var domain = (dEl.value || '').trim().replace(/\/+$/, '');
+    document.querySelectorAll('.btn-url').forEach(function(inp) {
+        var path = (inp.dataset.path || '').replace(/^\/+/, '');
+        inp.value = domain + '/' + path + (inp.dataset.suffix || '');
+    });
+}
+(function () {
+    var dEl = document.getElementById('btnDomain');
+    if (dEl) { dEl.addEventListener('input', refreshBtnUrls); refreshBtnUrls(); }
+})();
+
+document.querySelectorAll('.btn-copy-url').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var grp = this.closest('.input-group');
+        var inp = grp ? grp.querySelector('.btn-url') : null;
+        if (inp) copyToClipboard(inp.value, 'URL tombol');
     });
 });
 

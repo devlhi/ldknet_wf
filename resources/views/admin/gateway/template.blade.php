@@ -11,6 +11,13 @@
                             <div class="card-body">
                                 <h4 class="card-title">Template Message</h4>
                                 <p class="card-title-desc"> Semua kata dengan symbol <code>{}</code> tidak boleh dihapus maupun diganti.</p>
+                                <div class="alert alert-info py-2 small mb-3">
+                                    <strong>Variabel link:</strong>
+                                    <code>{link_bayar}</code> = link langsung ke halaman <em>bayar tagihan</em> (disarankan untuk notif tagihan/pengingat) ·
+                                    <code>{link_invoice}</code> = link ke <em>invoice/kwitansi</em> (untuk notif terbayar) ·
+                                    <code>{link_web}</code> = URL beranda situs (lama, tetap bisa dipakai).
+                                    Cukup tulis <code>{link_bayar}</code> saja tanpa menambah <code>/tagihan/{nomor_invoice}</code> lagi.
+                                </div>
 
                                 @if (session('auth_errors'))
                                     <div class="alert alert-danger alert-message" role="alert">

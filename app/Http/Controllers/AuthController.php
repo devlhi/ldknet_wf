@@ -11,9 +11,57 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    /**
+     * Masa berlaku token reset password (detik). Setelah lewat, token ditolak.
+     */
+    private const RESET_TOKEN_TTL = 3600; // 60 menit
+
+    /**
+     * Hash bcrypt dummy dipakai untuk menyamakan waktu respons login ketika email
+     * tidak ada, supaya keberadaan akun tidak bocor lewat perbedaan timing.
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$10$f4BA0BST5keNpp3feqhsbOjx8Zo7PESshz1ttSI0XxxuqX7V6Gr1O';
+
+    /**
+     * Token yang dikirim ke user berupa string acak; yang disimpan di DB adalah
+     * hash-nya. Jadi kebocoran isi tabel token_user tidak membocorkan token yang
+     * bisa dipakai untuk reset.
+     */
+    private function hashResetToken(string $token): string
+    {
+        return hash('sha256', $token);
+    }
+
+    /**
+     * Cari token reset yang masih valid (cocok + belum kedaluwarsa).
+     * Token kedaluwarsa langsung dihapus.
+     */
+    private function findValidResetToken(string $token): ?TokenUser
+    {
+        if ($token === '') {
+            return null;
+        }
+
+        $data = TokenUser::where('token', $this->hashResetToken($token))->first();
+
+        if (! $data) {
+            return null;
+        }
+
+        // date_create = unix timestamp saat token dibuat (kolom int legacy).
+        if ((time() - (int) $data->date_create) > self::RESET_TOKEN_TTL) {
+            $data->delete();
+
+            return null;
+        }
+
+        return $data;
+    }
+
     private function websiteData(): array
     {
         $website = Schema::hasTable('website') ? Website::first() : null;
@@ -58,24 +106,30 @@ class AuthController extends Controller
             ->orWhere('nomor', $credentials['email'])
             ->first();
 
-        if (! $user) {
-            return redirect('auth/login')->with('auth_errors', ['Email tidak terdaftar']);
+        $validLevel = $user && in_array($user->level, ['developer', 'admin', 'finance', 'user', 'technician'], true);
+
+        // Verifikasi password DULU, sebelum mengungkap status akun apa pun. Kalau
+        // user tidak ada tetap jalankan satu bcrypt (ke hash dummy) supaya waktu
+        // respons sama — mencegah enumerasi akun lewat timing maupun beda pesan.
+        if ($validLevel) {
+            $passwordOk = Hash::check($credentials['password'], $user->password);
+        } else {
+            Hash::check($credentials['password'], self::DUMMY_PASSWORD_HASH);
+            $passwordOk = false;
         }
 
+        if (! $passwordOk) {
+            return redirect('auth/login')->with('auth_errors', ['Email atau password salah']);
+        }
+
+        // Pesan spesifik di bawah hanya tampil bagi yang kredensialnya sudah benar,
+        // jadi tidak memberi sinyal keberadaan akun kepada penyerang.
         if (! $user->isVerified()) {
             return redirect('auth/login')->with('auth_errors', ['Akun anda belum diverifikasi, mohon cek email inbox / spam anda !']);
         }
 
-        if (! in_array($user->level, ['developer', 'admin', 'finance', 'user', 'technician'])) {
-            return redirect('auth/login')->with('auth_errors', ['Email tidak terdaftar']);
-        }
-
-        if (in_array($user->level, ['user', 'technician']) && ! $user->isActive()) {
+        if (in_array($user->level, ['user', 'technician'], true) && ! $user->isActive()) {
             return redirect('auth/login')->with('auth_errors', ['Akun anda nonaktif, hubungi Admin']);
-        }
-
-        if (! Hash::check($credentials['password'], $user->password)) {
-            return redirect('auth/login')->with('auth_errors', ['Password salah']);
         }
 
         Auth::login($user);
@@ -118,14 +172,23 @@ class AuthController extends Controller
         $email = $request->input('email');
         $user = User::where('email', $email)->first();
 
+        // Balas pesan sama baik email terdaftar maupun tidak, supaya keberadaan
+        // akun tidak bisa dienumerasi lewat form lupa password.
+        $genericResponse = redirect('auth/forgot')
+            ->with('success', ['Jika email terdaftar, link reset password telah dikirim. Silakan cek inbox / spam Anda.']);
+
         if (! $user) {
-            return redirect('auth/forgot')->with('auth_errors', ['Email tidak ditemukan']);
+            return $genericResponse;
         }
 
-        $token = md5($email.now()->format('d-m-Y H:i:s'));
+        // Token acak berentropi tinggi (bukan md5 dari email+waktu yang bisa ditebak).
+        $token = Str::random(64);
+
+        // Hanya boleh ada satu link reset aktif per email: buang token lama dulu.
+        TokenUser::where('email', $email)->delete();
 
         TokenUser::create([
-            'token' => $token,
+            'token' => $this->hashResetToken($token),
             'email' => $email,
             'date_create' => time(),
         ]);
@@ -138,15 +201,13 @@ class AuthController extends Controller
             return redirect('auth/forgot')->with('auth_errors', ['Gagal, kesalahan sistem']);
         }
 
-        return redirect('auth/forgot')->with('success', ['Berhasil mengirimkan link reset password, harap cek inbox / spam !']);
+        return $genericResponse;
     }
 
     public function resetpassword(string $token)
     {
-        $data = TokenUser::where('token', $token)->first();
-
-        if (! $data) {
-            return redirect('auth/login')->with('auth_errors', ['Invalid token']);
+        if (! $this->findValidResetToken($token)) {
+            return redirect('auth/login')->with('auth_errors', ['Token tidak valid atau sudah kedaluwarsa']);
         }
 
         return view('auth.reset-password', [
@@ -166,15 +227,18 @@ class AuthController extends Controller
             'confirm_password.same' => 'Konfirmasi password harus sama.',
         ]);
 
-        $data = TokenUser::where('token', $token)->first();
+        $data = $this->findValidResetToken($token);
 
         if (! $data) {
-            return redirect('auth/login')->with('auth_errors', ['Invalid token']);
+            return redirect('auth/login')->with('auth_errors', ['Token tidak valid atau sudah kedaluwarsa']);
         }
 
         User::where('email', $data->email)->update([
             'password' => Hash::make($request->input('password')),
         ]);
+
+        // Token sekali-pakai: hapus semua token milik email ini setelah berhasil.
+        TokenUser::where('email', $data->email)->delete();
 
         return redirect('auth/login')->with('success', ['Password berhasil diganti']);
     }

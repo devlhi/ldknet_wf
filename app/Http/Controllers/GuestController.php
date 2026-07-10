@@ -80,8 +80,21 @@ class GuestController extends Controller
     {
         $datainvoice = Invoice::where('code', $code)->first();
 
+        // Robust utk tombol WA (mis. isolir) yang isian {{1}}-nya = ID Pelanggan:
+        // kalau {code} bukan nomor invoice, coba sebagai ID Pelanggan -> tagihan
+        // Unpaid terbaru pelanggan tsb.
         if (! $datainvoice) {
-            return redirect('invoice')->with('auth_errors', ['Nomor Invoice tidak ditemukan !']);
+            $byIdpel = Invoice::where('idpel', $code)
+                ->where('status', 'Unpaid')
+                ->orderByDesc('id')
+                ->first();
+            if ($byIdpel) {
+                return redirect('tagihan/'.$byIdpel->code);
+            }
+        }
+
+        if (! $datainvoice) {
+            return redirect('tagihan')->with('auth_errors', ['Tagihan tidak ditemukan. Silakan cek dengan ID Pelanggan Anda.']);
         }
 
         $gateway = PaymentGateway::where('payment_default', '1')->first();

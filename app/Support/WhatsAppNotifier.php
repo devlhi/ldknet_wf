@@ -62,7 +62,7 @@ class WhatsAppNotifier
         return $response;
     }
 
-    public static function sendNotification(string $event, string $number, string $message, array $parameters = []): mixed
+    public static function sendNotification(string $event, string $number, string $message, array $parameters = [], ?string $buttonSuffix = null): mixed
     {
         $gateway = WhatsAppGatewayResolver::active();
         if (! $gateway) {
@@ -72,17 +72,37 @@ class WhatsAppNotifier
         $api = WhatsAppGatewayResolver::make($gateway);
         if (WhatsAppGatewayResolver::isMeta($gateway)) {
             $templateName = self::templateName($event);
+
+            // Pemanggil bisa mengirim lebih banyak parameter daripada jumlah variabel
+            // template (mis. tagihan_v2 menambah link_invoice, tapi template lama masih
+            // 6 variabel). Potong sesuai jumlah variabel template supaya Meta tidak
+            // menolak (jumlah harus sama persis). Variabel tambahan diletakkan di urutan
+            // TERAKHIR agar pemotongan aman untuk template lama.
+            $params = array_values($parameters);
+            $expected = self::templateParamCount($templateName);
+            if ($expected !== null && count($params) > $expected) {
+                $params = array_slice($params, 0, $expected);
+            }
+
+            // Suffix tombol URL (kode invoice) hanya dikirim bila template yang
+            // dipetakan memang punya tombol (mis. _v2). Template lama tanpa tombol
+            // -> null, supaya Meta tidak menolak pesan.
+            $urlButtonParam = ($buttonSuffix !== null && $buttonSuffix !== '' && self::templateHasDynamicButton($templateName))
+                ? $buttonSuffix
+                : null;
+
             $response = $api->sendTemplate(
                 WhatsAppGatewayResolver::sender($gateway),
                 $number,
                 $templateName,
-                array_values($parameters),
-                self::templateLanguage($event)
+                $params,
+                self::templateLanguage($event),
+                $urlButtonParam
             );
 
             // Catat ke inbox dengan teks template Meta asli (parameter sudah terisi)
             // agar tampilan inbox = pesan yang benar-benar diterima pelanggan.
-            $inboxBody = self::renderTemplateBody($gateway, $templateName, array_values($parameters)) ?? $message;
+            $inboxBody = self::renderTemplateBody($gateway, $templateName, $params) ?? $message;
             self::logOutbound($gateway, $number, $inboxBody, 'template:'.$templateName, $response);
 
             return $response;
@@ -193,6 +213,36 @@ class WhatsAppNotifier
         $number = preg_replace('/\D+/', '', $number);
 
         return str_starts_with($number, '0') ? '62'.substr($number, 1) : $number;
+    }
+
+    /**
+     * Apakah template punya tombol URL DINAMIS (butuh parameter suffix saat kirim).
+     * Tombol statis tidak butuh parameter, jadi tidak dihitung di sini.
+     */
+    private static function templateHasDynamicButton(string $templateName): bool
+    {
+        foreach (WhatsAppMetaApi::defaultTemplateDefinitions() as $def) {
+            if (($def['name'] ?? '') === $templateName) {
+                return ! empty($def['button']) && ($def['button']['dynamic'] ?? true) !== false;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Jumlah variabel yang diharapkan template (dari definisi bawaan), untuk
+     * memotong parameter berlebih. null = template tak dikenal (kirim apa adanya).
+     */
+    private static function templateParamCount(string $templateName): ?int
+    {
+        foreach (WhatsAppMetaApi::defaultTemplateDefinitions() as $def) {
+            if (($def['name'] ?? '') === $templateName) {
+                return count($def['parameters'] ?? []);
+            }
+        }
+
+        return null;
     }
 
     public static function templateName(string $event): string

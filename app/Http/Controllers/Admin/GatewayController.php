@@ -533,9 +533,24 @@ class GatewayController extends Controller
 
         $defaults = WhatsAppMetaApi::defaultTemplateDefinitions();
 
+        // Template yang SUDAH ada di Meta dilewati (Meta menolak nama duplikat).
+        // Membuat tombol Create idempoten: hanya template baru (mis. _v2) yang
+        // benar-benar dikirim, template lama tidak diganggu.
+        $existing = collect((array) data_get($api->templates($wabaId), 'data', []))
+            ->pluck('name')
+            ->filter()
+            ->all();
+
         $results = [];
         $errors = [];
+        $skipped = [];
         foreach ($defaults as $tpl) {
+            if (in_array($tpl['name'], $existing, true)) {
+                $skipped[] = $tpl['name'];
+
+                continue;
+            }
+
             $response = $api->createTemplateFromDefinition($wabaId, $tpl, $language);
             if (isset($response['id'])) {
                 $results[] = $tpl['name'].' (OK)';
@@ -546,11 +561,19 @@ class GatewayController extends Controller
 
         $redirect = redirect(url('admin/whatsapp/meta/templates?business_account_id='.$wabaId));
 
-        if ($errors !== []) {
-            return $redirect->with('auth_errors', $errors)->with('success', $results !== [] ? ['Sebagian berhasil: '.implode(', ', $results)] : []);
+        $successMsgs = [];
+        if ($results !== []) {
+            $successMsgs[] = 'Berhasil membuat '.count($results).' template ke Meta: '.implode(', ', $results);
+        }
+        if ($skipped !== []) {
+            $successMsgs[] = 'Dilewati karena sudah ada di Meta: '.implode(', ', $skipped);
         }
 
-        return $redirect->with('success', ['Berhasil membuat 4 template default ke Meta: '.implode(', ', $results)]);
+        if ($errors !== []) {
+            return $redirect->with('auth_errors', $errors)->with('success', $successMsgs);
+        }
+
+        return $redirect->with('success', $successMsgs !== [] ? $successMsgs : ['Tidak ada template baru untuk dibuat.']);
     }
 
     public function whatsappMetaTest(Request $request)
