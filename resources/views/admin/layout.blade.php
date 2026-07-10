@@ -396,6 +396,13 @@
                                     <span>Rekap Absensi</span>
                                 </a>
                             </li>
+
+                            <li>
+                                <a href="{{ url('admin/absensi/pengaturan') }}" class="waves-effect">
+                                    <i class="uil-location-point"></i>
+                                    <span>Pengaturan Radius Absen</span>
+                                </a>
+                            </li>
                         @endif
 
                         @endif

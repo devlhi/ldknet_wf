@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Karyawan;
 
 use App\Http\Controllers\Controller;
 use App\Models\HrAttendance;
+use App\Models\HrAttendanceSetting;
 use App\Models\Website;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -38,12 +39,68 @@ class AttendanceController extends Controller
         $attendance = HrAttendance::where('user_id', auth()->id())
             ->whereDate('tanggal', $today)
             ->first();
+        $setting = HrAttendanceSetting::first();
 
         return view('karyawan.absensi', [
             'title' => 'Absensi',
             'attendance' => $attendance,
             'today' => $today,
+            'attendanceSetting' => [
+                'enforce' => (bool) ($setting->enforce ?? false),
+                'latitude' => $setting->latitude ?? null,
+                'longitude' => $setting->longitude ?? null,
+                'radius_meter' => $setting->radius_meter ?? null,
+                'label' => $setting->label ?? null,
+            ],
         ] + $this->websiteData());
+    }
+
+    /**
+     * Jarak antar 2 titik koordinat dalam meter (formula Haversine).
+     */
+    private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371000;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+    /**
+     * Validasi lokasi absen terhadap radius yang dikonfigurasi admin.
+     * Return null bila boleh lanjut (radius OK, atau enforcement nonaktif/belum
+     * dikonfigurasi -> fail-open supaya instalasi lama tidak mendadak terkunci),
+     * atau pesan error bila ditolak.
+     */
+    private function checkRadius(?string $lat, ?string $lng): ?string
+    {
+        $setting = HrAttendanceSetting::first();
+
+        if (! $setting || ! $setting->enforce || $setting->latitude === null || $setting->longitude === null) {
+            return null;
+        }
+
+        if ($lat === null || $lat === '' || $lng === null || $lng === '') {
+            return 'Lokasi GPS tidak terdeteksi. Aktifkan izin lokasi di HP/browser Anda untuk bisa absen.';
+        }
+
+        $distance = $this->distanceMeters((float) $lat, (float) $lng, (float) $setting->latitude, (float) $setting->longitude);
+
+        if ($distance > $setting->radius_meter) {
+            $lokasi = $setting->label ? " ({$setting->label})" : '';
+
+            return sprintf(
+                'Anda berada %s meter dari lokasi absen%s (radius maksimal %s meter). Absen ditolak.',
+                number_format($distance, 0, ',', '.'),
+                $lokasi,
+                number_format((float) $setting->radius_meter, 0, ',', '.')
+            );
+        }
+
+        return null;
     }
 
     public function checkIn(Request $request)
@@ -72,8 +129,13 @@ class AttendanceController extends Controller
         }
 
         // Hanya status "hadir" yang mencatat jam check-in, GPS, dan foto.
-        // Izin/sakit/cuti cukup mencatat status tanpa check-in.
+        // Izin/sakit/cuti cukup mencatat status tanpa check-in (tidak perlu lokasi).
         $isPresent = $data['status'] === 'hadir';
+
+        if ($isPresent && ($err = $this->checkRadius($data['lat'] ?? null, $data['lng'] ?? null))) {
+            return redirect('karyawan/absensi')->with('auth_errors', [$err]);
+        }
+
         $foto = $isPresent ? $this->storePhoto($request, 'in') : null;
 
         HrAttendance::create([
@@ -115,6 +177,10 @@ class AttendanceController extends Controller
         } catch (ValidationException $e) {
             return redirect('karyawan/absensi')
                 ->with('auth_errors', array_merge(...array_values($e->errors())));
+        }
+
+        if ($err = $this->checkRadius($data['lat'] ?? null, $data['lng'] ?? null)) {
+            return redirect('karyawan/absensi')->with('auth_errors', [$err]);
         }
 
         $attendance->update([

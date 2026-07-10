@@ -12,4 +12,7 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::get('absensi/rekap', [AdminAttendanceController::class, 'report']);
     Route::get('absensi/rekap/export', [AdminAttendanceController::class, 'exportCsv']);
     Route::post('absensi/rekap/update/{id}', [AdminAttendanceController::class, 'updateEntry']);
+
+    Route::get('absensi/pengaturan', [AdminAttendanceController::class, 'settings']);
+    Route::post('absensi/pengaturan', [AdminAttendanceController::class, 'updateSettings']);
 });

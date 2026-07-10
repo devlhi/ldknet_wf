@@ -54,5 +54,5 @@ Sedang berjalan / belum selesai:
 
 - `auth` — login/forgot/reset + middleware role — update: 2026-07-10 WIB (security: reset password, throttle, anti-enumerasi) -> .multibrain/indexes/auth.md
 - `admin-dashboard` — layout admin + halaman dashboard — update: 2026-07-10 WIB (fix Pelanggan Baru: baca dari orders bukan psb) -> .multibrain/indexes/admin-dashboard.md
-- `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-10 WIB (konfirmasi bayar tanpa bukti opsional) -> .multibrain/indexes/modules-parallel.md
+- `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-10 WIB (fitur radius absen) -> .multibrain/indexes/modules-parallel.md
 - `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-10 WIB (security: validasi signature webhook Meta) -> .multibrain/indexes/wa-gateway.md

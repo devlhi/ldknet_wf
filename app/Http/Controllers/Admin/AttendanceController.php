@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\HrAttendance;
+use App\Models\HrAttendanceSetting;
 use App\Models\User;
 use App\Models\Website;
 use App\Services\NewAccountMailer;
@@ -104,6 +105,44 @@ class AttendanceController extends Controller
         ]);
 
         return redirect('admin/karyawan')->with('success', ['Status karyawan berhasil diperbarui']);
+    }
+
+    public function settings()
+    {
+        return view('admin.absensi.settings', [
+            'title' => 'Pengaturan Radius Absensi',
+            'setting' => HrAttendanceSetting::first(),
+        ] + $this->websiteData());
+    }
+
+    public function updateSettings(Request $request)
+    {
+        try {
+            $data = $request->validate([
+                'label' => 'nullable|string|max:100',
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+                'radius_meter' => 'required|integer|min:10|max:5000',
+            ], [
+                'latitude.required' => 'Klik titik lokasi di peta terlebih dahulu',
+                'longitude.required' => 'Klik titik lokasi di peta terlebih dahulu',
+            ]);
+        } catch (ValidationException $e) {
+            return redirect('admin/absensi/pengaturan')
+                ->with('auth_errors', array_merge(...array_values($e->errors())));
+        }
+
+        $setting = HrAttendanceSetting::first() ?? new HrAttendanceSetting;
+        $setting->fill([
+            'label' => $data['label'] ?? null,
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
+            'radius_meter' => $data['radius_meter'],
+            'enforce' => $request->boolean('enforce'),
+        ]);
+        $setting->save();
+
+        return redirect('admin/absensi/pengaturan')->with('success', ['Pengaturan radius absensi berhasil disimpan']);
     }
 
     private function reportFilters(Request $request): array

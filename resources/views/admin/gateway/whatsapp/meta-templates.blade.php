@@ -112,7 +112,10 @@
                                         <tbody>
                                             @foreach ($localTemplates as $tpl)
                                                 <tr>
-                                                    <td><code>{{ $tpl['name'] }}</code></td>
+                                                    <td>
+                                                        <code>{{ $tpl['name'] }}</code>
+                                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1 btn-copy-var" data-copy="{{ $tpl['name'] }}" title="Salin nama template"><i class="mdi mdi-content-copy"></i></button>
+                                                    </td>
                                                     <td>{{ $tpl['language'] }}</td>
                                                     <td>{{ $tpl['category'] }}</td>
                                                     <td>
@@ -323,14 +326,14 @@ document.querySelectorAll('.btn-copy-el').forEach(function(btn) {
     });
 });
 
-// Salin isi pesan LENGKAP: header + body + footer (teks asli), tanpa label
-// tampilan "Header:"/"Footer:". Footer IKUT tercopy.
+// Salin isi pesan: BODY + FOOTER saja (tanpa header, tanpa label tampilan
+// "Header:"/"Footer:"). Header punya tombol salin sendiri.
 document.querySelectorAll('.btn-copy-message').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var cell = this.closest('td');
         if (!cell) return;
         var parts = [];
-        ['.tpl-header-text', '.tpl-body-text', '.tpl-footer-text'].forEach(function(sel) {
+        ['.tpl-body-text', '.tpl-footer-text'].forEach(function(sel) {
             var el = cell.querySelector(sel);
             if (el) {
                 var t = el.textContent.replace(/\r/g, '').trim();

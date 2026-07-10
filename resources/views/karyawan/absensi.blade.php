@@ -64,6 +64,8 @@
                         <div class="card-body">
                             <h5 class="card-title mb-3">Aksi Absen</h5>
 
+                            <div id="gpsStatus"></div>
+
                             @if (! $attendance)
                                 <form action="{{ url('karyawan/absensi/check-in') }}" method="POST" enctype="multipart/form-data">
                                     @csrf
@@ -86,7 +88,7 @@
                                         <label class="form-label">Keterangan (opsional)</label>
                                         <textarea name="keterangan" class="form-control" rows="2"></textarea>
                                     </div>
-                                    <button type="submit" class="btn btn-success w-100"><i class="uil uil-sign-in-alt me-1"></i> Simpan Absensi (Check In)</button>
+                                    <button type="submit" class="btn btn-success w-100 btn-absen-submit"><i class="uil uil-sign-in-alt me-1"></i> Simpan Absensi (Check In)</button>
                                 </form>
                             @elseif ($attendance->status !== 'hadir')
                                 <div class="alert alert-info mb-0 text-center">
@@ -101,7 +103,7 @@
                                         <label class="form-label">Foto (opsional)</label>
                                         <input type="file" name="foto" accept="image/*" capture="user" class="form-control">
                                     </div>
-                                    <button type="submit" class="btn btn-danger w-100"><i class="uil uil-sign-out-alt me-1"></i> Check Out</button>
+                                    <button type="submit" class="btn btn-danger w-100 btn-absen-submit"><i class="uil uil-sign-out-alt me-1"></i> Check Out</button>
                                 </form>
                             @else
                                 <div class="alert alert-success mb-0 text-center">
@@ -122,12 +124,36 @@
 @section('scripts')
     <script>
         (function() {
-            if (!navigator.geolocation) {
-                return;
+            var enforce = @json($attendanceSetting['enforce'] ?? false);
+            var officeLat = @json($attendanceSetting['latitude'] ?? null);
+            var officeLng = @json($attendanceSetting['longitude'] ?? null);
+            var radius = @json($attendanceSetting['radius_meter'] ?? null);
+            var hasOfficeLocation = enforce && officeLat !== null && officeLng !== null;
+
+            var statusSelect = document.querySelector('select[name="status"]'); // ada di form check-in saja
+            var gpsBox = document.getElementById('gpsStatus');
+            var submitBtn = document.querySelector('.btn-absen-submit');
+
+            var gps = { lat: null, lng: null, error: null };
+
+            function needsLocationCheck() {
+                if (!hasOfficeLocation) return false;
+                // Form check-in: pembatasan hanya berlaku saat status "Hadir".
+                // Form check-out: selalu berlaku (hanya tampil setelah check-in hadir).
+                return statusSelect ? statusSelect.value === 'hadir' : true;
             }
-            navigator.geolocation.getCurrentPosition(function(pos) {
-                var lat = pos.coords.latitude;
-                var lng = pos.coords.longitude;
+
+            function haversine(lat1, lng1, lat2, lng2) {
+                var R = 6371000;
+                var dLat = (lat2 - lat1) * Math.PI / 180;
+                var dLng = (lng2 - lng1) * Math.PI / 180;
+                var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            }
+
+            function setLatLngInputs(lat, lng) {
                 ['lat-in', 'lat-out'].forEach(function(id) {
                     var el = document.getElementById(id);
                     if (el) el.value = lat;
@@ -136,7 +162,58 @@
                     var el = document.getElementById(id);
                     if (el) el.value = lng;
                 });
-            });
+            }
+
+            function render() {
+                if (!submitBtn) return;
+
+                if (!needsLocationCheck()) {
+                    if (gpsBox) gpsBox.innerHTML = '';
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                if (gps.error) {
+                    if (gpsBox) gpsBox.innerHTML = '<div class="alert alert-danger mb-3">' + gps.error + '</div>';
+                    submitBtn.disabled = true;
+                    return;
+                }
+
+                if (gps.lat === null) {
+                    if (gpsBox) gpsBox.innerHTML = '<div class="alert alert-info mb-3"><span class="spinner-border spinner-border-sm me-1"></span> Mendeteksi lokasi Anda...</div>';
+                    submitBtn.disabled = true;
+                    return;
+                }
+
+                var dist = haversine(gps.lat, gps.lng, officeLat, officeLng);
+                var within = dist <= radius;
+                if (gpsBox) {
+                    gpsBox.innerHTML = '<div class="alert ' + (within ? 'alert-success' : 'alert-danger') + ' mb-3">' +
+                        (within ? '<i class="uil uil-check-circle"></i> Anda berada dalam radius absen' : '<i class="uil uil-times-circle"></i> Anda di luar radius absen') +
+                        ' (jarak ' + Math.round(dist) + ' m, maksimal ' + radius + ' m)</div>';
+                }
+                submitBtn.disabled = !within;
+            }
+
+            if (statusSelect) statusSelect.addEventListener('change', render);
+            if (hasOfficeLocation && submitBtn) submitBtn.disabled = needsLocationCheck();
+
+            if (!navigator.geolocation) {
+                gps.error = 'Perangkat/browser tidak mendukung deteksi lokasi.' + (hasOfficeLocation ? ' Absen tidak bisa dilakukan dari perangkat ini.' : '');
+                render();
+                return;
+            }
+
+            render();
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                gps.lat = pos.coords.latitude;
+                gps.lng = pos.coords.longitude;
+                setLatLngInputs(gps.lat, gps.lng);
+                render();
+            }, function() {
+                gps.error = 'Gagal mendapatkan lokasi GPS. Aktifkan izin lokasi lalu muat ulang halaman.';
+                render();
+            }, { enableHighAccuracy: true, timeout: 10000 });
         })();
     </script>
 @endsection
