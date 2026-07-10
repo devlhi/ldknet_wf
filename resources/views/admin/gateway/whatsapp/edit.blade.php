@@ -127,8 +127,9 @@
 
                                         <h6>Nama Template Meta (harus approved di Meta)</h6>
                                         <small class="text-muted d-block mb-2">
-                                            Tersedia versi lengkap <code>_v2</code> (mis. <code>notif_tagihan_v2</code>). Setelah
-                                            template <code>_v2</code> berstatus APPROVED di Meta, ganti nama di bawah untuk memakainya.
+                                            Tersedia versi lengkap berakhiran <code>_v2</code> (lihat daftar &amp; nama pastinya di halaman <a href="{{ url('admin/whatsapp/meta/templates') }}">Meta Templates</a> —
+                                            kata dasarnya bisa berbeda dari nama lama, mis. <code>notif_tagihanbaru_v2</code>, karena nama yang pernah dihapus di Meta tidak bisa dipakai ulang).
+                                            Setelah versi <code>_v2</code>-nya berstatus APPROVED di Meta, ganti nama di bawah untuk memakainya.
                                             Selama menunggu approval, biarkan nama lama agar notifikasi tetap terkirim.
                                         </small>
                                         <div class="mb-3">

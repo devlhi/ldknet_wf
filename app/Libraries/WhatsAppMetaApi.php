@@ -263,7 +263,10 @@ class WhatsAppMetaApi
             // lama agar pemanggil sendNotification() tidak perlu diubah.
             // =================================================================
             [
-                'name' => 'notif_tagihan_v2',
+                // Base nama sengaja beda dari "tagihan": nama "notif_tagihan_v2" pernah
+                // dihapus dari Meta dan terkunci (tidak bisa dipakai ulang), tapi akhiran
+                // _v2 tetap dipakai konsisten dengan template lain di bawah.
+                'name' => 'notif_tagihanbaru_v2',
                 'language' => 'id',
                 'category' => 'UTILITY',
                 'header' => 'Tagihan Internet Anda',
