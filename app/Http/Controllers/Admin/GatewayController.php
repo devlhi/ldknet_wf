@@ -440,10 +440,10 @@ class GatewayController extends Controller
 
     private function gatewayColumnLimitError(?string $apiUrl, ?string $sender): ?string
     {
-        // Kolom DB legacy: api_url varchar(255), sender varchar(15) — tidak boleh diubah (shared dengan CI4)
-        if (strlen((string) $apiUrl) > 255) {
-            return 'Setting terlalu panjang ('.strlen((string) $apiUrl).' karakter, maks 255). Persingkat verify token / nama template Meta.';
-        }
+        // api_url & api_key sudah diperlebar ke TEXT (migration widen_whatsapp_setting_columns),
+        // jadi tidak ada lagi batas 255 utk blob setting Meta / Access Token.
+        // Kolom `sender` masih varchar(15) — Phone Number ID Meta yang panjang disimpan
+        // di blob api_url, kolom sender cukup diisi penanda pendek "meta".
         if (strlen((string) $sender) > 15) {
             return 'Sender / Phone Number ID lebih dari 15 karakter — kolom DB legacy hanya menampung 15. Gunakan Phone Number ID yang valid (maks 15 digit).';
         }
