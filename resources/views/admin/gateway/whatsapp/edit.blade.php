@@ -121,6 +121,12 @@
                                         </div>
 
                                         <div class="mb-3">
+                                            <label class="form-label">App Secret <span class="text-muted">(opsional)</span></label>
+                                            <input type="text" class="form-control" name="meta_app_secret" value="{{ $metaSettings['app_secret'] ?? '' }}" placeholder="Dari Meta App Dashboard → Settings → Basic → App Secret" autocomplete="off">
+                                            <small class="text-muted">Bila diisi, webhook memvalidasi tanda tangan tiap pesan masuk (anti pesan palsu). Kosongkan untuk melewati validasi.</small>
+                                        </div>
+
+                                        <div class="mb-3">
                                             <label class="form-label">Bahasa Template (default)</label>
                                             <input type="text" class="form-control" name="meta_language" value="{{ $metaSettings['language'] ?? 'id' }}">
                                         </div>

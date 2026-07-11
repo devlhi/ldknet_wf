@@ -90,7 +90,7 @@ class WhatsAppGatewayResolver
         $settings = array_merge(self::defaultMetaSettings(), $settings);
         $payload = [];
         foreach ($settings as $key => $value) {
-            if (in_array($key, ['graph_url', 'verify_token', 'waba_id', 'phone_number_id', 'language', 'templates'])) {
+            if (in_array($key, ['graph_url', 'verify_token', 'waba_id', 'phone_number_id', 'language', 'templates', 'app_secret'])) {
                 $payload[$key] = $value;
             }
         }
@@ -116,6 +116,15 @@ class WhatsAppGatewayResolver
         return (string) (self::metaSettings($gateway)['waba_id'] ?? '');
     }
 
+    /**
+     * App Secret Meta untuk validasi signature webhook (X-Hub-Signature-256).
+     * Disimpan di blob setting (bukan .env), sama seperti verify_token dkk.
+     */
+    public static function metaAppSecret(WhatsappSetting $gateway): string
+    {
+        return (string) (self::metaSettings($gateway)['app_secret'] ?? '');
+    }
+
     public static function metaPhoneNumberId(WhatsappSetting $gateway): string
     {
         return (string) (self::metaSettings($gateway)['phone_number_id'] ?? '');
@@ -128,6 +137,7 @@ class WhatsAppGatewayResolver
             'verify_token' => 'landaknet-meta-webhook',
             'waba_id' => '',
             'phone_number_id' => '',
+            'app_secret' => '',
             'language' => 'id',
             'templates' => [
                 'tagihan' => 'notif_tagihan',
@@ -187,6 +197,9 @@ class WhatsAppGatewayResolver
             'templates' => $templates,
             // Ditambahkan di indeks 8 supaya blob lama (tanpa field ini) tetap terbaca.
             'phone_number_id' => $parts[8] ?? '',
+            // App Secret di indeks 11 (setelah isolir/buka_isolir di 9/10) — blob
+            // lama tanpa field ini fallback ke string kosong (fail-open).
+            'app_secret' => $parts[11] ?? '',
         ];
     }
 
@@ -206,6 +219,7 @@ class WhatsAppGatewayResolver
             $settings['phone_number_id'] ?? '',
             $templates['isolir'] ?? 'notif_isolir',
             $templates['buka_isolir'] ?? 'notif_buka_isolir',
+            $settings['app_secret'] ?? '',
         ];
 
         return 'meta###'.implode('|', array_map('rawurlencode', $parts));

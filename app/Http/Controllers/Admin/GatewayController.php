@@ -460,6 +460,9 @@ class GatewayController extends Controller
             // Phone Number ID Meta bisa 16+ digit → tidak muat di kolom sender varchar(15),
             // jadi disimpan di blob ini. Field form "sender" dipakai sebagai fallback input.
             'phone_number_id' => $request->post('meta_phone_number_id') ?: $request->post('sender') ?: '',
+            // App Secret Meta untuk validasi signature webhook (opsional). Disimpan
+            // di blob setting, bukan .env.
+            'app_secret' => $request->post('meta_app_secret') ?: '',
             'language' => $request->post('meta_language') ?: 'id',
             'templates' => [
                 'tagihan' => $request->post('meta_template_tagihan') ?: 'notif_tagihan',

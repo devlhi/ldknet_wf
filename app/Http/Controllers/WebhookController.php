@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Libraries\ACSRequest;
 use App\Libraries\RouterosAPI;
+use App\Models\GangguanReport;
 use App\Models\Member;
 use App\Models\Order;
 use App\Models\Router;
@@ -227,6 +228,15 @@ class WebhookController extends Controller
         if (isset($data['message'])) {
             $pesan = $data['message'];
             $from = strtolower($data['from']);
+
+            // Serap otomatis jadi laporan gangguan — hanya chat pribadi pelanggan
+            // (bukan grup, bukan pesan keluar dari kita). Additif & tidak mengubah
+            // alur bot; capture() dibungkus try/catch + dedup sendiri.
+            $isGroupChat = str_contains($from, '@g.us') || (strlen($from) > 13 && substr($from, 0, 5) === '12036');
+            $isOutgoing = ! empty($data['fromMe']) || ! empty($data['from_me']);
+            if (! $isGroupChat && ! $isOutgoing) {
+                GangguanReport::capture($from, $data['pushName'] ?? ($data['notifyName'] ?? null), (string) $pesan, 'wablas');
+            }
 
             // Deteksi apakah dari grup
             // Format 1: dari grup dengan @g.us
@@ -2726,9 +2736,13 @@ class WebhookController extends Controller
 
     public function whatsappMeta()
     {
-        // Bila META_APP_SECRET diset, tolak payload yang signature-nya tidak cocok
-        // (mencegah webhook palsu). Fail-open kalau secret belum dikonfigurasi.
-        $appSecret = (string) config('services.whatsapp_meta.app_secret');
+        // App Secret diambil dari setting gateway Meta aktif (blob DB, bukan .env).
+        // Bila diisi, tolak payload yang signature-nya tidak cocok (cegah webhook
+        // palsu). Fail-open kalau secret belum dikonfigurasi.
+        $activeGateway = WhatsAppGatewayResolver::active();
+        $appSecret = ($activeGateway && WhatsAppGatewayResolver::isMeta($activeGateway))
+            ? WhatsAppGatewayResolver::metaAppSecret($activeGateway)
+            : '';
         if ($appSecret !== '' && ! $this->verifyMetaSignature($appSecret)) {
             \Log::warning('WhatsApp Meta webhook: signature X-Hub-Signature-256 tidak valid, payload ditolak');
 
@@ -2779,6 +2793,9 @@ class WebhookController extends Controller
                     'status' => 'received',
                     'created_at' => now(),
                 ]);
+
+                // Serap otomatis jadi laporan gangguan bila terindikasi keluhan.
+                GangguanReport::capture($from, $fromName, $text, 'meta');
 
                 $reply = $this->handleMetaTextCommand($text);
                 if ($reply !== null) {

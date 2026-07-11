@@ -159,7 +159,15 @@ class CustomerController extends Controller
 
             $editUrl = url('admin/customer/edit/'.$row->idpel);
 
-            $aksi = '<button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalGantiPass" data-action="'.$gantipassUrl.'" data-nama="'.$namaAttr.'"><i class="uil uil-lock"></i> Ganti Password</button> '
+            // Tombol WA: buka chat langsung ke nomor pelanggan (nomor dinormalisasi ke 62...).
+            $waNumber = preg_replace('/\D+/', '', (string) $row->nomor);
+            $waNumber = str_starts_with($waNumber, '0') ? '62'.substr($waNumber, 1) : $waNumber;
+            $waBtn = $waNumber !== ''
+                ? '<a href="https://wa.me/'.$waNumber.'" target="_blank" class="btn btn-sm btn-success" title="Chat WhatsApp"><i class="uil uil-whatsapp"></i></a> '
+                : '';
+
+            $aksi = $waBtn
+                .'<button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalGantiPass" data-action="'.$gantipassUrl.'" data-nama="'.$namaAttr.'"><i class="uil uil-lock"></i> Ganti Password</button> '
                 .'<a href="'.$detailUrl.'" class="btn btn-sm btn-success"><i class="uil-check-circle"></i> Cek Disini</a> '
                 .'<a href="'.$editUrl.'" class="btn btn-sm btn-primary"><i class="uil-edit"></i> Edit Data</a>';
 

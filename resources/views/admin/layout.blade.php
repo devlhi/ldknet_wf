@@ -330,6 +330,13 @@
                         </li>
 
                         <li>
+                            <a href="{{ url('admin/gangguan') }}" class="waves-effect">
+                                <i class="uil-exclamation-octagon"></i>
+                                <span>Laporan Gangguan</span>
+                            </a>
+                        </li>
+
+                        <li>
                             <a href="{{ url('admin/template/message') }}" class="waves-effect">
                                 <i class="uil-comment-alt-message"></i>
                                 <span>Template Message</span>
@@ -366,19 +373,10 @@
                             </a>
                         </li>
 
-                        <li>
-                            <a href="javascript: void(0);" class="has-arrow waves-effect">
-                                <i class="uil-ticket"></i>
-                                <span>Voucher</span>
-                            </a>
-                            <ul class="sub-menu" aria-expanded="false">
-                                <li><a href="{{ url('server/voucher/dashboard') }}">Dashboard</a></li>
-                                <li><a href="{{ url('server/voucher/users') }}">Users</a></li>
-                                <li><a href="{{ url('server/voucher/report') }}">Report</a></li>
-                                <li><a href="{{ url('server/voucher/report/orders') }}">Report Orders</a></li>
-                                <li><a href="{{ url('server/voucher/template/message') }}">Template Message</a></li>
-                            </ul>
-                        </li>
+                        {{-- Menu Voucher Hotspot disembunyikan agar konsisten dgn CI4 (di CI4
+                             voucher tidak ada di sidebar utama; diakses via URL langsung). Kode
+                             controller/route/view tetap ada, tinggal kembalikan link ini bila
+                             suatu saat menjual voucher hotspot. Route: server/voucher/dashboard --}}
 
                         @if (in_array(auth()->user()->level, ['admin', 'developer']))
                             <li class="menu-title">HRD / Karyawan</li>

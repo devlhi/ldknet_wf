@@ -45,6 +45,34 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="col-md-6 col-xl-4">
+                    <a href="{{ url('admin/finance/invoice') }}" class="text-reset">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="float-end mt-2"><i class="uil uil-bill font-size-24 text-danger"></i></div>
+                                <div>
+                                    <h4 class="mb-1 mt-1 text-danger">Rp <span data-plugin="counterup">{{ number_format($tunggakanRupiah) }}</span></h4>
+                                    <p class="text-muted mb-0">Total Tunggakan <span class="badge bg-soft-danger text-danger">{{ number_format($tunggakanJumlah) }} tagihan</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6 col-xl-4">
+                    <a href="{{ url('admin/customers') }}" class="text-reset">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="float-end mt-2"><i class="uil uil-ban font-size-24 text-warning"></i></div>
+                                <div>
+                                    <h4 class="mb-1 mt-1 text-warning"><span data-plugin="counterup">{{ number_format($totalIsolir) }}</span></h4>
+                                    <p class="text-muted mb-0">Pelanggan Terisolir</p>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
             </div>
 
             <div class="row">

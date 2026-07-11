@@ -47,6 +47,58 @@
             </div>
 
             <div class="card">
+                <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between" role="button" data-bs-toggle="collapse" data-bs-target="#rekapPerKaryawan" aria-expanded="true">
+                    <h5 class="mb-0"><i class="uil uil-users-alt me-1"></i> Ringkasan per Karyawan</h5>
+                    <i class="uil uil-angle-down"></i>
+                </div>
+                <div class="collapse show" id="rekapPerKaryawan">
+                    <div class="card-body">
+                        @if ($perEmployee->isEmpty())
+                            <p class="text-muted mb-0 text-center py-2">Belum ada data pada rentang tanggal ini.</p>
+                        @else
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Nama</th>
+                                            <th class="text-center text-success">Hadir</th>
+                                            <th class="text-center text-info">Izin</th>
+                                            <th class="text-center text-warning">Sakit</th>
+                                            <th class="text-center text-danger">Alpha</th>
+                                            <th class="text-center text-secondary">Cuti</th>
+                                            <th class="text-center">Total</th>
+                                            <th style="min-width: 140px;">% Kehadiran</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($perEmployee as $emp)
+                                            <tr>
+                                                <td>{{ $emp['nama'] }}</td>
+                                                <td class="text-center fw-semibold">{{ $emp['hadir'] }}</td>
+                                                <td class="text-center">{{ $emp['izin'] }}</td>
+                                                <td class="text-center">{{ $emp['sakit'] }}</td>
+                                                <td class="text-center">{{ $emp['alpha'] }}</td>
+                                                <td class="text-center">{{ $emp['cuti'] }}</td>
+                                                <td class="text-center">{{ $emp['total'] }}</td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                                            <div class="progress-bar {{ $emp['persen'] >= 80 ? 'bg-success' : ($emp['persen'] >= 50 ? 'bg-warning' : 'bg-danger') }}" style="width: {{ $emp['persen'] }}%"></div>
+                                                        </div>
+                                                        <small class="text-muted">{{ $emp['persen'] }}%</small>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
                 <div class="card-body">
                     <form method="GET" action="{{ url('admin/absensi/rekap') }}" class="row g-2 mb-3">
                         <div class="col-md-3">

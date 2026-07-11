@@ -184,10 +184,29 @@ class AttendanceController extends Controller
             'cuti' => $rows->where('status', 'cuti')->count(),
         ];
 
+        // Ringkasan per karyawan pada rentang terpilih: jumlah tiap status +
+        // persentase kehadiran, diurut dari yang paling banyak entri.
+        $perEmployee = $rows->groupBy('user_id')->map(function ($items) {
+            $total = $items->count();
+            $hadir = $items->where('status', 'hadir')->count();
+
+            return [
+                'nama' => optional($items->first()->user)->nama ?? '-',
+                'hadir' => $hadir,
+                'izin' => $items->where('status', 'izin')->count(),
+                'sakit' => $items->where('status', 'sakit')->count(),
+                'alpha' => $items->where('status', 'alpha')->count(),
+                'cuti' => $items->where('status', 'cuti')->count(),
+                'total' => $total,
+                'persen' => $total > 0 ? (int) round($hadir / $total * 100) : 0,
+            ];
+        })->sortByDesc('total')->values();
+
         return view('admin.absensi.rekap', [
             'title' => 'Rekap Absensi',
             'rows' => $rows,
             'summary' => $summary,
+            'perEmployee' => $perEmployee,
             'employees' => User::where('level', 'technician')->orderBy('nama')->get(),
             'filters' => compact('start', 'end', 'userId', 'status'),
         ] + $this->websiteData());

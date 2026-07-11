@@ -42,6 +42,17 @@ class AdminController extends Controller
             ->whereYear('date', now()->year)
             ->count();
 
+        // Ringkasan penagihan: total tunggakan (invoice Unpaid pelanggan) & jumlah
+        // pelanggan yang sedang terisolir — surface data yang sudah ada agar admin
+        // langsung lihat prioritas penagihan di dashboard.
+        $tunggakan = Invoice::where('status', 'Unpaid')
+            ->where('account', 'user')
+            ->selectRaw('COUNT(*) as jml, COALESCE(SUM(price), 0) as total')
+            ->first();
+        $tunggakanJumlah = (int) ($tunggakan->jml ?? 0);
+        $tunggakanRupiah = (float) ($tunggakan->total ?? 0);
+        $totalIsolir = Order::where('status', 'Isolir')->count();
+
         $months = collect(range(1, 12));
         $monthLabels = $months->map(fn ($month) => bulan($month))->values();
 
@@ -86,6 +97,9 @@ class AdminController extends Controller
             'credit' => $credit,
             'debit' => $debit,
             'totalpsb' => $totalpsb,
+            'tunggakanJumlah' => $tunggakanJumlah,
+            'tunggakanRupiah' => $tunggakanRupiah,
+            'totalIsolir' => $totalIsolir,
             'chartData' => $chartData,
             'routers' => Router::all(['id', 'nama', 'ip']),
         ] + $this->websiteData());

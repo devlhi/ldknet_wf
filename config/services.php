@@ -2,10 +2,8 @@
 
 return [
     'whatsapp_meta' => [
-        // App Secret aplikasi Meta. Bila diisi (via env META_APP_SECRET), webhook
-        // memvalidasi header X-Hub-Signature-256. Bila kosong, validasi dilewati
-        // (fail-open) agar instalasi lama tidak langsung berhenti menerima pesan.
-        'app_secret' => env('META_APP_SECRET'),
+        // Catatan: App Secret Meta TIDAK di sini/.env — disimpan di setting gateway
+        // (blob DB, menu WhatsApp Gateway), dibaca via WhatsAppGatewayResolver::metaAppSecret().
         'verify_token' => 'landaknet-meta-webhook',
         'graph_url' => 'https://graph.facebook.com/v20.0',
         'templates' => [
