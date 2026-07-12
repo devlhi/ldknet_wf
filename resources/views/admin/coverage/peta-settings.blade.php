@@ -15,7 +15,7 @@
                 <div class="col-12">
                     <div class="page-title-box d-flex align-items-center justify-content-between">
                         <h4 class="mb-0">Pengaturan Peta Jaringan</h4>
-                        <a href="{{ url('admin/coverage/peta') }}" class="btn btn-light"><i class="uil uil-arrow-left me-1"></i> Ke Peta</a>
+                        <a href="{{ url('admin/coverage/peta') }}" class="btn btn-light"><i class="mdi mdi-arrow-left me-1"></i> Ke Peta</a>
                     </div>
                 </div>
             </div>
@@ -38,13 +38,13 @@
                             <div class="card-body">
                                 <div class="position-relative mb-2">
                                     <div class="input-group">
-                                        <span class="input-group-text"><i class="uil uil-search"></i></span>
+                                        <span class="input-group-text"><i class="mdi mdi-magnify"></i></span>
                                         <input type="text" class="form-control" id="locSearch" placeholder="Cari nama lokasi/area... (mis. Ngabang, Landak)" autocomplete="off">
                                     </div>
                                     <div id="searchResults" class="list-group position-absolute w-100 shadow-sm" style="z-index:1000;max-height:240px;overflow-y:auto;display:none;"></div>
                                 </div>
                                 <div id="pickMap"></div>
-                                <small class="text-muted d-block mt-2"><i class="uil uil-info-circle"></i> <strong>Klik peta</strong> untuk menaruh titik pusat/OLT (📡). Geser &amp; zoom peta ke area yang diinginkan lalu klik <em>“Jadikan tampilan default”</em> untuk menyimpan area tampilan.</small>
+                                <small class="text-muted d-block mt-2"><i class="mdi mdi-information-outline"></i> <strong>Klik peta</strong> untuk menaruh titik pusat/OLT (📡). Geser &amp; zoom peta ke area yang diinginkan lalu klik <em>“Jadikan tampilan default”</em> untuk menyimpan area tampilan.</small>
                             </div>
                         </div>
                     </div>
@@ -86,10 +86,10 @@
                                         <input type="text" name="center_lng" id="centerLng" class="form-control" value="{{ old('center_lng', $setting->center_lng) }}" placeholder="lng">
                                         <input type="number" name="zoom" id="zoomVal" class="form-control" style="max-width:90px" min="1" max="20" value="{{ old('zoom', $setting->zoom) }}" placeholder="zoom">
                                     </div>
-                                    <button type="button" id="captureView" class="btn btn-sm btn-outline-primary mt-2"><i class="uil uil-focus-target me-1"></i> Jadikan tampilan peta saat ini sebagai default</button>
+                                    <button type="button" id="captureView" class="btn btn-sm btn-outline-primary mt-2"><i class="mdi mdi-crosshairs-gps me-1"></i> Jadikan tampilan peta saat ini sebagai default</button>
                                 </div>
 
-                                <button type="submit" class="btn btn-primary mt-3 w-100"><i class="uil uil-save me-1"></i> Simpan Pengaturan</button>
+                                <button type="submit" class="btn btn-primary mt-3 w-100"><i class="mdi mdi-content-save me-1"></i> Simpan Pengaturan</button>
                             </div>
                         </div>
                     </div>

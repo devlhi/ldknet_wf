@@ -22,14 +22,14 @@
                             <h4 class="mb-0">Peta Jaringan</h4>
                             <p class="text-muted mb-0">Titik pusat/OLT, sebaran ODP, dan jalur kabel fiber mengikuti jalan (beranimasi).</p>
                         </div>
-                        <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="btn btn-light"><i class="uil uil-cog me-1"></i> Pengaturan Peta</a>
+                        <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="btn btn-light"><i class="mdi mdi-cog me-1"></i> Pengaturan Peta</a>
                     </div>
                 </div>
             </div>
 
             @if (! $setting->hub_lat || ! $setting->hub_lng)
                 <div class="alert alert-warning">
-                    <i class="uil uil-info-circle me-1"></i> Titik pusat/OLT belum diatur, jadi jalur kabel belum bisa digambar.
+                    <i class="mdi mdi-information-outline me-1"></i> Titik pusat/OLT belum diatur, jadi jalur kabel belum bisa digambar.
                     <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="alert-link">Atur titik pusat di sini</a>.
                 </div>
             @endif

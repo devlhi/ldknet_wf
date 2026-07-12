@@ -7,7 +7,7 @@
             <div class="col-12">
                 <div class="page-title-box d-flex align-items-center justify-content-between">
                     <h4 class="mb-0">Pengaturan Laporan Gangguan</h4>
-                    <a href="{{ url('admin/gangguan') }}" class="btn btn-light"><i class="uil uil-arrow-left me-1"></i> Kembali</a>
+                    <a href="{{ url('admin/gangguan') }}" class="btn btn-light"><i class="mdi mdi-arrow-left me-1"></i> Kembali</a>
                 </div>
             </div>
         </div>
@@ -29,7 +29,7 @@
                     {{-- Balasan otomatis --}}
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title mb-3"><i class="uil uil-comment-alt-message me-1"></i> Balasan Otomatis</h5>
+                            <h5 class="card-title mb-3"><i class="mdi mdi-message-text me-1"></i> Balasan Otomatis</h5>
 
                             <div class="form-check form-switch mb-3">
                                 <input class="form-check-input" type="checkbox" role="switch" name="auto_reply_enabled" id="autoReply" value="1" {{ old('auto_reply_enabled', $setting->auto_reply_enabled) ? 'checked' : '' }}>
@@ -47,7 +47,7 @@
                     {{-- Gangguan massal --}}
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title mb-3"><i class="uil uil-exclamation-triangle me-1"></i> Deteksi Gangguan Massal</h5>
+                            <h5 class="card-title mb-3"><i class="mdi mdi-alert me-1"></i> Deteksi Gangguan Massal</h5>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
@@ -73,7 +73,7 @@
                     {{-- SLA --}}
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title mb-3"><i class="uil uil-clock me-1"></i> SLA Penanganan</h5>
+                            <h5 class="card-title mb-3"><i class="mdi mdi-clock-outline me-1"></i> SLA Penanganan</h5>
                             <div class="mb-2" style="max-width: 320px;">
                                 <label class="form-label">Batas waktu respons (jam)</label>
                                 <input type="number" name="sla_response_hours" class="form-control" min="1" max="168" value="{{ old('sla_response_hours', $setting->sla_response_hours) }}" required>
@@ -82,7 +82,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary mb-4"><i class="uil uil-save me-1"></i> Simpan Pengaturan</button>
+                    <button type="submit" class="btn btn-primary mb-4"><i class="mdi mdi-content-save me-1"></i> Simpan Pengaturan</button>
                 </div>
 
                 <div class="col-lg-5">

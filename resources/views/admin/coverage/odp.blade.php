@@ -124,7 +124,7 @@
                     <div class="modal-body">
                         <div class="position-relative mb-3">
                             <div class="input-group">
-                                <span class="input-group-text"><i class="uil uil-search"></i></span>
+                                <span class="input-group-text"><i class="mdi mdi-magnify"></i></span>
                                 <input type="text" class="form-control" id="odpSearch" placeholder="Cari nama lokasi/alamat ODP... (mis. Dusun Ngabang)" autocomplete="off">
                             </div>
                             <div id="odpSearchResults" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; max-height: 240px; overflow-y: auto; display: none;"></div>

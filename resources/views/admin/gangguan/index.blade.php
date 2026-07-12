@@ -18,8 +18,8 @@
                         <p class="text-muted mb-0">Laporan otomatis terserap dari chat WhatsApp pelanggan (Meta &amp; gateway lama).</p>
                     </div>
                     <div class="d-flex gap-2">
-                        <a href="{{ $exportUrl }}" target="_blank" rel="noopener" class="btn btn-danger"><i class="uil uil-file-download-alt me-1"></i> Export PDF</a>
-                        <a href="{{ url('admin/gangguan/pengaturan') }}" class="btn btn-light"><i class="uil uil-cog me-1"></i> Pengaturan</a>
+                        <a href="{{ $exportUrl }}" target="_blank" rel="noopener" class="btn btn-danger"><i class="mdi mdi-file-download me-1"></i> Export PDF</a>
+                        <a href="{{ url('admin/gangguan/pengaturan') }}" class="btn btn-light"><i class="mdi mdi-cog me-1"></i> Pengaturan</a>
                     </div>
                 </div>
             </div>
@@ -70,7 +70,7 @@
                         </select>
                     </div>
                     <div class="col-md-2 d-flex gap-1">
-                        <button class="btn btn-primary w-100"><i class="uil uil-filter"></i> Terapkan</button>
+                        <button class="btn btn-primary w-100"><i class="mdi mdi-filter-variant"></i> Terapkan</button>
                         <a href="{{ url('admin/gangguan') }}" class="btn btn-light">Reset</a>
                     </div>
                     <div class="col-12"><small class="text-muted">Untuk periode Bulanan/Tahunan, sistem mengambil bulan/tahun dari <em>Tanggal acuan</em>. Sedang menampilkan: <strong>{{ $periodeLabel }}</strong>.</small></div>
@@ -81,7 +81,7 @@
         {{-- Peringatan gangguan massal per ODP --}}
         @if ($massal->isNotEmpty())
             <div class="alert alert-danger border-0 shadow-sm">
-                <h5 class="alert-heading mb-2"><i class="uil uil-exclamation-triangle me-1"></i> Kemungkinan Gangguan Massal Terdeteksi</h5>
+                <h5 class="alert-heading mb-2"><i class="mdi mdi-alert me-1"></i> Kemungkinan Gangguan Massal Terdeteksi</h5>
                 <p class="mb-2 text-muted">Beberapa ODP menerima banyak laporan dalam waktu berdekatan — kemungkinan gangguan jaringan area, bukan masalah per pelanggan.</p>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
@@ -94,10 +94,10 @@
                                     <td class="text-center">{{ $m->pelanggan_aktif }}</td>
                                     <td class="text-end text-nowrap">
                                         @if ($m->latitude && $m->longitude)
-                                            <a href="https://www.google.com/maps?q={{ $m->latitude }},{{ $m->longitude }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Lihat lokasi ODP"><i class="uil uil-map-marker"></i></a>
+                                            <a href="https://www.google.com/maps?q={{ $m->latitude }},{{ $m->longitude }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Lihat lokasi ODP"><i class="mdi mdi-map-marker"></i></a>
                                         @endif
-                                        <a href="{{ url('admin/coverage/odp') }}" class="btn btn-sm btn-outline-primary" title="Peta ODP"><i class="uil uil-map"></i> Peta</a>
-                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#bc-{{ $loop->index }}"><i class="uil uil-megaphone"></i> Info ke pelanggan</button>
+                                        <a href="{{ url('admin/coverage/odp') }}" class="btn btn-sm btn-outline-primary" title="Peta ODP"><i class="mdi mdi-map"></i> Peta</a>
+                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#bc-{{ $loop->index }}"><i class="mdi mdi-bullhorn"></i> Info ke pelanggan</button>
                                     </td>
                                 </tr>
                             @endforeach
@@ -123,7 +123,7 @@
                                 </div>
                                 <div class="modal-footer">
                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                                    <button type="submit" class="btn btn-danger"><i class="uil uil-megaphone me-1"></i> Kirim ke {{ $m->pelanggan_aktif }} pelanggan</button>
+                                    <button type="submit" class="btn btn-danger"><i class="mdi mdi-bullhorn me-1"></i> Kirim ke {{ $m->pelanggan_aktif }} pelanggan</button>
                                 </div>
                             </form>
                         </div>
@@ -140,7 +140,7 @@
                         <h3 class="mb-0">{{ number_format($totalPeriode) }}</h3>
                         <p class="text-muted mb-0">Total laporan ({{ $periodeLabel }})</p>
                         @if ($overdue > 0)
-                            <span class="badge bg-danger mt-1"><i class="uil uil-clock"></i> {{ $overdue }} lewat {{ $slaHours }} jam belum ditangani</span>
+                            <span class="badge bg-danger mt-1"><i class="mdi mdi-clock-outline"></i> {{ $overdue }} lewat {{ $slaHours }} jam belum ditangani</span>
                         @endif
                     </div>
                 </div>
@@ -170,7 +170,7 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <div class="border rounded p-2 h-100 d-flex align-items-center">
-                            <div class="avatar-xs me-2"><span class="avatar-title bg-soft-info text-info rounded-circle"><i class="uil uil-clock"></i></span></div>
+                            <div class="avatar-xs me-2"><span class="avatar-title bg-soft-info text-info rounded-circle"><i class="mdi mdi-clock-outline"></i></span></div>
                             <div>
                                 <p class="text-muted mb-0"><small>Rata-rata waktu respons (periode ini)</small></p>
                                 <h5 class="mb-0">{{ GangguanReport::humanDuration($avgRespon) }}</h5>
@@ -179,7 +179,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="border rounded p-2 h-100 d-flex align-items-center">
-                            <div class="avatar-xs me-2"><span class="avatar-title bg-soft-success text-success rounded-circle"><i class="uil uil-check-circle"></i></span></div>
+                            <div class="avatar-xs me-2"><span class="avatar-title bg-soft-success text-success rounded-circle"><i class="mdi mdi-check-circle"></i></span></div>
                             <div>
                                 <p class="text-muted mb-0"><small>Rata-rata waktu penyelesaian (periode ini)</small></p>
                                 <h5 class="mb-0">{{ GangguanReport::humanDuration($avgSelesai) }}</h5>
@@ -187,7 +187,7 @@
                         </div>
                     </div>
                 </div>
-                <h5 class="card-title mb-3"><i class="uil uil-chart-pie me-1"></i> Gangguan Paling Sering Dilaporkan
+                <h5 class="card-title mb-3"><i class="mdi mdi-chart-pie me-1"></i> Gangguan Paling Sering Dilaporkan
                     <small class="text-muted">— {{ $periodeLabel }}</small>
                 </h5>
                 @if ($rekapKategori->isEmpty())
@@ -213,7 +213,7 @@
         @if (!empty($breakdown))
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title mb-3"><i class="uil uil-history me-1"></i> Riwayat SLA
+                    <h5 class="card-title mb-3"><i class="mdi mdi-history me-1"></i> Riwayat SLA
                         <small class="text-muted">— per {{ $periode === 'harian' ? 'jam' : ($periode === 'tahunan' ? 'bulan' : 'hari') }}</small>
                     </h5>
                     <div class="table-responsive">
@@ -247,7 +247,7 @@
         {{-- Daftar / riwayat laporan --}}
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title mb-3"><i class="uil uil-list-ul me-1"></i> Riwayat Laporan <small class="text-muted">({{ $periodeLabel }})</small></h5>
+                <h5 class="card-title mb-3"><i class="mdi mdi-format-list-bulleted me-1"></i> Riwayat Laporan <small class="text-muted">({{ $periodeLabel }})</small></h5>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle">
                         <thead class="table-light">
@@ -267,12 +267,12 @@
                                 <tr @class(['table-danger' => $isOverdue])>
                                     <td class="text-nowrap">
                                         <small>{{ $r->created_at->timezone('Asia/Jakarta')->format('d/m H:i') }}</small>
-                                        @if ($isOverdue)<br><span class="badge bg-danger"><i class="uil uil-clock"></i> telat</span>@endif
+                                        @if ($isOverdue)<br><span class="badge bg-danger"><i class="mdi mdi-clock-outline"></i> telat</span>@endif
                                     </td>
                                     <td>
                                         <div class="fw-semibold">{{ $r->from_name ?: '-' }}</div>
                                         <small class="text-muted">{{ $r->idpel ? 'ID: '.$r->idpel.' · ' : '' }}{{ $r->from_number }}</small>
-                                        @if ($r->nama_odp)<br><small class="text-muted"><i class="uil uil-map-marker"></i> {{ $r->nama_odp }}</small>@endif
+                                        @if ($r->nama_odp)<br><small class="text-muted"><i class="mdi mdi-map-marker"></i> {{ $r->nama_odp }}</small>@endif
                                     </td>
                                     <td><span class="badge bg-soft-primary text-primary">{{ GangguanReport::kategoriLabel($r->kategori) }}</span></td>
                                     <td style="max-width: 280px;"><small>{{ \Illuminate\Support\Str::limit($r->pesan, 140) }}</small></td>
@@ -285,9 +285,9 @@
                                     </td>
                                     <td class="text-nowrap">
                                         @if ($r->gateway === 'meta')
-                                            <a href="{{ url('admin/whatsapp/inbox?number='.$r->from_number) }}" class="btn btn-sm btn-success" title="Balas via Inbox (dengan signature)"><i class="uil uil-whatsapp"></i> Balas</a>
+                                            <a href="{{ url('admin/whatsapp/inbox?number='.$r->from_number) }}" class="btn btn-sm btn-success" title="Balas via Inbox (dengan signature)"><i class="mdi mdi-whatsapp"></i> Balas</a>
                                         @endif
-                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#status-{{ $r->id }}"><i class="uil uil-edit"></i> Status</button>
+                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#status-{{ $r->id }}"><i class="mdi mdi-pencil"></i> Status</button>
 
                                         {{-- Tutup cepat (tandai selesai) / buka lagi bila sudah ditutup --}}
                                         <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" class="d-inline swal-confirm"
@@ -301,9 +301,9 @@
                                             <input type="hidden" name="f_status" value="{{ $statusFilter }}">
                                             <input type="hidden" name="f_kategori" value="{{ $kategoriFilter }}">
                                             @if ($r->status === 'selesai')
-                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Buka kembali laporan"><i class="uil uil-redo"></i> Buka</button>
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Buka kembali laporan"><i class="mdi mdi-restore"></i> Buka</button>
                                             @else
-                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Tutup laporan (tandai selesai)"><i class="uil uil-check-circle"></i> Tutup</button>
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Tutup laporan (tandai selesai)"><i class="mdi mdi-check-circle"></i> Tutup</button>
                                             @endif
                                         </form>
 
@@ -338,7 +338,7 @@
                                                         </div>
                                                         <div class="modal-footer">
                                                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                                                            <button type="submit" class="btn btn-success"><i class="uil uil-save"></i> Simpan</button>
+                                                            <button type="submit" class="btn btn-success"><i class="mdi mdi-content-save"></i> Simpan</button>
                                                         </div>
                                                     </form>
                                                 </div>
