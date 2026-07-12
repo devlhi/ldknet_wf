@@ -290,8 +290,10 @@
                                         <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#status-{{ $r->id }}"><i class="uil uil-edit"></i> Status</button>
 
                                         {{-- Tutup cepat (tandai selesai) / buka lagi bila sudah ditutup --}}
-                                        <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" class="d-inline"
-                                            onsubmit="return confirm('{{ $r->status === 'selesai' ? 'Buka lagi laporan ini?' : 'Tutup laporan ini? Status jadi Selesai.' }}')">
+                                        <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" class="d-inline swal-confirm"
+                                            data-text="{{ $r->status === 'selesai' ? 'Buka kembali laporan ini? Status akan menjadi Diproses.' : 'Tutup laporan ini? Status akan menjadi Selesai.' }}"
+                                            data-confirm="{{ $r->status === 'selesai' ? 'Ya, Buka' : 'Ya, Tutup' }}"
+                                            data-icon="{{ $r->status === 'selesai' ? 'warning' : 'question' }}">
                                             @csrf
                                             <input type="hidden" name="status" value="{{ $r->status === 'selesai' ? 'diproses' : 'selesai' }}">
                                             <input type="hidden" name="periode" value="{{ $periode }}">
@@ -356,4 +358,30 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+// Konfirmasi via SweetAlert2 (bukan window.confirm bawaan browser) untuk form Tutup/Buka.
+document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form.swal-confirm');
+    if (!form || form.dataset.confirmed === '1') return;
+    e.preventDefault();
+    Swal.fire({
+        title: 'Konfirmasi',
+        text: form.dataset.text || 'Lanjutkan?',
+        icon: form.dataset.icon || 'question',
+        showCancelButton: true,
+        confirmButtonText: form.dataset.confirm || 'Ya',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#34c38f',
+        cancelButtonColor: '#74788d'
+    }).then(function (result) {
+        if (result.isConfirmed) {
+            form.dataset.confirmed = '1';
+            form.submit();
+        }
+    });
+});
+</script>
 @endsection

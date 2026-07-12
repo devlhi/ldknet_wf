@@ -96,8 +96,8 @@
                                                         data-port="{{ $row['total_port'] }}"
                                                         data-lat="{{ $row['latitude'] }}"
                                                         data-lng="{{ $row['longitude'] }}"><i class="mdi mdi-pencil"></i></button>
-                                                    <a href="{{ url('admin/coverage/odp/delete/'.$row['id']) }}" class="btn btn-sm btn-danger"
-                                                        onclick="return confirm('Hapus ODP {{ addslashes($row['nama']) }}?')"><i class="mdi mdi-delete"></i></a>
+                                                    <a href="{{ url('admin/coverage/odp/delete/'.$row['id']) }}" class="btn btn-sm btn-danger swal-delete"
+                                                        data-text="Hapus ODP {{ $row['nama'] }}? Tindakan ini tidak bisa dibatalkan."><i class="mdi mdi-delete"></i></a>
                                                 </td>
                                             </tr>
                                         @endforeach
@@ -349,5 +349,25 @@
         if (e.target !== searchInput && !searchResults.contains(e.target)) hideResults();
     });
 })();
+</script>
+<script>
+// Konfirmasi hapus ODP via SweetAlert2 (bukan window.confirm bawaan browser).
+document.addEventListener('click', function (e) {
+    var link = e.target.closest('a.swal-delete');
+    if (!link) return;
+    e.preventDefault();
+    Swal.fire({
+        title: 'Konfirmasi Hapus',
+        text: link.dataset.text || 'Data akan dihapus.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#f46a6a',
+        cancelButtonColor: '#74788d'
+    }).then(function (result) {
+        if (result.isConfirmed) window.location.href = link.href;
+    });
+});
 </script>
 @endsection
