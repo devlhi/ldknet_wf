@@ -90,6 +90,7 @@ class WhatsAppInboxController extends Controller
                 'status' => $msg->status,
                 'message_type' => $msg->message_type,
                 'media_url' => $msg->hasMedia() ? url('admin/whatsapp/inbox/media/'.$msg->id) : null,
+                'can_reply' => $msg->direction === 'in' && (string) $msg->meta_message_id !== '',
                 'created_at' => optional($msg->created_at)->format('d M H:i'),
             ])->values(),
             'can_reply_text' => $canReplyText,
@@ -198,6 +199,7 @@ class WhatsAppInboxController extends Controller
             'message' => ['required', 'string', 'max:4000'],
             'signature_mode' => ['nullable', 'string', 'in:auto,manual'],
             'signature_name' => ['nullable', 'string', 'max:80', 'required_if:signature_mode,manual'],
+            'reply_to_message_id' => ['nullable', 'integer'],
         ]);
 
         $gateway = WhatsAppGatewayResolver::active();
@@ -214,6 +216,20 @@ class WhatsAppInboxController extends Controller
             return back()->with('auth_errors', ['Balasan teks bebas hanya bisa dikirim dalam 24 jam sejak pesan terakhir user. Gunakan template message untuk percakapan lama.']);
         }
 
+        $replyTo = null;
+        if (! empty($validated['reply_to_message_id'])) {
+            $replyTo = WaInboxMessage::whereKey($validated['reply_to_message_id'])
+                ->where('from_number', $validated['number'])
+                ->where('direction', 'in')
+                ->whereNotNull('meta_message_id')
+                ->where('meta_message_id', '!=', '')
+                ->first();
+
+            if (! $replyTo) {
+                return back()->withInput()->with('auth_errors', ['Pesan yang akan dibalas tidak valid atau bukan dari percakapan ini.']);
+            }
+        }
+
         $signatureMode = $validated['signature_mode'] ?? 'auto';
         $signatureName = $signatureMode === 'manual'
             ? trim((string) $validated['signature_name'])
@@ -226,7 +242,12 @@ class WhatsAppInboxController extends Controller
 
         try {
             $api = WhatsAppGatewayResolver::make($gateway);
-            $response = $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $validated['number'], $messageBody);
+            $response = $api->sendMessage(
+                WhatsAppGatewayResolver::sender($gateway),
+                $validated['number'],
+                $messageBody,
+                $replyTo?->meta_message_id
+            );
             $responseJson = json_decode((string) $response, true);
             $metaMessageId = (string) data_get($responseJson, 'messages.0.id', '');
             if (! is_array($responseJson) || isset($responseJson['error']) || $metaMessageId === '') {

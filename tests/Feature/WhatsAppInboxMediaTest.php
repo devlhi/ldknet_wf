@@ -184,7 +184,7 @@ class WhatsAppInboxMediaTest extends TestCase
     public function test_admin_can_reply_text_to_user_during_open_reply_window(): void
     {
         $admin = $this->createAdmin();
-        WaInboxMessage::create([
+        $inbound = WaInboxMessage::create([
             'from_number' => '628123456789',
             'from_name' => 'Pelanggan Test',
             'direction' => 'in',
@@ -204,6 +204,7 @@ class WhatsAppInboxMediaTest extends TestCase
             'number' => '628123456789',
             'message' => 'Baik, segera kami cek.',
             'signature_mode' => 'auto',
+            'reply_to_message_id' => $inbound->id,
         ])->assertRedirect('admin/whatsapp/inbox?number=628123456789')
             ->assertSessionHas('success');
 
@@ -216,7 +217,45 @@ class WhatsAppInboxMediaTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://graph.facebook.com/v20.0/meta/messages'
             && $request['to'] === '628123456789'
             && $request['type'] === 'text'
-            && data_get($request->data(), 'text.body') === "Baik, segera kami cek.\n\n~Admin");
+            && data_get($request->data(), 'text.body') === "Baik, segera kami cek.\n\n~Admin"
+            && data_get($request->data(), 'context.message_id') === 'wamid.inbound-text-window');
+    }
+
+    public function test_admin_cannot_reply_to_message_from_another_conversation(): void
+    {
+        $admin = $this->createAdmin();
+        WaInboxMessage::create([
+            'from_number' => '628123456789',
+            'direction' => 'in',
+            'body' => 'Pesan terbaru',
+            'message_type' => 'text',
+            'meta_message_id' => 'wamid.current-conversation',
+            'status' => 'received',
+            'created_at' => now()->subHour(),
+        ]);
+        $otherMessage = WaInboxMessage::create([
+            'from_number' => '628987654321',
+            'direction' => 'in',
+            'body' => 'Pesan percakapan lain',
+            'message_type' => 'text',
+            'meta_message_id' => 'wamid.other-conversation',
+            'status' => 'received',
+            'created_at' => now()->subHour(),
+        ]);
+        Http::fake();
+
+        $this->actingAs($admin)->from('admin/whatsapp/inbox?number=628123456789')
+            ->post('admin/whatsapp/inbox/send', [
+                'number' => '628123456789',
+                'message' => 'Tidak boleh terkirim',
+                'signature_mode' => 'auto',
+                'reply_to_message_id' => $otherMessage->id,
+            ])
+            ->assertRedirect('admin/whatsapp/inbox?number=628123456789')
+            ->assertSessionHas('auth_errors');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, WaInboxMessage::where('direction', 'out')->count());
     }
 
     public function test_admin_cannot_reply_text_after_reply_window_expires(): void

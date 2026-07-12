@@ -16,9 +16,9 @@ class WhatsAppMetaApi
         $this->apiKey = (string) $apiKey;
     }
 
-    public function sendMessage($sender, $number, $message)
+    public function sendMessage($sender, $number, $message, ?string $replyToMessageId = null)
     {
-        return $this->postMessage($sender, [
+        $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
             'to' => $this->normalizeNumber($number),
@@ -27,7 +27,13 @@ class WhatsAppMetaApi
                 'preview_url' => true,
                 'body' => (string) $message,
             ],
-        ]);
+        ];
+
+        if ($replyToMessageId !== null && $replyToMessageId !== '') {
+            $payload['context'] = ['message_id' => $replyToMessageId];
+        }
+
+        return $this->postMessage($sender, $payload);
     }
 
     public function sendMessageMedia($sender, $number, $mediatype, $caption, $url)

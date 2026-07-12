@@ -121,13 +121,18 @@
                                                             <img src="{{ url('admin/whatsapp/inbox/media/'.$msg->id) }}" alt="Gambar chat" class="d-block rounded mb-2" style="max-width: 280px; max-height: 280px; object-fit: contain;">
                                                         </a>
                                                     @endif
-                                                    <div style="white-space: pre-wrap; word-break: break-word;">{{ $msg->body }}</div>
+                                                    <div class="message-body" style="white-space: pre-wrap; word-break: break-word;">{{ $msg->body }}</div>
                                                     <small class="{{ $msg->direction === 'out' ? 'text-white-50' : 'text-muted' }}">
                                                         {{ optional($msg->created_at)->format('d M H:i') }}
                                                         @if ($msg->direction === 'out')
                                                             &middot; {{ $msg->status === 'failed' ? '✗ Gagal' : '✓ Terkirim' }}
                                                         @endif
                                                     </small>
+                                                    @if ($canReplyText && $msg->direction === 'in' && filled($msg->meta_message_id))
+                                                        <button type="button" class="btn btn-link btn-sm p-0 ms-2 reply-message-btn" data-message-id="{{ $msg->id }}">
+                                                            <i class="uil uil-reply"></i> Balas
+                                                        </button>
+                                                    @endif
                                                 </div>
                                             </div>
                                         @endforeach
@@ -138,6 +143,16 @@
                                             <form method="post" action="{{ url('admin/whatsapp/inbox/send') }}" id="replyForm">
                                                 @csrf
                                                 <input type="hidden" name="number" value="{{ $selectedNumber }}">
+                                                <input type="hidden" name="reply_to_message_id" id="replyToMessageId">
+                                                <div id="replyPreview" class="alert alert-light border-start border-primary border-3 py-2 px-3 mb-2 d-none">
+                                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                                        <div>
+                                                            <small class="text-primary fw-semibold"><i class="uil uil-reply"></i> Membalas pesan pelanggan</small>
+                                                            <div id="replyPreviewText" class="small text-muted text-truncate" style="max-width: 600px;"></div>
+                                                        </div>
+                                                        <button type="button" id="cancelReplyBtn" class="btn-close btn-sm" aria-label="Batal membalas"></button>
+                                                    </div>
+                                                </div>
                                                 <div class="mb-2 d-flex align-items-center gap-3">
                                                     <div class="form-check form-check-inline">
                                                         <input class="form-check-input" type="radio" name="signature_mode" id="sigAuto" value="auto" checked onchange="document.getElementById('signatureNameInput').disabled = true;">
@@ -195,6 +210,11 @@
     var POLL_INTERVAL = 5000; // 5 detik
     var pollUrl = '{{ url('admin/whatsapp/inbox/poll') }}';
     var thread = document.getElementById('chatThread');
+    var canReplyText = @json($canReplyText);
+    var replyToMessageId = document.getElementById('replyToMessageId');
+    var replyPreview = document.getElementById('replyPreview');
+    var replyPreviewText = document.getElementById('replyPreviewText');
+    var replyTextarea = document.querySelector('#replyForm textarea[name="message"]');
     if (thread) { thread.scrollTop = thread.scrollHeight; }
 
     function escapeHtml(str) {
@@ -215,12 +235,37 @@
         var media = msg.media_url
             ? '<a href="' + escapeHtml(msg.media_url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(msg.media_url) + '" alt="Gambar chat" class="d-block rounded mb-2" style="max-width: 280px; max-height: 280px; object-fit: contain;"></a>'
             : '';
+        var reply = canReplyText && msg.can_reply
+            ? '<button type="button" class="btn btn-link btn-sm p-0 ms-2 reply-message-btn" data-message-id="' + msg.id + '"><i class="uil uil-reply"></i> Balas</button>'
+            : '';
         return '<div class="d-flex mb-2 ' + (out ? 'justify-content-end' : 'justify-content-start') + '" data-message-id="' + msg.id + '">' +
             '<div class="p-2 rounded ' + bubble + '" style="max-width: 70%;">' + badge + media +
-            '<div style="white-space: pre-wrap; word-break: break-word;">' + escapeHtml(msg.body) + '</div>' +
-            '<small class="' + (out ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(msg.created_at) + statusMark + '</small>' +
+            '<div class="message-body" style="white-space: pre-wrap; word-break: break-word;">' + escapeHtml(msg.body) + '</div>' +
+            '<small class="' + (out ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(msg.created_at) + statusMark + '</small>' + reply +
             '</div></div>';
     }
+
+    function clearReplySelection() {
+        if (replyToMessageId) replyToMessageId.value = '';
+        if (replyPreview) replyPreview.classList.add('d-none');
+        if (replyPreviewText) replyPreviewText.textContent = '';
+    }
+
+    if (thread) {
+        thread.addEventListener('click', function (event) {
+            var button = event.target.closest('.reply-message-btn');
+            if (!button || !replyToMessageId || !replyPreview || !replyPreviewText) return;
+            var message = button.closest('[data-message-id]');
+            var body = message ? message.querySelector('.message-body') : null;
+            replyToMessageId.value = button.getAttribute('data-message-id');
+            replyPreviewText.textContent = body ? body.textContent.trim() : '[Pesan]';
+            replyPreview.classList.remove('d-none');
+            if (replyTextarea) replyTextarea.focus();
+        });
+    }
+
+    var cancelReplyBtn = document.getElementById('cancelReplyBtn');
+    if (cancelReplyBtn) cancelReplyBtn.addEventListener('click', clearReplySelection);
 
     function scrollIfNeeded() {
         if (!thread) return;
@@ -287,6 +332,7 @@
     }
 
     function updateWindowStatus(canReply) {
+        canReplyText = canReply;
         var replyBox = document.getElementById('replyBox');
         if (!replyBox) return;
         var hasForm = document.getElementById('replyForm');
