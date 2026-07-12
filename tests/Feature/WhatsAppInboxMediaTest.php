@@ -181,6 +181,70 @@ class WhatsAppInboxMediaTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_admin_can_reply_text_to_user_during_open_reply_window(): void
+    {
+        $admin = $this->createAdmin();
+        WaInboxMessage::create([
+            'from_number' => '628123456789',
+            'from_name' => 'Pelanggan Test',
+            'direction' => 'in',
+            'body' => 'Mohon dibantu',
+            'message_type' => 'text',
+            'meta_message_id' => 'wamid.inbound-text-window',
+            'status' => 'received',
+            'created_at' => now()->subHour(),
+        ]);
+        Http::fake([
+            'https://graph.facebook.com/v20.0/meta/messages' => Http::response([
+                'messages' => [['id' => 'wamid.outbound-text-1']],
+            ]),
+        ]);
+
+        $this->actingAs($admin)->post('admin/whatsapp/inbox/send', [
+            'number' => '628123456789',
+            'message' => 'Baik, segera kami cek.',
+            'signature_mode' => 'auto',
+        ])->assertRedirect('admin/whatsapp/inbox?number=628123456789')
+            ->assertSessionHas('success');
+
+        $message = WaInboxMessage::where('meta_message_id', 'wamid.outbound-text-1')->firstOrFail();
+        $this->assertSame('out', $message->direction);
+        $this->assertSame('text', $message->message_type);
+        $this->assertSame("Baik, segera kami cek.\n\n~Admin", $message->body);
+        $this->assertSame($admin->id, $message->sent_by);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://graph.facebook.com/v20.0/meta/messages'
+            && $request['to'] === '628123456789'
+            && $request['type'] === 'text'
+            && data_get($request->data(), 'text.body') === "Baik, segera kami cek.\n\n~Admin");
+    }
+
+    public function test_admin_cannot_reply_text_after_reply_window_expires(): void
+    {
+        $admin = $this->createAdmin();
+        WaInboxMessage::create([
+            'from_number' => '628123456789',
+            'direction' => 'in',
+            'body' => 'Pesan lama',
+            'message_type' => 'text',
+            'status' => 'received',
+            'created_at' => now()->subDay()->subSecond(),
+        ]);
+        Http::fake();
+
+        $this->actingAs($admin)->from('admin/whatsapp/inbox?number=628123456789')
+            ->post('admin/whatsapp/inbox/send', [
+                'number' => '628123456789',
+                'message' => 'Balasan terlambat',
+                'signature_mode' => 'auto',
+            ])
+            ->assertRedirect('admin/whatsapp/inbox?number=628123456789')
+            ->assertSessionHas('auth_errors');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, WaInboxMessage::where('direction', 'out')->count());
+    }
+
     public function test_admin_can_send_image_during_open_reply_window_and_preview_private_copy(): void
     {
         $admin = $this->createAdmin();

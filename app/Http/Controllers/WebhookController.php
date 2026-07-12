@@ -2864,7 +2864,11 @@ class WebhookController extends Controller
                 return;
             }
 
-            Storage::disk('local')->put($path, $contents);
+            if (! Storage::disk('local')->put($path, $contents)) {
+                Log::warning('Gambar WhatsApp Meta gagal ditulis ke storage', [
+                    'message_id_hash' => hash('sha256', $metaMessageId),
+                ]);
+            }
         } catch (\Throwable) {
             Log::warning('Gambar WhatsApp Meta gagal disimpan', [
                 'message_id_hash' => hash('sha256', $metaMessageId),

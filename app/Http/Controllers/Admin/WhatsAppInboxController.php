@@ -224,14 +224,16 @@ class WhatsAppInboxController extends Controller
             return back()->withInput()->with('auth_errors', ['Pesan terlalu panjang setelah ditambahkan signature admin.']);
         }
 
-        $api = WhatsAppGatewayResolver::make($gateway);
-        $response = $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $validated['number'], $messageBody);
-        $responseJson = json_decode((string) $response, true);
-
-        if (is_array($responseJson) && isset($responseJson['error'])) {
-            $errorMessage = data_get($responseJson, 'error.message', 'Meta API menolak pesan.');
-
-            return back()->withInput()->with('auth_errors', ['Gagal mengirim pesan: '.$errorMessage]);
+        try {
+            $api = WhatsAppGatewayResolver::make($gateway);
+            $response = $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $validated['number'], $messageBody);
+            $responseJson = json_decode((string) $response, true);
+            $metaMessageId = (string) data_get($responseJson, 'messages.0.id', '');
+            if (! is_array($responseJson) || isset($responseJson['error']) || $metaMessageId === '') {
+                return back()->withInput()->with('auth_errors', ['Meta gagal mengirim pesan. Silakan coba lagi.']);
+            }
+        } catch (\Throwable) {
+            return back()->withInput()->with('auth_errors', ['Pesan gagal dikirim ke Meta. Silakan coba lagi.']);
         }
 
         WaInboxMessage::create([
@@ -240,6 +242,7 @@ class WhatsAppInboxController extends Controller
             'direction' => 'out',
             'body' => $messageBody,
             'message_type' => 'text',
+            'meta_message_id' => $metaMessageId,
             'status' => 'sent',
             'sent_by' => auth()->id(),
             'created_at' => now(),
