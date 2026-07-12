@@ -16,4 +16,8 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::get('coverage/odp/delete/{any}', [CoverageController::class, 'deleteODP']);
     Route::get('coverage/customer', [CoverageController::class, 'getCustomerMap']);
     Route::get('coverage/rxpower', [CoverageController::class, 'rxpower']);
+    Route::get('coverage/peta', [CoverageController::class, 'peta']);
+    Route::get('coverage/peta/pengaturan', [CoverageController::class, 'petaSettings']);
+    Route::post('coverage/peta/pengaturan', [CoverageController::class, 'petaSettingsUpdate']);
+    Route::post('coverage/peta/cable', [CoverageController::class, 'storeCable']);
 });
