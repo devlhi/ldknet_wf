@@ -10,6 +10,7 @@ use App\Support\WhatsAppGatewayResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class WhatsAppInboxController extends Controller
 {
@@ -54,7 +55,7 @@ class WhatsAppInboxController extends Controller
             'messages' => $messages,
             'customer' => $customer,
             'lastIncomingAt' => $lastIncomingAt,
-            'canReplyText' => $lastIncomingAt ? $lastIncomingAt->diffInHours(now()) < 24 : false,
+            'canReplyText' => $this->replyWindowIsOpen($lastIncomingAt),
         ] + $this->websiteData());
     }
 
@@ -78,7 +79,7 @@ class WhatsAppInboxController extends Controller
                 ->latest('created_at')
                 ->first()?->created_at;
 
-            $canReplyText = $lastIncomingAt ? $lastIncomingAt->diffInHours(now()) < 24 : false;
+            $canReplyText = $this->replyWindowIsOpen($lastIncomingAt);
         }
 
         return response()->json([
@@ -88,6 +89,7 @@ class WhatsAppInboxController extends Controller
                 'body' => $msg->body,
                 'status' => $msg->status,
                 'message_type' => $msg->message_type,
+                'media_url' => $msg->hasMedia() ? url('admin/whatsapp/inbox/media/'.$msg->id) : null,
                 'created_at' => optional($msg->created_at)->format('d M H:i'),
             ])->values(),
             'can_reply_text' => $canReplyText,
@@ -99,6 +101,94 @@ class WhatsAppInboxController extends Controller
                 'is_selected' => $conv->from_number === $number,
             ])->values(),
         ]);
+    }
+
+    public function media(WaInboxMessage $message)
+    {
+        abort_unless($message->message_type === 'image' && $message->hasMedia(), 404);
+
+        $path = WaInboxMessage::mediaPath((string) $message->meta_message_id);
+        $contents = Storage::disk('local')->get($path);
+        $imageInfo = @getimagesizefromstring($contents);
+        abort_unless($imageInfo !== false && isset($imageInfo['mime']) && str_starts_with($imageInfo['mime'], 'image/'), 404);
+
+        return response($contents, 200, [
+            'Content-Type' => $imageInfo['mime'],
+            'Content-Disposition' => 'inline',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function sendImage(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'number' => ['required', 'string', 'max:30'],
+            'image' => ['required', 'file', 'mimetypes:image/jpeg,image/png', 'max:5120'],
+            'caption' => ['nullable', 'string', 'max:1024'],
+        ]);
+
+        $gateway = WhatsAppGatewayResolver::active();
+        if (! $gateway || ! WhatsAppGatewayResolver::isMeta($gateway)) {
+            return back()->with('auth_errors', ['Gateway WhatsApp Meta aktif tidak ditemukan.']);
+        }
+
+        $lastIncomingAt = WaInboxMessage::where('from_number', $validated['number'])
+            ->where('direction', 'in')
+            ->latest('created_at')
+            ->first()?->created_at;
+        if (! $this->replyWindowIsOpen($lastIncomingAt)) {
+            return back()->with('auth_errors', ['Gambar hanya bisa dikirim dalam 24 jam sejak pesan terakhir user. Gunakan template message untuk percakapan lama.']);
+        }
+
+        $image = $request->file('image');
+        $imageInfo = @getimagesize($image->getRealPath());
+        $mimeType = strtolower((string) data_get($imageInfo, 'mime', ''));
+        if ($imageInfo === false || ! in_array($mimeType, ['image/jpeg', 'image/png'], true)) {
+            return back()->withInput()->with('auth_errors', ['File harus berupa gambar JPEG atau PNG yang valid.']);
+        }
+
+        $contents = file_get_contents($image->getRealPath());
+        if ($contents === false) {
+            return back()->withInput()->with('auth_errors', ['Gambar tidak dapat dibaca.']);
+        }
+
+        $caption = trim((string) ($validated['caption'] ?? ''));
+        $api = WhatsAppGatewayResolver::make($gateway);
+        $sender = WhatsAppGatewayResolver::sender($gateway);
+
+        try {
+            $upload = $api->uploadMedia($sender, $contents, $mimeType, $mimeType === 'image/png' ? 'reply.png' : 'reply.jpg');
+            $mediaId = (string) data_get($upload, 'id', '');
+            if ($mediaId === '') {
+                return back()->withInput()->with('auth_errors', ['Meta menolak upload gambar.']);
+            }
+
+            $response = $api->sendImageByMediaId($sender, $validated['number'], $mediaId, $caption);
+            $responseJson = json_decode($response, true);
+            $metaMessageId = (string) data_get($responseJson, 'messages.0.id', '');
+            if (! is_array($responseJson) || isset($responseJson['error']) || $metaMessageId === '') {
+                return back()->withInput()->with('auth_errors', ['Meta gagal mengirim gambar.']);
+            }
+        } catch (\Throwable) {
+            return back()->withInput()->with('auth_errors', ['Gambar gagal dikirim ke Meta. Silakan coba lagi.']);
+        }
+
+        $message = WaInboxMessage::create([
+            'from_number' => $validated['number'],
+            'from_name' => User::where('nomor', $validated['number'])->value('nama'),
+            'direction' => 'out',
+            'body' => trim('[Image] '.$caption),
+            'message_type' => 'image',
+            'meta_message_id' => $metaMessageId,
+            'status' => 'sent',
+            'sent_by' => auth()->id(),
+            'created_at' => now(),
+        ]);
+
+        Storage::disk('local')->put(WaInboxMessage::mediaPath($metaMessageId), $contents);
+
+        return redirect('admin/whatsapp/inbox?number='.$validated['number'])->with('success', ['Gambar berhasil dikirim.']);
     }
 
     public function send(Request $request): RedirectResponse
@@ -120,7 +210,7 @@ class WhatsAppInboxController extends Controller
             ->latest('created_at')
             ->first()?->created_at;
 
-        if (! $lastIncomingAt || $lastIncomingAt->diffInHours(now()) >= 24) {
+        if (! $this->replyWindowIsOpen($lastIncomingAt)) {
             return back()->with('auth_errors', ['Balasan teks bebas hanya bisa dikirim dalam 24 jam sejak pesan terakhir user. Gunakan template message untuk percakapan lama.']);
         }
 
@@ -156,6 +246,11 @@ class WhatsAppInboxController extends Controller
         ]);
 
         return redirect('admin/whatsapp/inbox?number='.$validated['number'])->with('success', ['Pesan berhasil dikirim.']);
+    }
+
+    private function replyWindowIsOpen($lastIncomingAt): bool
+    {
+        return $lastIncomingAt !== null && $lastIncomingAt->greaterThan(now()->subDay());
     }
 
     private function conversations()

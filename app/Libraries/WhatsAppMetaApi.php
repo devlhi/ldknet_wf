@@ -49,6 +49,67 @@ class WhatsAppMetaApi
         ]);
     }
 
+    public function uploadMedia(string $sender, string $contents, string $mimeType, string $filename): array
+    {
+        $response = Http::withToken($this->apiKey)
+            ->acceptJson()
+            ->attach('file', $contents, $filename, ['Content-Type' => $mimeType])
+            ->post($this->apiUrl.'/'.rawurlencode(trim($sender)).'/media', [
+                'messaging_product' => 'whatsapp',
+                'type' => $mimeType,
+            ]);
+
+        return $response->json();
+    }
+
+    public function sendImageByMediaId(string $sender, string $number, string $mediaId, string $caption = ''): string
+    {
+        $image = ['id' => $mediaId];
+        if ($caption !== '') {
+            $image['caption'] = $caption;
+        }
+
+        return $this->postMessage($sender, [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $this->normalizeNumber($number),
+            'type' => 'image',
+            'image' => $image,
+        ]);
+    }
+
+    public function mediaMetadata(string $mediaId): array
+    {
+        $response = Http::withToken($this->apiKey)
+            ->acceptJson()
+            ->get($this->apiUrl.'/'.rawurlencode($mediaId));
+
+        return $response->successful() ? $response->json() : [];
+    }
+
+    public function downloadMedia(string $url): ?string
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $trustedHost = collect(['facebook.com', 'fbcdn.net', 'fbsbx.com', 'whatsapp.net'])
+            ->contains(fn (string $domain) => $host === $domain || str_ends_with($host, '.'.$domain));
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false || parse_url($url, PHP_URL_SCHEME) !== 'https' || ! $trustedHost) {
+            return null;
+        }
+
+        $response = Http::withToken($this->apiKey)
+            ->timeout(30)
+            ->get($url);
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $contents = $response->body();
+
+        return $contents !== '' && strlen($contents) <= 10 * 1024 * 1024 ? $contents : null;
+    }
+
     public function sendTemplate($sender, $number, $templateName, array $parameters = [], string $language = 'id', ?string $urlButtonParam = null)
     {
         $components = [];

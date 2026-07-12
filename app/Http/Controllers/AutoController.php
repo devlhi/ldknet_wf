@@ -53,33 +53,63 @@ class AutoController extends Controller
 
     public function isolir()
     {
-        foreach (Order::where('status', 'Isolir')->get() as $data) {
-            $router = Router::find($data->id_router);
-            if (! $router) {
-                continue;
-            }
-            $ros = new RouterosAPI;
-            if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
-                continue;
-            }
-            if ($data->mode == 'pppoe') {
-                $ros->comm('/ppp/secret/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
-                $active = $ros->comm('/ppp/active/getall', ['.proplist' => '.id', '?name' => $data->pppoe_user]);
-                if (! empty($active)) {
-                    foreach ($active as $act) {
-                        $ros->comm('/ppp/active/remove', ['.id' => $act['.id']]);
-                    }
+        $attempted = 0;
+        $succeeded = 0;
+        $failed = 0;
+
+        Order::where('status', 'Isolir')->orderBy('id')->chunkById(100, function ($orders) use (&$attempted, &$succeeded, &$failed) {
+            foreach ($orders as $data) {
+                $attempted++;
+                $router = Router::find($data->id_router);
+                if (! $router) {
+                    $failed++;
+                    Log::warning("Retry isolir ditunda, router tidak ditemukan ({$data->idpel}, router {$data->id_router})");
+
+                    continue;
                 }
-            } elseif ($data->mode == 'hotspot') {
-                $ros->comm('/ip/hotspot/user/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
-                $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $data->pppoe_user]);
-                if (! empty($active)) {
-                    foreach ($active as $act) {
-                        $ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]);
+
+                $ros = $this->makeRouteros();
+
+                try {
+                    if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
+                        $failed++;
+                        Log::warning("Retry isolir ditunda, Mikrotik tidak terhubung ({$data->idpel}, router {$router->id})");
+
+                        continue;
                     }
+
+                    if ($data->mode === 'pppoe') {
+                        $ros->comm('/ppp/secret/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
+                        $active = $ros->comm('/ppp/active/getall', ['.proplist' => '.id', '?name' => $data->pppoe_user]);
+                        foreach ($active ?: [] as $act) {
+                            $ros->comm('/ppp/active/remove', ['.id' => $act['.id']]);
+                        }
+                    } elseif ($data->mode === 'hotspot') {
+                        $ros->comm('/ip/hotspot/user/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
+                        $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $data->pppoe_user]);
+                        foreach ($active ?: [] as $act) {
+                            $ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]);
+                        }
+                    } else {
+                        throw new \RuntimeException("Mode pelanggan tidak didukung: {$data->mode}");
+                    }
+
+                    $succeeded++;
+                } catch (\Throwable $e) {
+                    $failed++;
+                    Log::warning("Retry isolir gagal ({$data->idpel}, router {$router->id}): {$e->getMessage()}");
+                } finally {
+                    $ros->disconnect();
                 }
             }
-        }
+        });
+
+        echo "Isolir: {$attempted} dicoba, {$succeeded} berhasil, {$failed} akan dicoba lagi pada jadwal berikutnya<br/>";
+    }
+
+    protected function makeRouteros(): RouterosAPI
+    {
+        return new RouterosAPI;
     }
 
     public function cetakinv()

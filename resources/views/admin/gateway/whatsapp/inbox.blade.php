@@ -116,6 +116,11 @@
                                                     @if ($msg->direction === 'out' && str_starts_with((string) $msg->message_type, 'template'))
                                                         <span class="badge bg-light text-dark mb-1">Notifikasi: {{ str_replace('template:', '', $msg->message_type) }}</span>
                                                     @endif
+                                                    @if ($msg->hasMedia())
+                                                        <a href="{{ url('admin/whatsapp/inbox/media/'.$msg->id) }}" target="_blank" rel="noopener">
+                                                            <img src="{{ url('admin/whatsapp/inbox/media/'.$msg->id) }}" alt="Gambar chat" class="d-block rounded mb-2" style="max-width: 280px; max-height: 280px; object-fit: contain;">
+                                                        </a>
+                                                    @endif
                                                     <div style="white-space: pre-wrap; word-break: break-word;">{{ $msg->body }}</div>
                                                     <small class="{{ $msg->direction === 'out' ? 'text-white-50' : 'text-muted' }}">
                                                         {{ optional($msg->created_at)->format('d M H:i') }}
@@ -148,6 +153,16 @@
                                                     <textarea name="message" class="form-control" rows="2" placeholder="Tulis balasan..." required></textarea>
                                                     <button type="submit" class="btn btn-primary"><i class="uil uil-message"></i> Kirim</button>
                                                 </div>
+                                            </form>
+                                            <form method="post" action="{{ url('admin/whatsapp/inbox/send-image') }}" enctype="multipart/form-data" class="mt-2">
+                                                @csrf
+                                                <input type="hidden" name="number" value="{{ $selectedNumber }}">
+                                                <div class="input-group">
+                                                    <input type="file" name="image" class="form-control" accept="image/jpeg,image/png" required>
+                                                    <input type="text" name="caption" class="form-control" maxlength="1024" placeholder="Caption gambar (opsional)">
+                                                    <button type="submit" class="btn btn-outline-primary"><i class="uil uil-image"></i> Kirim Gambar</button>
+                                                </div>
+                                                <small class="text-muted">JPEG atau PNG, maksimal 5 MB. Hanya tersedia selama jendela balas 24 jam aktif.</small>
                                             </form>
                                         @else
                                             <div class="alert alert-warning mb-0">
@@ -197,8 +212,11 @@
             ? '<span class="badge bg-light text-dark mb-1">Notifikasi: ' + escapeHtml((msg.message_type || '').replace('template:', '')) + '</span>'
             : '';
         var statusMark = out ? ' &middot; ' + (failed ? '✗ Gagal' : '✓ Terkirim') : '';
+        var media = msg.media_url
+            ? '<a href="' + escapeHtml(msg.media_url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(msg.media_url) + '" alt="Gambar chat" class="d-block rounded mb-2" style="max-width: 280px; max-height: 280px; object-fit: contain;"></a>'
+            : '';
         return '<div class="d-flex mb-2 ' + (out ? 'justify-content-end' : 'justify-content-start') + '" data-message-id="' + msg.id + '">' +
-            '<div class="p-2 rounded ' + bubble + '" style="max-width: 70%;">' + badge +
+            '<div class="p-2 rounded ' + bubble + '" style="max-width: 70%;">' + badge + media +
             '<div style="white-space: pre-wrap; word-break: break-word;">' + escapeHtml(msg.body) + '</div>' +
             '<small class="' + (out ? 'text-white-50' : 'text-muted') + '">' + escapeHtml(msg.created_at) + statusMark + '</small>' +
             '</div></div>';

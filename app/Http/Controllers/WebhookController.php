@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Libraries\ACSRequest;
 use App\Libraries\RouterosAPI;
+use App\Libraries\WhatsAppMetaApi;
 use App\Models\GangguanReport;
 use App\Models\Member;
 use App\Models\Order;
@@ -17,6 +18,8 @@ use App\Support\WhatsAppGatewayResolver;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class WebhookCIResult
 {
@@ -2750,7 +2753,6 @@ class WebhookController extends Controller
         }
 
         $payload = request()->all();
-        \Log::info('WhatsApp Meta webhook payload', $payload);
 
         $webhook = DB::table('webhook')->first();
         if ($webhook && ($webhook->status ?? 'off') !== 'on') {
@@ -2775,10 +2777,19 @@ class WebhookController extends Controller
             $text = $this->metaMessageText($message);
             $contact = collect($contacts)->firstWhere('wa_id', $from);
             $fromName = data_get($contact, 'profile.name');
+            $type = (string) data_get($message, 'type', 'text');
+            $metaMessageId = (string) data_get($message, 'id', '');
+            $existingMessage = $metaMessageId !== ''
+                ? WaInboxMessage::where('meta_message_id', $metaMessageId)->first()
+                : null;
 
-            // Meta melakukan retry delivery webhook — pesan dengan id sama tidak boleh diproses dua kali
-            $metaMessageId = data_get($message, 'id');
-            if ($metaMessageId && WaInboxMessage::where('meta_message_id', $metaMessageId)->exists()) {
+            // Meta dapat mengulang webhook. Untuk gambar, retry hanya mengisi file yang
+            // sebelumnya gagal diunduh, tanpa membuat pesan/laporan/balasan kedua kali.
+            if ($existingMessage) {
+                if ($type === 'image') {
+                    $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
+                }
+
                 continue;
             }
 
@@ -2788,11 +2799,15 @@ class WebhookController extends Controller
                     'from_name' => $fromName,
                     'direction' => 'in',
                     'body' => $text,
-                    'message_type' => (string) data_get($message, 'type', 'text'),
-                    'meta_message_id' => data_get($message, 'id'),
+                    'message_type' => $type,
+                    'meta_message_id' => $metaMessageId ?: null,
                     'status' => 'received',
                     'created_at' => now(),
                 ]);
+
+                if ($type === 'image') {
+                    $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
+                }
 
                 // Serap otomatis jadi laporan gangguan bila terindikasi keluhan.
                 GangguanReport::capture($from, $fromName, $text, 'meta');
@@ -2814,6 +2829,47 @@ class WebhookController extends Controller
         }
 
         return response()->json(['status' => 'ok']);
+    }
+
+    private function storeMetaImage(WhatsAppMetaApi $api, string $mediaId, string $metaMessageId): void
+    {
+        if ($mediaId === '' || $metaMessageId === '') {
+            return;
+        }
+
+        $path = WaInboxMessage::mediaPath($metaMessageId);
+        if (Storage::disk('local')->exists($path)) {
+            return;
+        }
+
+        try {
+            $metadata = $api->mediaMetadata($mediaId);
+            $mimeType = strtolower((string) data_get($metadata, 'mime_type', ''));
+            $url = (string) data_get($metadata, 'url', '');
+
+            if (! str_starts_with($mimeType, 'image/') || $url === '') {
+                Log::warning('Gambar WhatsApp Meta tidak dapat diunduh: metadata media tidak valid', [
+                    'message_id_hash' => hash('sha256', $metaMessageId),
+                ]);
+
+                return;
+            }
+
+            $contents = $api->downloadMedia($url);
+            if ($contents === null || @getimagesizefromstring($contents) === false) {
+                Log::warning('Gambar WhatsApp Meta tidak dapat diunduh: konten media tidak valid', [
+                    'message_id_hash' => hash('sha256', $metaMessageId),
+                ]);
+
+                return;
+            }
+
+            Storage::disk('local')->put($path, $contents);
+        } catch (\Throwable) {
+            Log::warning('Gambar WhatsApp Meta gagal disimpan', [
+                'message_id_hash' => hash('sha256', $metaMessageId),
+            ]);
+        }
     }
 
     private function handleMetaTextCommand(string $text): ?string

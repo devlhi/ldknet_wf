@@ -34,7 +34,9 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::post('whatsapp/message/text-message/send', [GatewayController::class, 'whatsappSendMessage']);
     Route::get('whatsapp/inbox', [WhatsAppInboxController::class, 'index']);
     Route::get('whatsapp/inbox/poll', [WhatsAppInboxController::class, 'poll']);
+    Route::get('whatsapp/inbox/media/{message}', [WhatsAppInboxController::class, 'media']);
     Route::post('whatsapp/inbox/send', [WhatsAppInboxController::class, 'send']);
+    Route::post('whatsapp/inbox/send-image', [WhatsAppInboxController::class, 'sendImage']);
     Route::match(['get', 'post'], 'whatsapp/template/message', [GatewayController::class, 'whatsappTemplate']);
     Route::post('whatsapp/update/setting', [GatewayController::class, 'whatsappUpdateSetting']);
     Route::post('whatsapp/update/number', [GatewayController::class, 'whatsappUpdateNumber']);
