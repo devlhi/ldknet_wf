@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\GangguanReport;
+use App\Models\GangguanSetting;
+use App\Models\Order;
 use App\Models\Website;
+use App\Support\WhatsAppNotifier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class GangguanController extends Controller
@@ -20,34 +24,148 @@ class GangguanController extends Controller
         ];
     }
 
+    /**
+     * Tentukan periode laporan (harian/mingguan/bulanan/tahunan) + rentang tanggalnya
+     * dari input request. Dipakai bersama oleh halaman daftar & cetak PDF.
+     */
+    private function resolvePeriode(Request $request): array
+    {
+        $periode = (string) $request->input('periode', 'bulanan');
+        if (! in_array($periode, ['harian', 'mingguan', 'bulanan', 'tahunan'], true)) {
+            $periode = 'bulanan';
+        }
+
+        // Tanggal acuan diterima sebagai Y-m-d (bisa juga Y-m atau Y — dinormalkan).
+        $raw = (string) $request->input('tanggal', '');
+        $anchor = Carbon::now();
+        if ($raw !== '') {
+            try {
+                if (preg_match('/^\d{4}$/', $raw)) {
+                    $raw .= '-01-01';
+                } elseif (preg_match('/^\d{4}-\d{2}$/', $raw)) {
+                    $raw .= '-01';
+                }
+                $anchor = Carbon::parse($raw);
+            } catch (\Throwable $e) {
+                $anchor = Carbon::now();
+            }
+        }
+
+        [$start, $end, $label] = match ($periode) {
+            'harian' => [
+                $anchor->copy()->startOfDay(),
+                $anchor->copy()->endOfDay(),
+                $anchor->translatedFormat('l, d F Y'),
+            ],
+            'mingguan' => [
+                $anchor->copy()->startOfWeek(Carbon::MONDAY),
+                $anchor->copy()->endOfWeek(Carbon::SUNDAY),
+                'Minggu '.$anchor->copy()->startOfWeek(Carbon::MONDAY)->translatedFormat('d M').' – '.$anchor->copy()->endOfWeek(Carbon::SUNDAY)->translatedFormat('d M Y'),
+            ],
+            'tahunan' => [
+                $anchor->copy()->startOfYear(),
+                $anchor->copy()->endOfYear(),
+                'Tahun '.$anchor->format('Y'),
+            ],
+            default => [
+                $anchor->copy()->startOfMonth(),
+                $anchor->copy()->endOfMonth(),
+                $anchor->translatedFormat('F Y'),
+            ],
+        };
+
+        return [
+            'periode' => $periode,
+            'anchor' => $anchor,
+            'tanggal' => $anchor->format('Y-m-d'),
+            'start' => $start,
+            'end' => $end,
+            'label' => $label,
+        ];
+    }
+
+    /**
+     * Rekap SLA + jumlah laporan untuk satu rentang tanggal.
+     */
+    private function rekapFor(Carbon $start, Carbon $end): array
+    {
+        $base = fn () => GangguanReport::query()->whereBetween('created_at', [$start, $end]);
+
+        $totalPeriode = $base()->count();
+        $rekapStatus = $base()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $rekapKategori = $base()->selectRaw('kategori, COUNT(*) as total')->groupBy('kategori')->orderByDesc('total')->get();
+
+        $sla = $base()
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, responded_at)) as avg_respon')
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) as avg_selesai')
+            ->first();
+
+        return [
+            'totalPeriode' => $totalPeriode,
+            'rekapStatus' => $rekapStatus,
+            'rekapKategori' => $rekapKategori,
+            'avgRespon' => $sla->avg_respon !== null ? (float) $sla->avg_respon : null,
+            'avgSelesai' => $sla->avg_selesai !== null ? (float) $sla->avg_selesai : null,
+        ];
+    }
+
+    /**
+     * Riwayat SLA per sub-periode (per jam / hari / bulan) dalam rentang, untuk
+     * melihat tren gangguan & kecepatan penanganan dari waktu ke waktu.
+     */
+    private function slaBreakdown(Carbon $start, Carbon $end, string $periode): array
+    {
+        $fmt = match ($periode) {
+            'harian' => '%H:00',
+            'tahunan' => '%Y-%m',
+            default => '%Y-%m-%d',
+        };
+
+        $rows = GangguanReport::whereBetween('created_at', [$start, $end])
+            ->selectRaw("DATE_FORMAT(created_at, '{$fmt}') as bucket")
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(status = 'selesai') as selesai")
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, responded_at)) as avg_respon')
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) as avg_selesai')
+            ->groupBy('bucket')
+            ->orderBy('bucket')
+            ->get();
+
+        return $rows->map(function ($r) use ($periode) {
+            $label = match ($periode) {
+                'harian' => $r->bucket,
+                'tahunan' => Carbon::createFromFormat('Y-m', $r->bucket)->translatedFormat('F Y'),
+                default => Carbon::createFromFormat('Y-m-d', $r->bucket)->translatedFormat('D, d M Y'),
+            };
+
+            return [
+                'label' => $label,
+                'total' => (int) $r->total,
+                'selesai' => (int) $r->selesai,
+                'avg_respon' => $r->avg_respon !== null ? (float) $r->avg_respon : null,
+                'avg_selesai' => $r->avg_selesai !== null ? (float) $r->avg_selesai : null,
+            ];
+        })->all();
+    }
+
     public function index(Request $request)
     {
-        $bulan = (string) $request->input('bulan', now()->format('Y-m'));
-        if (! preg_match('/^\d{4}-\d{2}$/', $bulan)) {
-            $bulan = now()->format('Y-m');
-        }
-        [$th, $bl] = array_map('intval', explode('-', $bulan));
+        $p = $this->resolvePeriode($request);
+        $setting = GangguanSetting::current();
 
         $status = $request->input('status');
         $kategori = $request->input('kategori');
 
-        $base = fn () => GangguanReport::query()
-            ->whereYear('created_at', $th)
-            ->whereMonth('created_at', $bl);
+        $rekap = $this->rekapFor($p['start'], $p['end']);
+        $breakdown = $this->slaBreakdown($p['start'], $p['end'], $p['periode']);
 
-        // Rekap seluruh bulan (independen dari filter status/kategori di daftar).
-        $rekapKategori = $base()
-            ->selectRaw('kategori, COUNT(*) as total')
-            ->groupBy('kategori')
-            ->orderByDesc('total')
-            ->get();
-        $totalBulan = $base()->count();
-        $rekapStatus = $base()
-            ->selectRaw('status, COUNT(*) as total')
-            ->groupBy('status')
-            ->pluck('total', 'status');
+        // Laporan terlambat & gangguan massal = kondisi "saat ini" (tidak terikat periode).
+        $batasSla = now()->subHours(max(1, (int) $setting->sla_response_hours));
+        $overdue = GangguanReport::where('status', 'baru')->whereNull('responded_at')->where('created_at', '<', $batasSla)->count();
+        $massal = GangguanReport::massalAlerts((int) $setting->massal_threshold, (int) $setting->massal_window_hours);
 
-        $list = $base()
+        $list = GangguanReport::query()
+            ->whereBetween('created_at', [$p['start'], $p['end']])
             ->with('handler')
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($kategori, fn ($q) => $q->where('kategori', $kategori))
@@ -57,14 +175,69 @@ class GangguanController extends Controller
 
         return view('admin.gangguan.index', [
             'title' => 'Laporan Gangguan',
-            'bulan' => $bulan,
+            'periode' => $p['periode'],
+            'tanggal' => $p['tanggal'],
+            'periodeLabel' => $p['label'],
             'statusFilter' => $status,
             'kategoriFilter' => $kategori,
-            'rekapKategori' => $rekapKategori,
-            'rekapStatus' => $rekapStatus,
-            'totalBulan' => $totalBulan,
+            'rekapKategori' => $rekap['rekapKategori'],
+            'rekapStatus' => $rekap['rekapStatus'],
+            'totalPeriode' => $rekap['totalPeriode'],
+            'avgRespon' => $rekap['avgRespon'],
+            'avgSelesai' => $rekap['avgSelesai'],
+            'breakdown' => $breakdown,
+            'overdue' => $overdue,
+            'slaHours' => (int) $setting->sla_response_hours,
+            'massal' => $massal,
             'list' => $list,
         ] + $this->websiteData());
+    }
+
+    /**
+     * Halaman cetak / export PDF (via print-to-PDF browser). Standalone, tanpa
+     * layout admin, sudah dioptimalkan untuk kertas A4.
+     */
+    public function cetak(Request $request)
+    {
+        $p = $this->resolvePeriode($request);
+        $rekap = $this->rekapFor($p['start'], $p['end']);
+        $breakdown = $this->slaBreakdown($p['start'], $p['end'], $p['periode']);
+
+        $status = $request->input('status');
+        $kategori = $request->input('kategori');
+
+        // Batasi baris riwayat pada PDF agar tidak membengkak (mis. periode tahunan).
+        $maxRows = 1000;
+        $listQuery = GangguanReport::query()
+            ->whereBetween('created_at', [$p['start'], $p['end']])
+            ->with('handler')
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($kategori, fn ($q) => $q->where('kategori', $kategori))
+            ->orderByDesc('created_at');
+        $totalList = $listQuery->count();
+        $list = $listQuery->limit($maxRows)->get();
+
+        $website = Website::first();
+
+        return view('admin.gangguan.cetak', [
+            'periode' => $p['periode'],
+            'periodeLabel' => $p['label'],
+            'start' => $p['start'],
+            'end' => $p['end'],
+            'statusFilter' => $status,
+            'kategoriFilter' => $kategori,
+            'rekapKategori' => $rekap['rekapKategori'],
+            'rekapStatus' => $rekap['rekapStatus'],
+            'totalPeriode' => $rekap['totalPeriode'],
+            'avgRespon' => $rekap['avgRespon'],
+            'avgSelesai' => $rekap['avgSelesai'],
+            'breakdown' => $breakdown,
+            'list' => $list,
+            'totalList' => $totalList,
+            'maxRows' => $maxRows,
+            'namaPerusahaan' => $website->title ?? 'LandakNet',
+            'logo' => $website->logo ?? '',
+        ]);
     }
 
     public function updateStatus(Request $request, $id)
@@ -83,21 +256,108 @@ class GangguanController extends Controller
             return redirect('admin/gangguan')->with('auth_errors', array_merge(...array_values($e->errors())));
         }
 
+        // Catat waktu respons pertama saat laporan keluar dari status 'baru'.
+        if ($data['status'] !== 'baru' && $report->responded_at === null) {
+            $report->responded_at = now();
+        }
+
         $report->status = $data['status'];
         $report->catatan = $data['catatan'] ?? $report->catatan;
         $report->handled_by = auth()->id();
-        $report->resolved_at = $data['status'] === 'selesai' ? now() : null;
+        $report->resolved_at = $data['status'] === 'selesai' ? ($report->resolved_at ?? now()) : null;
         $report->save();
 
-        // Pakai field filter khusus (f_status/f_kategori) — JANGAN 'status' dari form
-        // karena itu status baru laporan, bukan filter daftar.
+        // Pertahankan konteks periode + filter daftar setelah update (pakai field khusus).
         $filter = array_filter([
-            'bulan' => $request->input('bulan'),
+            'periode' => $request->input('periode'),
+            'tanggal' => $request->input('tanggal'),
             'status' => $request->input('f_status'),
             'kategori' => $request->input('f_kategori'),
         ], fn ($v) => $v !== null && $v !== '');
 
         return redirect('admin/gangguan?'.http_build_query($filter))
             ->with('success', ['Status laporan gangguan diperbarui']);
+    }
+
+    public function settings()
+    {
+        return view('admin.gangguan.settings', [
+            'title' => 'Pengaturan Laporan Gangguan',
+            'setting' => GangguanSetting::current(),
+        ] + $this->websiteData());
+    }
+
+    public function updateSettings(Request $request)
+    {
+        try {
+            $data = $request->validate([
+                'auto_reply_enabled' => 'nullable|boolean',
+                'auto_reply_text' => 'nullable|string|max:1000',
+                'sla_response_hours' => 'required|integer|min:1|max:168',
+                'massal_threshold' => 'required|integer|min:2|max:50',
+                'massal_window_hours' => 'required|integer|min:1|max:72',
+                'massal_broadcast_text' => 'nullable|string|max:1000',
+            ]);
+        } catch (ValidationException $e) {
+            return redirect('admin/gangguan/pengaturan')->with('auth_errors', array_merge(...array_values($e->errors())));
+        }
+
+        $setting = GangguanSetting::current();
+        $setting->auto_reply_enabled = (bool) $request->boolean('auto_reply_enabled');
+        $setting->auto_reply_text = $data['auto_reply_text'] ?? '';
+        $setting->sla_response_hours = $data['sla_response_hours'];
+        $setting->massal_threshold = $data['massal_threshold'];
+        $setting->massal_window_hours = $data['massal_window_hours'];
+        $setting->massal_broadcast_text = $data['massal_broadcast_text'] ?? '';
+        $setting->save();
+
+        return redirect('admin/gangguan/pengaturan')->with('success', ['Pengaturan laporan gangguan disimpan']);
+    }
+
+    /**
+     * Broadcast pemberitahuan gangguan massal ke seluruh pelanggan aktif pada
+     * satu ODP terdampak. Dipicu manual oleh admin dari banner gangguan massal.
+     */
+    public function broadcastOdp(Request $request)
+    {
+        $namaOdp = trim((string) $request->input('nama_odp'));
+        if ($namaOdp === '') {
+            return redirect('admin/gangguan')->with('auth_errors', ['ODP tidak valid']);
+        }
+
+        $setting = GangguanSetting::current();
+        $template = trim((string) $setting->massal_broadcast_text);
+        if ($template === '') {
+            return redirect('admin/gangguan')->with('auth_errors', ['Teks broadcast gangguan massal belum diatur. Isi di menu Pengaturan.']);
+        }
+
+        $pelanggan = Order::where('nama_odp', $namaOdp)
+            ->where('status', 'Active')
+            ->whereNotNull('nomor')
+            ->where('nomor', '!=', '')
+            ->get(['nama', 'nomor']);
+
+        $terkirim = 0;
+        $gagal = 0;
+        foreach ($pelanggan as $pel) {
+            $message = strtr($template, [
+                '{odp}' => $namaOdp,
+                '{nama}' => trim((string) $pel->nama) !== '' ? ' '.$pel->nama : '',
+            ]);
+            try {
+                WhatsAppNotifier::sendText($pel->nomor, $message);
+                $terkirim++;
+            } catch (\Throwable $e) {
+                $gagal++;
+            }
+        }
+
+        if ($terkirim === 0 && $gagal === 0) {
+            return redirect('admin/gangguan')->with('auth_errors', ['Tidak ada pelanggan aktif dengan nomor pada ODP '.$namaOdp]);
+        }
+
+        return redirect('admin/gangguan')->with('success', [
+            "Broadcast gangguan massal ODP {$namaOdp} terkirim ke {$terkirim} pelanggan".($gagal > 0 ? " ({$gagal} gagal)" : '').'.',
+        ]);
     }
 }

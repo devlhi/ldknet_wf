@@ -1,1 +1,3 @@
 ﻿- 2026-07-09 01:55 WIB | Droid | NMS Links visual polylines, CRUD links, and public signed monitor URL -> .multibrain/context/2026-07-09-0155-Droid-nms-links.md
+- 2026-07-12 20:50 WIB | Claude | Laporan Gangguan: auto-reply pelanggan, SLA (respons/selesai + badge telat), deteksi gangguan massal per ODP + broadcast, peta ODP lengkap (Leaflet/OSM + picker Nominatim + CRUD). Deploy: perlu `php artisan migrate` -> .multibrain/context/2026-07-12-2050-claude-gangguan-sla-massal-odpmap.md
+- 2026-07-12 21:00 WIB | Claude | Laporan Gangguan lanjutan: SLA periode harian/mingguan/bulanan/tahunan + riwayat SLA per sub-periode + export PDF (print-to-PDF standalone, tanpa lib) + riwayat laporan per periode -> .multibrain/context/2026-07-12-2050-claude-gangguan-sla-massal-odpmap.md

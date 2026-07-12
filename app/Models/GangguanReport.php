@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\WhatsAppNotifier;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class GangguanReport extends Model
@@ -13,6 +15,8 @@ class GangguanReport extends Model
 
     protected $casts = [
         'resolved_at' => 'datetime',
+        'responded_at' => 'datetime',
+        'auto_reply_sent' => 'boolean',
     ];
 
     public const STATUSES = ['baru', 'diproses', 'selesai'];
@@ -101,17 +105,56 @@ class GangguanReport extends Model
             $local = '0'.substr($number, 2);
             $order = Order::where('nomor', $number)->orWhere('nomor', $local)->first();
 
-            self::create([
+            $report = self::create([
                 'from_number' => $number,
                 'from_name' => $fromName ?: ($order->nama ?? null),
                 'idpel' => $order->idpel ?? null,
+                'nama_odp' => $order->nama_odp ?? null,
+                'kode_area' => $order->kode_area ?? null,
                 'gateway' => $gateway,
                 'kategori' => $kategori,
                 'pesan' => mb_substr($text, 0, 1000),
                 'status' => 'baru',
             ]);
+
+            self::sendAutoReply($report);
         } catch (\Throwable $e) {
             Log::warning('Gagal menyerap laporan gangguan: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Balas otomatis ke pelanggan bahwa laporannya diterima. Dibungkus try/catch
+     * sendiri: kegagalan kirim TIDAK boleh menggagalkan pencatatan laporan.
+     * Dikirim via gateway aktif (Meta/lama) — pelanggan baru saja chat jadi masih
+     * dalam window 24 jam Meta (pesan sesi bebas diperbolehkan).
+     */
+    protected static function sendAutoReply(self $report): void
+    {
+        try {
+            $setting = GangguanSetting::current();
+            if (! $setting->auto_reply_enabled) {
+                return;
+            }
+
+            $template = trim((string) $setting->auto_reply_text);
+            if ($template === '') {
+                return;
+            }
+
+            $nama = trim((string) $report->from_name);
+            $message = strtr($template, [
+                // {nama} diawali spasi bila ada nama, kosong bila anonim (biar "Halo 🙏" tetap rapi).
+                '{nama}' => $nama !== '' ? ' '.$nama : '',
+                '{kategori}' => self::kategoriLabel($report->kategori),
+            ]);
+
+            WhatsAppNotifier::sendText($report->from_number, $message);
+
+            $report->auto_reply_sent = true;
+            $report->save();
+        } catch (\Throwable $e) {
+            Log::warning('Gagal kirim balasan otomatis laporan gangguan: '.$e->getMessage());
         }
     }
 
@@ -133,5 +176,65 @@ class GangguanReport extends Model
             'pembayaran' => 'Terkait Pembayaran',
             default => 'Lainnya',
         };
+    }
+
+    /** Format durasi menit -> "2j 15m" / "45m" / "-" untuk tampilan SLA. */
+    public static function humanDuration(?float $minutes): string
+    {
+        if ($minutes === null) {
+            return '-';
+        }
+        $minutes = (int) round($minutes);
+        if ($minutes < 60) {
+            return $minutes.'m';
+        }
+        $h = intdiv($minutes, 60);
+        $m = $minutes % 60;
+
+        return $m > 0 ? "{$h}j {$m}m" : "{$h}j";
+    }
+
+    /**
+     * Deteksi kemungkinan gangguan massal: kelompokkan laporan terbuka
+     * (baru/diproses) per ODP dalam rentang $windowHours jam terakhir; ODP dengan
+     * jumlah laporan >= $threshold ditandai sebagai indikasi gangguan massal.
+     * Return Collection stdClass: {nama_odp, total, latitude, longitude, pelanggan_aktif}.
+     */
+    public static function massalAlerts(int $threshold, int $windowHours): Collection
+    {
+        $threshold = max(2, $threshold);
+        $windowHours = max(1, $windowHours);
+
+        $rows = self::query()
+            ->whereIn('status', ['baru', 'diproses'])
+            ->whereNotNull('nama_odp')
+            ->where('nama_odp', '!=', '')
+            ->where('created_at', '>=', now()->subHours($windowHours))
+            ->selectRaw('nama_odp, COUNT(*) as total, MAX(created_at) as last_at')
+            ->groupBy('nama_odp')
+            ->havingRaw('COUNT(*) >= ?', [$threshold])
+            ->orderByDesc('total')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return $rows;
+        }
+
+        $names = $rows->pluck('nama_odp')->all();
+        $odps = Odp::whereIn('nama', $names)->get()->keyBy('nama');
+        $pelanggan = Order::whereIn('nama_odp', $names)
+            ->where('status', 'Active')
+            ->selectRaw('nama_odp, COUNT(*) as jml')
+            ->groupBy('nama_odp')
+            ->pluck('jml', 'nama_odp');
+
+        return $rows->map(function ($r) use ($odps, $pelanggan) {
+            $odp = $odps->get($r->nama_odp);
+            $r->latitude = $odp->latitude ?? null;
+            $r->longitude = $odp->longitude ?? null;
+            $r->pelanggan_aktif = (int) ($pelanggan[$r->nama_odp] ?? 0);
+
+            return $r;
+        });
     }
 }

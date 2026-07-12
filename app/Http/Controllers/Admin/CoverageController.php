@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\GangguanReport;
 use App\Models\Odp;
 use App\Models\Order;
 use App\Models\Website;
@@ -40,26 +41,41 @@ class CoverageController extends Controller
     {
         $getallodp = Odp::all();
 
-        // Inisialisasi array untuk menyimpan data ODP dengan jumlah port yang digunakan
+        // Jumlah pelanggan & laporan gangguan terbuka per ODP dihitung sekali
+        // (hindari query di dalam loop).
+        $pelangganPerOdp = Order::selectRaw('nama_odp, COUNT(*) as jml')
+            ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
+            ->groupBy('nama_odp')->pluck('jml', 'nama_odp');
+
+        $gangguanPerOdp = Schema::hasTable('gangguan_reports')
+            ? GangguanReport::whereIn('status', ['baru', 'diproses'])
+                ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
+                ->selectRaw('nama_odp, COUNT(*) as jml')
+                ->groupBy('nama_odp')->pluck('jml', 'nama_odp')
+            : collect();
+
+        // Data ODP lengkap untuk tabel + peta (satu sumber data).
         $odpWithDetails = [];
 
         foreach ($getallodp as $odp) {
-            // Mengambil order berdasarkan nama ODP
             $orders = Order::where('nama_odp', $odp->nama)->get()->toArray();
 
-            $totalport = $odp->port;
-
-            // Membuat array dari 1 hingga jumlah total port
-            $allPorts = range(1, $odp->port);
-            $usedPorts = array_column($orders, 'port_odp'); // Mengumpulkan port yang digunakan dari data order
-
-            $availablePorts = array_diff($allPorts, $usedPorts); // Menghitung port yang tersedia
+            $totalport = (int) $odp->port;
+            $allPorts = $totalport > 0 ? range(1, $totalport) : [];
+            $usedPorts = array_filter(array_column($orders, 'port_odp'), fn ($p) => $p !== null && $p !== '');
+            $availablePorts = array_values(array_diff($allPorts, $usedPorts));
 
             $odpWithDetails[] = [
+                'id' => $odp->id,
+                'kode' => $odp->kode,
                 'nama' => $odp->nama,
+                'latitude' => $odp->latitude,
+                'longitude' => $odp->longitude,
                 'total_port' => $totalport,
                 'used_ports' => count($usedPorts),
                 'available_ports' => $availablePorts,
+                'pelanggan' => (int) ($pelangganPerOdp[$odp->nama] ?? 0),
+                'gangguan_open' => (int) ($gangguanPerOdp[$odp->nama] ?? 0),
             ];
         }
 
@@ -74,6 +90,7 @@ class CoverageController extends Controller
     {
         Odp::create([
             'nama' => $request->post('nama'),
+            'kode' => $request->post('kode'),
             'port' => $request->post('jumlah'),
             'latitude' => $request->post('latitude'),
             'longitude' => $request->post('longitude'),
@@ -86,6 +103,7 @@ class CoverageController extends Controller
     {
         $data = [
             'nama' => $request->post('nama'),
+            'kode' => $request->post('kode'),
             'port' => $request->post('jumlah') ?? $request->post('port'),
             'latitude' => $request->post('latitude'),
             'longitude' => $request->post('longitude'),
