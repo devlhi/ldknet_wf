@@ -289,6 +289,22 @@
                                         @endif
                                         <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#status-{{ $r->id }}"><i class="uil uil-edit"></i> Status</button>
 
+                                        {{-- Tutup cepat (tandai selesai) / buka lagi bila sudah ditutup --}}
+                                        <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" class="d-inline"
+                                            onsubmit="return confirm('{{ $r->status === 'selesai' ? 'Buka lagi laporan ini?' : 'Tutup laporan ini? Status jadi Selesai.' }}')">
+                                            @csrf
+                                            <input type="hidden" name="status" value="{{ $r->status === 'selesai' ? 'diproses' : 'selesai' }}">
+                                            <input type="hidden" name="periode" value="{{ $periode }}">
+                                            <input type="hidden" name="tanggal" value="{{ $tanggal }}">
+                                            <input type="hidden" name="f_status" value="{{ $statusFilter }}">
+                                            <input type="hidden" name="f_kategori" value="{{ $kategoriFilter }}">
+                                            @if ($r->status === 'selesai')
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Buka kembali laporan"><i class="uil uil-redo"></i> Buka</button>
+                                            @else
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Tutup laporan (tandai selesai)"><i class="uil uil-check-circle"></i> Tutup</button>
+                                            @endif
+                                        </form>
+
                                         <div class="modal fade" id="status-{{ $r->id }}" tabindex="-1" aria-hidden="true">
                                             <div class="modal-dialog modal-dialog-centered">
                                                 <div class="modal-content">
