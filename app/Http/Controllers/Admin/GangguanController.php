@@ -10,6 +10,7 @@ use App\Models\Website;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class GangguanController extends Controller
@@ -164,11 +165,17 @@ class GangguanController extends Controller
         $overdue = GangguanReport::where('status', 'baru')->whereNull('responded_at')->where('created_at', '<', $batasSla)->count();
         $massal = GangguanReport::massalAlerts((int) $setting->massal_threshold, (int) $setting->massal_window_hours);
 
-        $list = GangguanReport::query()
+        $listQuery = GangguanReport::query()
             ->whereBetween('created_at', [$p['start'], $p['end']])
-            ->with('handler')
             ->when($status, fn ($q) => $q->where('status', $status))
-            ->when($kategori, fn ($q) => $q->where('kategori', $kategori))
+            ->when($kategori, fn ($q) => $q->where('kategori', $kategori));
+
+        $openFilteredCount = (clone $listQuery)
+            ->whereIn('status', ['baru', 'diproses'])
+            ->count();
+
+        $list = $listQuery
+            ->with('handler')
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();
@@ -190,6 +197,7 @@ class GangguanController extends Controller
             'slaHours' => (int) $setting->sla_response_hours,
             'massal' => $massal,
             'list' => $list,
+            'openFilteredCount' => $openFilteredCount,
         ] + $this->websiteData());
     }
 
@@ -277,6 +285,73 @@ class GangguanController extends Controller
 
         return redirect('admin/gangguan?'.http_build_query($filter))
             ->with('success', ['Status laporan gangguan diperbarui']);
+    }
+
+    public function bulkClose(Request $request)
+    {
+        try {
+            $data = $request->validate([
+                'close_all' => 'nullable|boolean',
+                'ids' => 'required_unless:close_all,1|array|min:1',
+                'ids.*' => 'integer|distinct',
+                'catatan' => 'nullable|string|max:500',
+                'periode' => 'nullable|in:harian,mingguan,bulanan,tahunan',
+                'tanggal' => 'nullable|date_format:Y-m-d',
+                'f_status' => 'nullable|in:baru,diproses,selesai',
+                'f_kategori' => 'nullable|in:internet_mati,internet_lambat,tidak_bisa_akses,wifi,pembayaran,lainnya',
+            ]);
+        } catch (ValidationException $e) {
+            return redirect('admin/gangguan')->with('auth_errors', array_merge(...array_values($e->errors())));
+        }
+
+        $closeAll = $request->boolean('close_all');
+        $ids = array_values(array_unique(array_map('intval', $data['ids'] ?? [])));
+        $catatan = trim((string) ($data['catatan'] ?? ''));
+        $handledAt = now();
+        $periode = $this->resolvePeriode($request);
+
+        $closed = DB::transaction(function () use ($closeAll, $ids, $catatan, $handledAt, $periode, $data) {
+            $reports = GangguanReport::query()
+                ->whereIn('status', ['baru', 'diproses'])
+                ->when(
+                    $closeAll,
+                    fn ($query) => $query
+                        ->whereBetween('created_at', [$periode['start'], $periode['end']])
+                        ->when($data['f_status'] ?? null, fn ($filtered) => $filtered->where('status', $data['f_status']))
+                        ->when($data['f_kategori'] ?? null, fn ($filtered) => $filtered->where('kategori', $data['f_kategori'])),
+                    fn ($query) => $query->whereIn('id', $ids)
+                )
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($reports as $report) {
+                if ($report->responded_at === null) {
+                    $report->responded_at = $handledAt;
+                }
+                if ($report->resolved_at === null) {
+                    $report->resolved_at = $handledAt;
+                }
+
+                $report->status = 'selesai';
+                $report->handled_by = auth()->id();
+                if ($catatan !== '') {
+                    $report->catatan = $catatan;
+                }
+                $report->save();
+            }
+
+            return $reports->count();
+        });
+
+        $filter = array_filter([
+            'periode' => $request->input('periode'),
+            'tanggal' => $request->input('tanggal'),
+            'status' => $request->input('f_status'),
+            'kategori' => $request->input('f_kategori'),
+        ], fn ($v) => $v !== null && $v !== '');
+
+        return redirect('admin/gangguan?'.http_build_query($filter))
+            ->with('success', ["{$closed} laporan gangguan ditutup"]);
     }
 
     public function settings()
