@@ -177,7 +177,10 @@ class CoverageController extends Controller
         }
 
         $setting = CoverageMapSetting::current();
-        $pindahHub = (string) $setting->hub_lat !== (string) $data['hub_lat'] || (string) $setting->hub_lng !== (string) $data['hub_lng'];
+        // Bandingkan numerik (bukan string) supaya perbedaan format angka
+        // (mis. 0.68 vs 0.6800000) tidak dianggap "pindah" & menghapus cache sia-sia.
+        $sama = fn ($a, $b) => round((float) $a, 7) === round((float) $b, 7);
+        $pindahHub = ! $sama($setting->hub_lat, $data['hub_lat']) || ! $sama($setting->hub_lng, $data['hub_lng']);
         $setting->fill($data)->save();
 
         // Titik pusat berpindah -> jalur kabel lama tidak valid, hapus cache biar di-route ulang.

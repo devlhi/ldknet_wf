@@ -30,7 +30,10 @@ class WhatsAppApi
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
+            // Timeout wajib (bukan 0/tak-terbatas): dipanggil sinkron termasuk dari
+            // webhook (balasan otomatis). Gateway mati tidak boleh menggantung proses.
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 25,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => 'POST',
@@ -66,7 +69,10 @@ class WhatsAppApi
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
+            // Timeout wajib (bukan 0/tak-terbatas): dipanggil sinkron termasuk dari
+            // webhook (balasan otomatis). Gateway mati tidak boleh menggantung proses.
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 25,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => 'POST',

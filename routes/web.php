@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [AuthController::class, 'index']);
+// Landing page publik ANNORTY NET; pengguna login diarahkan ke dashboard-nya.
+Route::get('/', [LandingController::class, 'index']);
 
 // Authentication
 Route::prefix('auth')->group(function () {

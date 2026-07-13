@@ -418,7 +418,12 @@ class FinanceController extends Controller
         $filename = '';
         if ($request->hasFile('image')) {
             $gambar = $request->file('image');
-            $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$gambar->getClientOriginalExtension();
+            // Ekstensi diturunkan dari isi file (guessExtension), BUKAN nama asli klien.
+            // getClientOriginalExtension() bisa dipakai upload file .php ber-konten
+            // gambar valid (lolos rule image) ke folder publik -> RCE. Whitelist ketat.
+            $ext = strtolower((string) $gambar->guessExtension());
+            $ext = in_array($ext, ['jpg', 'jpeg', 'png'], true) ? $ext : 'jpg';
+            $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$ext;
             $gambar->move(public_path('data/bukti'), $filename);
         }
 

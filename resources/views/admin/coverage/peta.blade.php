@@ -115,7 +115,7 @@
         return new Promise(function (resolve) {
             var url = 'https://router.project-osrm.org/route/v1/driving/'
                 + hub.lng + ',' + hub.lat + ';' + parseFloat(o.longitude) + ',' + parseFloat(o.latitude)
-                + '?overview=full&geometries=geojson';
+                + '?overview=simplified&geometries=geojson';
             fetch(url, { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {

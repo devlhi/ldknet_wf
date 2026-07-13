@@ -88,6 +88,8 @@ class WhatsAppMetaApi
     {
         $response = Http::withToken($this->apiKey)
             ->acceptJson()
+            ->connectTimeout(8)
+            ->timeout(15)
             ->get($this->apiUrl.'/'.rawurlencode($mediaId));
 
         return $response->successful() ? $response->json() : [];
@@ -403,8 +405,13 @@ class WhatsAppMetaApi
 
     protected function postMessage($sender, array $payload)
     {
+        // Timeout wajib: metode ini dipanggil sinkron di webhook (mis. balasan
+        // otomatis laporan gangguan). Tanpa timeout, gateway lambat/mati bisa
+        // menggantung proses webhook tanpa batas.
         $response = Http::withToken($this->apiKey)
             ->acceptJson()
+            ->connectTimeout(8)
+            ->timeout(20)
             ->post($this->apiUrl.'/'.trim((string) $sender).'/messages', $payload);
 
         return $response->body();
