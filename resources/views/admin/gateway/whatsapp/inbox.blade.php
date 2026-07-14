@@ -120,7 +120,7 @@
         color: var(--wa-text);
         border-bottom: 1px solid var(--wa-border);
     }
-    .wa-back { display: none; color: var(--wa-muted); font-size: 1.3rem; text-decoration: none; }
+    .wa-back { display: none; color: var(--wa-text); font-size: 1.3rem; text-decoration: none; width: 36px; height: 36px; border-radius: 50%; align-items: center; justify-content: center; flex-shrink: 0; }
     .wa-chat-header .wa-avatar { width: 40px; height: 40px; font-size: .95rem; }
     .wa-chat-meta { min-width: 0; flex: 1; }
     .wa-chat-name { font-weight: 600; color: var(--wa-text); font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -260,7 +260,7 @@
         .wa-chat { display: none !important; }
         .wa-inbox.has-selection .wa-sidebar { display: none !important; }
         .wa-inbox.has-selection .wa-chat { display: flex !important; }
-        .wa-back { display: inline-block; }
+        .wa-back { display: flex !important; align-items: center; justify-content: center; width: 40px; height: 40px; font-size: 1.5rem; }
         .wa-bubble { max-width: 86%; }
         .wa-thread { padding: 1rem 3%; }
     }
