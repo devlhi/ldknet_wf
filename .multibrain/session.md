@@ -55,5 +55,5 @@ Sedang berjalan / belum selesai:
 - `auth` — login/forgot/reset + middleware role — update: 2026-07-10 WIB (security: reset password, throttle, anti-enumerasi) -> .multibrain/indexes/auth.md
 - `admin-dashboard` — layout admin + halaman dashboard — update: 2026-07-10 WIB (fix Pelanggan Baru: baca dari orders bukan psb) -> .multibrain/indexes/admin-dashboard.md
 - `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-12 17:40 WIB (retry isolir Mikrotik) -> .multibrain/indexes/modules-parallel.md
-- `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-13 22:21 WIB (redesign UI WhatsApp Web) -> .multibrain/indexes/wa-gateway.md
+- `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-14 15:03 WIB (nuansa UI WhatsApp asli) -> .multibrain/indexes/wa-gateway.md
 - `features` — fitur tambahan lintas modul — update: 2026-07-13 23:11 WIB (gangguan bulk close & hapus ikon rusak) -> .multibrain/indexes/features.md

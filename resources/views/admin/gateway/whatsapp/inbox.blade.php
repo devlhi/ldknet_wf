@@ -3,18 +3,22 @@
 @section('content')
 <style>
     :root {
-        --wa-accent: #008069;
+        --wa-accent: #00a884;
+        --wa-accent-dark: #008069;
         --wa-accent-soft: #d9fdd3;
+        --wa-teal-header: #008069;
         --wa-toolbar: #f0f2f5;
         --wa-canvas: #efeae2;
         --wa-surface: #ffffff;
         --wa-hover: #f5f6f6;
-        --wa-selected: #e9edef;
+        --wa-selected: #f0f2f5;
         --wa-border: #e9edef;
         --wa-text: #111b21;
         --wa-muted: #667781;
         --wa-danger-bg: #ffe1e1;
         --wa-danger: #b42318;
+        --wa-bubble-in: #ffffff;
+        --wa-bubble-out: #d9fdd3;
     }
     .wa-inbox {
         display: flex;
@@ -24,13 +28,15 @@
         border: 1px solid var(--wa-border);
         border-radius: .5rem;
         overflow: hidden;
+        box-shadow: 0 1px 1px rgba(11,20,26,.07), 0 2px 5px rgba(11,20,26,.12);
     }
+
+    /* ---- Sidebar ---- */
     .wa-sidebar {
-        width: 340px;
+        width: 360px;
         min-width: 300px;
         display: flex;
         flex-direction: column;
-        border-right: 1px solid var(--wa-border);
         background: var(--wa-surface);
     }
     .wa-sidebar-header {
@@ -38,26 +44,44 @@
         align-items: center;
         justify-content: space-between;
         gap: .5rem;
-        padding: .75rem 1rem;
+        padding: .6rem 1rem;
+        background: var(--wa-teal-header);
+        color: #fff;
+    }
+    .wa-sidebar-title { font-weight: 600; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: .4rem; }
+    .wa-conn { font-size: .72rem; font-weight: 500; display: inline-flex; align-items: center; color: rgba(255,255,255,.85); }
+    .wa-conn.is-online { color: rgba(255,255,255,.9); }
+    .wa-conn.is-offline { color: rgba(255,200,200,.95); }
+    .conn-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+    .conn-dot.online { background:#53bdeb; animation: connBlink 1.4s infinite; }
+    .conn-dot.offline { background:#ff6b6b; }
+    @keyframes connBlink { 0%{box-shadow:0 0 0 0 rgba(83,189,235,0.6);} 70%{box-shadow:0 0 0 6px rgba(83,189,235,0);} 100%{box-shadow:0 0 0 0 rgba(83,189,235,0);} }
+    @media (prefers-reduced-motion: reduce) { .conn-dot.online { animation: none; } }
+
+    .wa-search-bar {
+        padding: .5rem .75rem;
         background: var(--wa-toolbar);
         border-bottom: 1px solid var(--wa-border);
     }
-    .wa-sidebar-title { font-weight: 600; color: var(--wa-text); font-size: .95rem; }
-    .wa-conn { font-size: .72rem; font-weight: 600; display: inline-flex; align-items: center; }
-    .wa-conn.is-online { color: var(--wa-accent); }
-    .wa-conn.is-offline { color: var(--wa-danger); }
-    .conn-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
-    .conn-dot.online { background:#34c38f; animation: connBlink 1.4s infinite; }
-    .conn-dot.offline { background:#f46a6a; }
-    @keyframes connBlink { 0%{box-shadow:0 0 0 0 rgba(52,195,143,0.6);} 70%{box-shadow:0 0 0 7px rgba(52,195,143,0);} 100%{box-shadow:0 0 0 0 rgba(52,195,143,0);} }
-    @media (prefers-reduced-motion: reduce) { .conn-dot.online { animation: none; } }
+    .wa-search-input {
+        width: 100%;
+        border: none;
+        border-radius: 8px;
+        padding: .4rem .75rem .4rem 2rem;
+        font-size: .85rem;
+        background: #fff;
+        color: var(--wa-text);
+    }
+    .wa-search-wrap { position: relative; }
+    .wa-search-wrap i { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--wa-muted); font-size: .9rem; pointer-events: none; }
+    .wa-search-input:focus { outline: none; box-shadow: 0 0 0 2px rgba(0,168,132,.2); }
 
     .wa-conversation-list { flex: 1; overflow-y: auto; }
     .wa-conversation {
         display: flex;
         align-items: center;
-        gap: .75rem;
-        padding: .65rem 1rem;
+        gap: .85rem;
+        padding: .7rem 1rem;
         text-decoration: none;
         border-bottom: 1px solid var(--wa-border);
         cursor: pointer;
@@ -67,48 +91,51 @@
     .wa-conversation.is-active { background: var(--wa-selected); }
     .wa-avatar {
         flex: 0 0 auto;
-        width: 44px; height: 44px;
+        width: 49px; height: 49px;
         border-radius: 50%;
-        background: var(--wa-accent);
+        background: linear-gradient(135deg, #00a884, #008069);
         color: #fff;
         display: flex; align-items: center; justify-content: center;
-        font-weight: 600; font-size: 1rem;
+        font-weight: 600; font-size: 1.1rem;
         text-transform: uppercase;
     }
     .wa-conversation-main { min-width: 0; flex: 1; }
     .wa-conversation-top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
-    .wa-conversation-title { font-weight: 600; color: var(--wa-text); font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wa-conversation-time { font-size: .7rem; color: var(--wa-muted); flex: 0 0 auto; }
-    .wa-conversation-preview { font-size: .8rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+    .wa-conversation-title { font-weight: 400; color: var(--wa-text); font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-conversation-time { font-size: .72rem; color: var(--wa-muted); flex: 0 0 auto; }
+    .wa-conversation-preview { font-size: .82rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
     .wa-empty-list { text-align: center; color: var(--wa-muted); padding: 2rem 1rem; }
 
-    .wa-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    /* ---- Chat pane ---- */
+    .wa-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--wa-canvas); }
     .wa-chat-header {
-        display: flex; align-items: center; gap: .75rem;
-        padding: .6rem 1rem;
-        background: var(--wa-toolbar);
-        border-bottom: 1px solid var(--wa-border);
+        display: flex; align-items: center; gap: .85rem;
+        padding: .55rem 1rem;
+        background: var(--wa-teal-header);
+        color: #fff;
     }
-    .wa-back { display: none; color: var(--wa-text); font-size: 1.25rem; text-decoration: none; }
+    .wa-back { display: none; color: #fff; font-size: 1.3rem; text-decoration: none; }
+    .wa-chat-header .wa-avatar { width: 40px; height: 40px; font-size: .95rem; }
     .wa-chat-meta { min-width: 0; flex: 1; }
-    .wa-chat-name { font-weight: 600; color: var(--wa-text); font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wa-chat-sub { font-size: .74rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-chat-name { font-weight: 600; color: #fff; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-chat-sub { font-size: .74rem; color: rgba(255,255,255,.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wa-window { text-align: right; }
-    .wa-window-time { display: block; color: var(--wa-muted); font-size: .66rem; margin-bottom: .15rem; white-space: nowrap; }
+    .wa-window-time { display: block; color: rgba(255,255,255,.7); font-size: .66rem; margin-bottom: .15rem; white-space: nowrap; }
     .wa-pill { font-size: .68rem; font-weight: 600; padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
-    .wa-pill.is-open { background: var(--wa-accent-soft); color: #0a5c33; }
-    .wa-pill.is-closed { background: var(--wa-danger-bg); color: var(--wa-danger); }
+    .wa-pill.is-open { background: rgba(217,253,211,.25); color: #d9fdd3; }
+    .wa-pill.is-closed { background: rgba(255,225,225,.25); color: #ffcfcf; }
 
+    /* ---- Thread / messages ---- */
     .wa-thread {
         flex: 1;
         overflow-y: auto;
-        padding: 1rem 1.25rem;
+        padding: 1rem 5%;
         background-color: var(--wa-canvas);
-        background-image: radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px);
-        background-size: 22px 22px;
+        background-image:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23000' fill-opacity='0.03'%3E%3Cpath d='M14 16c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zm40 30c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zM50 10c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM20 50c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM65 25c0-1.5 1-2.5 2.5-2.5S70 23.5 70 25s-1 2.5-2.5 2.5S65 26.5 65 25zM10 35c0-1.5 1-2.5 2.5-2.5S15 33.5 15 35s-1 2.5-2.5 2.5S10 36.5 10 35zM55 60c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM30 70c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2z'/%3E%3C/g%3E%3C/svg%3E");
         display: flex;
         flex-direction: column;
-        gap: .35rem;
+        gap: .3rem;
     }
     .wa-message-row { display: flex; }
     .wa-message-row.is-outgoing { justify-content: flex-end; }
@@ -116,15 +143,39 @@
     .wa-bubble {
         position: relative;
         max-width: min(65%, 620px);
-        padding: .4rem .6rem .35rem;
+        padding: .35rem .7rem .4rem;
         border-radius: 8px;
         box-shadow: 0 1px .5px rgba(11,20,26,.13);
         font-size: .875rem;
         color: var(--wa-text);
+        min-width: 80px;
     }
-    .wa-bubble.is-incoming { background: var(--wa-surface); border-top-left-radius: 0; }
-    .wa-bubble.is-outgoing { background: var(--wa-accent-soft); border-top-right-radius: 0; }
-    .wa-bubble.is-failed { background: var(--wa-danger-bg); }
+    .wa-bubble.is-incoming {
+        background: var(--wa-bubble-in);
+        border-top-left-radius: 0;
+    }
+    .wa-bubble.is-incoming::before {
+        content: '';
+        position: absolute;
+        top: 0; left: -8px;
+        width: 8px; height: 13px;
+        background: var(--wa-bubble-in);
+        clip-path: polygon(100% 0, 100% 100%, 0 0);
+    }
+    .wa-bubble.is-outgoing {
+        background: var(--wa-bubble-out);
+        border-top-right-radius: 0;
+    }
+    .wa-bubble.is-outgoing::before {
+        content: '';
+        position: absolute;
+        top: 0; right: -8px;
+        width: 8px; height: 13px;
+        background: var(--wa-bubble-out);
+        clip-path: polygon(0 0, 0 100%, 100% 0);
+    }
+    .wa-bubble.is-failed { background: var(--wa-danger-bg); border-top-right-radius: 0; }
+    .wa-bubble.is-failed::before { background: var(--wa-danger-bg); }
     .wa-bubble.is-failed .wa-message-meta { color: var(--wa-danger); }
     .wa-template-label {
         display: inline-block;
@@ -138,15 +189,16 @@
     .wa-media img { display: block; border-radius: 6px; margin-bottom: .35rem; max-width: 260px; max-height: 260px; object-fit: contain; }
     .message-body { white-space: pre-wrap; word-break: break-word; line-height: 1.35; }
     .wa-message-meta {
-        display: block;
+        float: right;
         text-align: right;
-        font-size: .66rem;
+        font-size: .65rem;
         color: var(--wa-muted);
-        margin-top: .15rem;
+        margin: .15rem 0 0 .5rem;
+        user-select: none;
     }
     .wa-reply-action {
         background: none; border: none; padding: 0; margin-top: .1rem;
-        color: var(--wa-accent); font-size: .72rem; font-weight: 600; cursor: pointer;
+        color: var(--wa-accent-dark); font-size: .72rem; font-weight: 600; cursor: pointer;
         opacity: 0; transition: opacity .12s ease;
     }
     .wa-bubble:hover .wa-reply-action,
@@ -155,7 +207,8 @@
 
     .wa-thread-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--wa-muted); }
 
-    .wa-composer { background: var(--wa-toolbar); border-top: 1px solid var(--wa-border); padding: .6rem 1rem; }
+    /* ---- Composer ---- */
+    .wa-composer { background: var(--wa-toolbar); border-top: 1px solid var(--wa-border); padding: .5rem 1rem; }
     .wa-signature-options { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .5rem; }
     .wa-reply-preview {
         background: var(--wa-surface);
@@ -165,18 +218,19 @@
         margin-bottom: .5rem;
         display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem;
     }
-    .wa-reply-preview .wa-quote-label { color: var(--wa-accent); font-size: .72rem; font-weight: 600; }
+    .wa-reply-preview .wa-quote-label { color: var(--wa-accent-dark); font-size: .72rem; font-weight: 600; }
     .wa-reply-preview .wa-quote-text { color: var(--wa-muted); font-size: .78rem; max-width: 600px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wa-compose-row { display: flex; align-items: flex-end; gap: .5rem; }
     .wa-compose-input {
         flex: 1;
-        border: 1px solid var(--wa-border);
-        border-radius: 20px;
-        padding: .5rem .9rem;
+        border: none;
+        border-radius: 8px;
+        padding: .55rem 1rem;
         resize: none;
         font-size: .875rem;
+        background: #fff;
     }
-    .wa-compose-input:focus { outline: none; border-color: var(--wa-accent); box-shadow: 0 0 0 2px rgba(0,128,105,.15); }
+    .wa-compose-input:focus { outline: none; box-shadow: 0 0 0 2px rgba(0,168,132,.2); }
     .wa-send-button {
         flex: 0 0 auto;
         width: 44px; height: 44px;
@@ -185,10 +239,11 @@
         background: var(--wa-accent);
         color: #fff;
         display: flex; align-items: center; justify-content: center;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
         cursor: pointer;
+        transition: background .15s ease;
     }
-    .wa-send-button:hover { background: #016a57; }
+    .wa-send-button:hover { background: var(--wa-accent-dark); }
     .wa-attachment-form { margin-top: .55rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
     .wa-attachment-form .form-control { max-width: 260px; }
     .wa-attachment-hint { font-size: .7rem; color: var(--wa-muted); flex-basis: 100%; margin: 0; }
@@ -201,10 +256,12 @@
         .wa-inbox.has-selection .wa-chat { display: flex; }
         .wa-back { display: inline-block; }
         .wa-bubble { max-width: 86%; }
+        .wa-thread { padding: 1rem 3%; }
     }
     @media (max-width: 575.98px) {
         .wa-inbox { border-radius: 0; }
         .wa-attachment-form .form-control { max-width: 100%; }
+        .wa-thread { padding: .75rem 4%; }
     }
 </style>
 <div class="page-content">
@@ -248,11 +305,17 @@
                 <div class="wa-inbox {{ $selectedNumber !== '' ? 'has-selection' : '' }}">
                     <div class="wa-sidebar">
                         <div class="wa-sidebar-header">
-                            <span class="wa-sidebar-title"><i class="uil uil-whatsapp me-1"></i> WhatsApp Inbox</span>
+                            <span class="wa-sidebar-title"><i class="uil uil-whatsapp"></i> WhatsApp Inbox</span>
                             <span id="metaConnStatus" class="wa-conn {{ $connOnline ? 'is-online' : 'is-offline' }}" role="status" aria-live="polite">
                                 <span class="conn-dot {{ $connOnline ? 'online' : 'offline' }}" id="metaConnDot" aria-hidden="true"></span>
                                 <span id="metaConnText">{{ $connOnline ? 'Terhubung' : 'Terputus' }}</span>
                             </span>
+                        </div>
+                        <div class="wa-search-bar">
+                            <div class="wa-search-wrap">
+                                <i class="uil uil-search"></i>
+                                <input type="text" id="waSearchInput" class="wa-search-input" placeholder="Cari atau mulai percakapan baru" aria-label="Cari percakapan">
+                            </div>
                         </div>
                         <div class="wa-conversation-list" id="conversationList">
                             @forelse ($conversations as $conv)
@@ -260,6 +323,8 @@
                                 <a href="{{ url('admin/whatsapp/inbox?number='.$conv->from_number) }}"
                                    class="wa-conversation {{ $selectedNumber === $conv->from_number ? 'is-active' : '' }}"
                                    data-conversation-number="{{ $conv->from_number }}"
+                                   data-search-title="{{ strtolower($convTitle) }}"
+                                   data-search-number="{{ strtolower($conv->from_number) }}"
                                    @if ($selectedNumber === $conv->from_number) aria-current="page" @endif>
                                     <span class="wa-avatar" aria-hidden="true">{{ mb_substr($convTitle, 0, 1) }}</span>
                                     <span class="wa-conversation-main">
@@ -292,7 +357,7 @@
                                         @if ($customer)
                                             &middot; {{ $customer->level }} &middot; {{ $customer->status_account }}
                                         @else
-                                            &middot; <span class="text-warning">Bukan user terdaftar</span>
+                                            &middot; <span style="color:#ffcc00;">Bukan user terdaftar</span>
                                         @endif
                                     </div>
                                 </div>
@@ -322,11 +387,11 @@
                                                     <img src="{{ url('admin/whatsapp/inbox/media/'.$msg->id) }}" alt="Gambar chat">
                                                 </a>
                                             @endif
-                                            <div class="message-body">{{ $msg->body }}</div>
+                                            <span class="message-body">{{ $msg->body }}</span>
                                             <span class="wa-message-meta">
-                                                {{ optional($msg->created_at)->format('d M H:i') }}
+                                                {{ optional($msg->created_at)->format('H:i') }}
                                                 @if ($out)
-                                                    &middot; {{ $failed ? '✗ Gagal' : '✓ Terkirim' }}
+                                                    &middot; {{ $failed ? '✗' : '✓✓' }}
                                                 @endif
                                             </span>
                                             @if ($canReplyText && $msg->direction === 'in' && filled($msg->meta_message_id))
@@ -364,7 +429,7 @@
                                             <input type="text" name="signature_name" id="signatureNameInput" class="form-control form-control-sm" style="max-width: 200px;" placeholder="Nama signature..." aria-label="Nama signature manual" disabled>
                                         </div>
                                         <div class="wa-compose-row">
-                                            <textarea name="message" class="wa-compose-input" rows="1" placeholder="Tulis balasan..." aria-label="Tulis balasan" required></textarea>
+                                            <textarea name="message" class="wa-compose-input" rows="1" placeholder="Ketik pesan" aria-label="Tulis balasan" required></textarea>
                                             <button type="submit" class="wa-send-button" aria-label="Kirim balasan"><i class="uil uil-message"></i></button>
                                         </div>
                                     </form>
@@ -427,7 +492,7 @@
         var badge = isTemplate
             ? '<span class="wa-template-label">Notifikasi: ' + escapeHtml((msg.message_type || '').replace('template:', '')) + '</span>'
             : '';
-        var statusMark = out ? ' &middot; ' + (failed ? '✗ Gagal' : '✓ Terkirim') : '';
+        var statusMark = out ? ' &middot; ' + (failed ? '✗' : '✓✓') : '';
         var media = msg.media_url
             ? '<a class="wa-media" href="' + escapeHtml(msg.media_url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(msg.media_url) + '" alt="Gambar chat"></a>'
             : '';
@@ -436,7 +501,7 @@
             : '';
         return '<div class="wa-message-row ' + (out ? 'is-outgoing' : 'is-incoming') + '" data-message-id="' + msg.id + '">' +
             '<div class="wa-bubble ' + bubble + '">' + badge + media +
-            '<div class="message-body">' + escapeHtml(msg.body) + '</div>' +
+            '<span class="message-body">' + escapeHtml(msg.body) + '</span>' +
             '<span class="wa-message-meta">' + escapeHtml(msg.created_at) + statusMark + '</span>' + reply +
             '</div></div>';
     }
@@ -477,7 +542,10 @@
             var initial = escapeHtml((c.title || ' ').charAt(0).toUpperCase());
             return '<a href="' + inboxBaseUrl + '?number=' + encodeURIComponent(c.from_number) + '" ' +
                 'class="wa-conversation ' + (c.is_selected ? 'is-active' : '') + '" ' +
-                'data-conversation-number="' + escapeHtml(c.from_number) + '"' + (c.is_selected ? ' aria-current="page"' : '') + '>' +
+                'data-conversation-number="' + escapeHtml(c.from_number) + '" ' +
+                'data-search-title="' + escapeHtml((c.title || '').toLowerCase()) + '" ' +
+                'data-search-number="' + escapeHtml((c.from_number || '').toLowerCase()) + '"' +
+                (c.is_selected ? ' aria-current="page"' : '') + '>' +
                 '<span class="wa-avatar" aria-hidden="true">' + initial + '</span>' +
                 '<span class="wa-conversation-main">' +
                 '<span class="wa-conversation-top">' +
@@ -487,6 +555,7 @@
                 '<p class="wa-conversation-preview">' + escapeHtml(c.preview) + '</p>' +
                 '</span></a>';
         }).join('');
+        filterConversations();
     }
 
     function pollInbox() {
@@ -541,6 +610,29 @@
         } else if (!canReply && hasForm) {
             location.reload();
         }
+    }
+
+    function filterConversations() {
+        var input = document.getElementById('waSearchInput');
+        if (!input) return;
+        var query = input.value.trim().toLowerCase();
+        var items = document.querySelectorAll('#conversationList .wa-conversation');
+        items.forEach(function (item) {
+            var title = item.getAttribute('data-search-title') || '';
+            var number = item.getAttribute('data-search-number') || '';
+            var match = query === '' || title.indexOf(query) !== -1 || number.indexOf(query) !== -1;
+            item.style.display = match ? '' : 'none';
+        });
+    }
+
+    var searchInput = document.getElementById('waSearchInput');
+    if (searchInput) searchInput.addEventListener('input', filterConversations);
+
+    if (replyTextarea) {
+        replyTextarea.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
     }
 
     setInterval(pollInbox, POLL_INTERVAL);
