@@ -6,7 +6,7 @@
         --wa-accent: #00a884;
         --wa-accent-dark: #008069;
         --wa-accent-soft: #d9fdd3;
-        --wa-teal-header: #008069;
+        --wa-header: #f0f2f5;
         --wa-toolbar: #f0f2f5;
         --wa-canvas: #efeae2;
         --wa-surface: #ffffff;
@@ -47,13 +47,14 @@
         gap: .5rem;
         padding: 0 1rem;
         min-height: 60px;
-        background: var(--wa-teal-header);
-        color: #fff;
+        background: var(--wa-header);
+        color: var(--wa-text);
+        border-bottom: 1px solid var(--wa-border);
     }
-    .wa-sidebar-title { font-weight: 600; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: .4rem; }
-    .wa-conn { font-size: .72rem; font-weight: 500; display: inline-flex; align-items: center; color: rgba(255,255,255,.85); }
-    .wa-conn.is-online { color: rgba(255,255,255,.9); }
-    .wa-conn.is-offline { color: rgba(255,200,200,.95); }
+    .wa-sidebar-title { font-weight: 600; font-size: 1rem; color: var(--wa-text); display: flex; align-items: center; gap: .4rem; }
+    .wa-conn { font-size: .72rem; font-weight: 500; display: inline-flex; align-items: center; color: var(--wa-muted); }
+    .wa-conn.is-online { color: var(--wa-accent); }
+    .wa-conn.is-offline { color: #e44b4b; }
     .conn-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
     .conn-dot.online { background:#53bdeb; animation: connBlink 1.4s infinite; }
     .conn-dot.offline { background:#ff6b6b; }
@@ -100,6 +101,7 @@
         display: flex; align-items: center; justify-content: center;
         font-weight: 600; font-size: 1.1rem;
         text-transform: uppercase;
+        flex-shrink: 0;
     }
     .wa-conversation-main { min-width: 0; flex: 1; }
     .wa-conversation-top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
@@ -114,19 +116,20 @@
         display: flex; align-items: center; gap: .85rem;
         padding: 0 1rem;
         min-height: 60px;
-        background: var(--wa-teal-header);
-        color: #fff;
+        background: var(--wa-header);
+        color: var(--wa-text);
+        border-bottom: 1px solid var(--wa-border);
     }
-    .wa-back { display: none; color: #fff; font-size: 1.3rem; text-decoration: none; }
+    .wa-back { display: none; color: var(--wa-muted); font-size: 1.3rem; text-decoration: none; }
     .wa-chat-header .wa-avatar { width: 40px; height: 40px; font-size: .95rem; }
     .wa-chat-meta { min-width: 0; flex: 1; }
-    .wa-chat-name { font-weight: 600; color: #fff; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wa-chat-sub { font-size: .74rem; color: rgba(255,255,255,.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-chat-name { font-weight: 600; color: var(--wa-text); font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-chat-sub { font-size: .74rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wa-window { text-align: right; }
-    .wa-window-time { display: block; color: rgba(255,255,255,.7); font-size: .66rem; margin-bottom: .15rem; white-space: nowrap; }
+    .wa-window-time { display: block; color: var(--wa-muted); font-size: .66rem; margin-bottom: .15rem; white-space: nowrap; }
     .wa-pill { font-size: .68rem; font-weight: 600; padding: .2rem .55rem; border-radius: 999px; white-space: nowrap; }
-    .wa-pill.is-open { background: rgba(217,253,211,.25); color: #d9fdd3; }
-    .wa-pill.is-closed { background: rgba(255,225,225,.25); color: #ffcfcf; }
+    .wa-pill.is-open { background: #d9fdd3; color: #008069; }
+    .wa-pill.is-closed { background: #ffe1e1; color: #b42318; }
 
     /* ---- Thread / messages ---- */
     .wa-thread {
@@ -135,7 +138,7 @@
         padding: 1rem 5%;
         background-color: var(--wa-canvas);
         background-image:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23000' fill-opacity='0.03'%3E%3Cpath d='M14 16c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zm40 30c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zM50 10c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM20 50c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM65 25c0-1.5 1-2.5 2.5-2.5S70 23.5 70 25s-1 2.5-2.5 2.5S65 26.5 65 25zM10 35c0-1.5 1-2.5 2.5-2.5S15 33.5 15 35s-1 2.5-2.5 2.5S10 36.5 10 35zM55 60c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM30 70c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2z'/%3E%3C/g%3E%3C/svg%3E");
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='%23000' fill-opacity='0.018'%3E%3Cpath d='M14 16c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zm40 30c0-2 1-3 3-3s3 1 3 3-1 3-3 3-3-1-3-3zM50 10c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM20 50c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM65 25c0-1.5 1-2.5 2.5-2.5S70 23.5 70 25s-1 2.5-2.5 2.5S65 26.5 65 25zM10 35c0-1.5 1-2.5 2.5-2.5S15 33.5 15 35s-1 2.5-2.5 2.5S10 36.5 10 35zM55 60c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2zM30 70c0-1 .5-2 2-2s2 1 2 2-.5 2-2 2-2-1-2-2z'/%3E%3C/g%3E%3C/svg%3E");
         display: flex;
         flex-direction: column;
         gap: .3rem;
@@ -146,9 +149,9 @@
     .wa-bubble {
         position: relative;
         max-width: min(65%, 620px);
-        padding: .35rem .7rem .4rem;
-        border-radius: 8px;
-        box-shadow: 0 1px .5px rgba(11,20,26,.13);
+        padding: .4rem .7rem .45rem;
+        border-radius: 10px;
+        box-shadow: 0 1px .5px rgba(11,20,26,.08);
         font-size: .875rem;
         color: var(--wa-text);
         min-width: 80px;
@@ -211,7 +214,7 @@
     .wa-thread-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--wa-muted); }
 
     /* ---- Composer ---- */
-    .wa-composer { background: var(--wa-toolbar); border-top: 1px solid var(--wa-border); padding: .5rem 1rem; }
+    .wa-composer { background: var(--wa-toolbar); border-top: 1px solid var(--wa-border); padding: .55rem 1rem; }
     .wa-signature-options { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .5rem; }
     .wa-reply-preview {
         background: var(--wa-surface);
@@ -360,7 +363,7 @@
                                         @if ($customer)
                                             &middot; {{ $customer->level }} &middot; {{ $customer->status_account }}
                                         @else
-                                            &middot; <span style="color:#ffcc00;">Bukan user terdaftar</span>
+                                            &middot; <span style="color:#e65100;">Bukan user terdaftar</span>
                                         @endif
                                     </div>
                                 </div>
