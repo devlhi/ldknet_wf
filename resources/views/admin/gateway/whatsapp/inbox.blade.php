@@ -255,19 +255,30 @@
     .wa-attachment-hint { font-size: .7rem; color: var(--wa-muted); flex-basis: 100%; margin: 0; }
 
     @media (max-width: 991.98px) {
-        .wa-inbox { height: calc(100dvh - 130px); }
-        .wa-sidebar { width: 100%; min-width: 0; }
-        .wa-chat { display: none; }
-        .wa-inbox.has-selection .wa-sidebar { display: none; }
-        .wa-inbox.has-selection .wa-chat { display: flex; }
+        .wa-inbox { height: calc(100dvh - 130px); border: none; border-radius: 0; }
+        .wa-sidebar { width: 100% !important; min-width: 0; display: flex !important; }
+        .wa-chat { display: none !important; }
+        .wa-inbox.has-selection .wa-sidebar { display: none !important; }
+        .wa-inbox.has-selection .wa-chat { display: flex !important; }
         .wa-back { display: inline-block; }
         .wa-bubble { max-width: 86%; }
         .wa-thread { padding: 1rem 3%; }
     }
     @media (max-width: 575.98px) {
-        .wa-inbox { border-radius: 0; }
+        .wa-inbox { border-radius: 0; height: calc(100dvh - 120px); }
         .wa-attachment-form .form-control { max-width: 100%; }
         .wa-thread { padding: .75rem 4%; }
+        .wa-sidebar-header { min-height: 54px; }
+        .wa-chat-header { min-height: 54px; }
+        .wa-avatar { width: 42px; height: 42px; font-size: 1rem; }
+        .wa-chat-header .wa-avatar { width: 36px; height: 36px; }
+        .wa-conversation { padding: .55rem .75rem; gap: .65rem; }
+        .wa-conversation-title { font-size: .88rem; }
+        .wa-conversation-preview { font-size: .78rem; }
+        .wa-signature-options { gap: .5rem; }
+        .wa-compose-row { gap: .4rem; }
+        .wa-compose-input { font-size: .85rem; padding: .5rem .75rem; }
+        .wa-send-button { width: 40px; height: 40px; font-size: 1.1rem; }
     }
 </style>
 <div class="page-content">
