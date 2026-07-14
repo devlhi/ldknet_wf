@@ -38,13 +38,15 @@
         display: flex;
         flex-direction: column;
         background: var(--wa-surface);
+        border-right: 1px solid rgba(0,0,0,.05);
     }
     .wa-sidebar-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: .5rem;
-        padding: .6rem 1rem;
+        padding: 0 1rem;
+        min-height: 60px;
         background: var(--wa-teal-header);
         color: #fff;
     }
@@ -110,7 +112,8 @@
     .wa-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--wa-canvas); }
     .wa-chat-header {
         display: flex; align-items: center; gap: .85rem;
-        padding: .55rem 1rem;
+        padding: 0 1rem;
+        min-height: 60px;
         background: var(--wa-teal-header);
         color: #fff;
     }
