@@ -27,7 +27,7 @@ class WhatsAppInboxController extends Controller
     public function index(Request $request)
     {
         $conversations = $this->conversations();
-        $selectedNumber = (string) ($request->query('number') ?: data_get($conversations->first(), 'from_number', ''));
+        $selectedNumber = (string) ($request->query('number') ?: '');
         $messages = collect();
         $customer = null;
         $lastIncomingAt = null;
