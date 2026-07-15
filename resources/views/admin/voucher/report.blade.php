@@ -30,6 +30,18 @@
             </div>
         </div>
 
+        @unless ($showData)
+            <div class="card">
+                <div class="card-body">
+                    <form method="GET">
+                        <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
+                    </form>
+                    <p class="text-muted mb-0 mt-2">Klik Tampilkan Data untuk memuat laporan.</p>
+                </div>
+            </div>
+        @endunless
+
+        @if ($showData)
         <div class="row">
             <div class="col-xl-12">
                 <div class="card">
@@ -108,11 +120,13 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 </div>
 @endsection
 
 @section('scripts')
+@if ($showData)
 <script src="{{ asset('assets/js/highcharts.js') }}"></script>
 <script src="{{ asset('assets/js/highcharts-theme.js') }}"></script>
 <script>
@@ -145,6 +159,7 @@
                 dataType: 'json',
                 data: {
                     _token: '{{ csrf_token() }}',
+                    show_data: 1,
                     bulan: bulan,
                     tahun: tahun
                 },
@@ -296,4 +311,5 @@
         return 'Rp ' + rupiah;
     }
 </script>
+@endif
 @endsection

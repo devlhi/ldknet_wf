@@ -26,10 +26,11 @@ class NmsController extends Controller
         ];
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $devices = NmsDevice::orderByDesc('id')->get();
-        $links = NmsLink::with(['deviceA:id,nama,tipe,latitude,longitude', 'deviceB:id,nama,tipe,latitude,longitude'])->get();
+        $showData = $request->boolean('show_data');
+        $devices = $showData ? NmsDevice::orderByDesc('id')->get() : collect();
+        $links = $showData ? NmsLink::with(['deviceA:id,nama,tipe,latitude,longitude', 'deviceB:id,nama,tipe,latitude,longitude'])->get() : collect();
         $monitorUrl = URL::signedRoute('nms.public.monitor');
 
         return view('admin.nms.index', [
@@ -37,6 +38,7 @@ class NmsController extends Controller
             'devices' => $devices,
             'links' => $links,
             'monitorUrl' => $monitorUrl,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -56,8 +58,11 @@ class NmsController extends Controller
             $periodLabel = 'Bulan Ini ('.$now->format('M Y').')';
         }
 
-        $devices = NmsDevice::where('status', 'active')->orderBy('nama')->get();
-        $slaSettings = NmsSlaSetting::whereIn('device_id', $devices->pluck('id'))->get()->keyBy('device_id');
+        $showData = $request->boolean('show_data');
+        $devices = $showData ? NmsDevice::where('status', 'active')->orderBy('nama')->get() : collect();
+        $slaSettings = $showData
+            ? NmsSlaSetting::whereIn('device_id', $devices->pluck('id'))->get()->keyBy('device_id')
+            : collect();
 
         // Build query: for each device, determine if we count ping_status or link_status (specific interface)
         $slaData = [];
@@ -113,6 +118,7 @@ class NmsController extends Controller
             'period' => $period,
             'periodLabel' => $periodLabel,
             'slaData' => collect($slaData)->sortBy('sla')->values(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

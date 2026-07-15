@@ -69,22 +69,28 @@ class VoucherController extends Controller
         ] + $this->websiteData());
     }
 
-    public function report()
+    public function report(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
         if (! $this->voucherTablesReady()) {
             $this->missingTablesWarning();
         }
 
         return view('admin.voucher.report', [
             'title' => 'Laporan',
-            'tahun' => $this->voucherTablesReady() ? $this->getTahunMasuk() : collect(),
+            'tahun' => $showData && $this->voucherTablesReady() ? $this->getTahunMasuk() : collect(),
             'orders' => false,
             'filterUrl' => url('server/voucher/report/filter'),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function reportFilter(Request $request)
     {
+        if ((string) $request->post('show_data') !== '1') {
+            return response()->json(['data' => []]);
+        }
+
         $bulan = (int) $request->post('bulan');
         $tahun = (int) $request->post('tahun');
         $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $bulan, $tahun);
@@ -109,8 +115,9 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function reportOrders()
+    public function reportOrders(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
         $hasTable = Schema::hasTable('orders_voucher');
         if (! $hasTable) {
             $this->missingTablesWarning();
@@ -118,14 +125,19 @@ class VoucherController extends Controller
 
         return view('admin.voucher.report', [
             'title' => 'Laporan',
-            'tahun' => $hasTable ? $this->getTahunMasukVoc() : collect(),
+            'tahun' => $showData && $hasTable ? $this->getTahunMasukVoc() : collect(),
             'orders' => true,
             'filterUrl' => url('server/voucher/report/orders/filter'),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function reportOrdersFilter(Request $request)
     {
+        if ((string) $request->post('show_data') !== '1') {
+            return response()->json(['data' => []]);
+        }
+
         $bulan = (int) $request->post('bulan');
         $tahun = (int) $request->post('tahun');
         $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $bulan, $tahun);
@@ -150,12 +162,17 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function users()
+    public function users(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
+
         return view('admin.voucher.users', [
             'title' => 'Users Manager',
-            'account' => DB::table('users')->where('level', 'member')->orWhere('level', 'reseller')->get(),
+            'account' => $showData
+                ? DB::table('users')->where('level', 'member')->orWhere('level', 'reseller')->get()
+                : collect(),
             'password' => Str::random(5),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

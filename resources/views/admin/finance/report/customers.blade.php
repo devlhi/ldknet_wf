@@ -70,7 +70,7 @@
                                 </div>
                                 <br>
                                 <button class="btn btn-primary d-inline-block" id="filterButton">
-                                    <i class="uil-search"></i> Filter
+                                    <i class="uil-eye"></i> Tampilkan Data
                                 </button>
 
                                 <button class="btn btn-success d-inline-block" id="refreshButton" name="refresh">
@@ -183,6 +183,7 @@
                     type: "POST",
                     dataType: 'json',
                     data: {
+                        show_data: 1,
                         paket: paket,
                         status: status,
                     },

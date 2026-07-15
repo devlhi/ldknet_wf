@@ -23,6 +23,13 @@
 
                     <div class="card">
                         <div class="card-body">
+                            @if (! ($dataLoaded ?? true))
+                                <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <span>Data Hotspot Profile belum dimuat dari RouterOS.</span>
+                                    <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                                </div>
+                            @endif
+
                             <div class="col-lg-6">
                                 <div class="example">
                                     <button type="button" class="btn btn-primary mb-1 mb-md-0" data-bs-toggle="modal" data-bs-target="#myModal"><i class="mdi mdi-account-multiple-plus"></i> Add Profile</button>

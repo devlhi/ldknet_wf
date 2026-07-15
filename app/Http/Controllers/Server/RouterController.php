@@ -29,11 +29,14 @@ class RouterController extends Controller
         ];
     }
 
-    public function home()
+    public function home(Request $request)
     {
+        $dataLoaded = $request->boolean('show_data');
+
         return view('server.router.home', [
             'title' => 'Management Router',
-            'getData' => Router::all(),
+            'getData' => $dataLoaded ? Router::all() : collect(),
+            'dataLoaded' => $dataLoaded,
         ] + $this->websiteData());
     }
 
@@ -172,12 +175,37 @@ class RouterController extends Controller
         ]);
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.dashboard', [
+                'title' => 'Dashboard Router',
+                'nameserver' => $router->nama,
+                'dnsserver' => $router->dns,
+                'hotspotuser' => 0,
+                'hotspotactive' => 0,
+                'hotspotprofile' => 0,
+                'hotspotlog' => [],
+                'totalhotspotlog' => 0,
+                'pppuser' => 0,
+                'pppactive' => 0,
+                'pppprofile' => 0,
+                'clock' => '-',
+                'uptime' => '0s',
+                'timezone' => '-',
+                'model' => '',
+                'architecture' => '-',
+                'version' => '-',
+                'interface' => [],
+                'traffics' => $router->interface,
+                'dataLoaded' => false,
+            ] + $this->websiteData());
         }
 
         $nameserver = $router->nama;
@@ -244,18 +272,23 @@ class RouterController extends Controller
                 'version' => $resource['version'] ?? '-',
                 'interface' => $getinterface,
                 'traffics' => $monitor,
+                'dataLoaded' => true,
             ] + $this->websiteData());
         }
 
         return redirect(url('server/router'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function users()
+    public function users(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.hotspot.user.list', ['title' => 'Hotspot Users', 'totalhotspotuser' => 0, 'hotspotuser' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -293,7 +326,7 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function addUser()
+    public function addUser(Request $request)
     {
         $router = $this->currentRouter();
 
@@ -353,12 +386,16 @@ class RouterController extends Controller
         }
     }
 
-    public function profile()
+    public function profile(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.hotspot.profile.list', ['title' => 'Hotspot Profile', 'totalprofile' => 0, 'getprofile' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -428,12 +465,16 @@ class RouterController extends Controller
         }
     }
 
-    public function hotspotActive()
+    public function hotspotActive(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.hotspot.active', ['title' => 'Hotspot Active', 'totalhotspotactive' => 0, 'hotspotactive' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -451,12 +492,16 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function hotspotLog()
+    public function hotspotLog(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.hotspot.log', ['title' => 'Hotspot Log', 'log' => [], 'totalhotspotlog' => 0, 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -477,12 +522,16 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function hotspotHost()
+    public function hotspotHost(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.hotspot.host', ['title' => 'Hotspot Host', 'hosts' => [], 'totalhost' => 0, 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -501,12 +550,16 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function pppProfile()
+    public function pppProfile(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.ppp.profile', ['title' => 'PPP Profile', 'totalprofile' => 0, 'getprofile' => [], 'pool' => [], 'queue' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -533,12 +586,16 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function pppSecret()
+    public function pppSecret(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.ppp.secret', ['title' => 'PPP Secret', 'totalsecret' => 0, 'getsecret' => [], 'profile' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -559,12 +616,16 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function pppActive()
+    public function pppActive(Request $request)
     {
         $router = $this->currentRouter();
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
+        }
+
+        if (! $request->boolean('show_data')) {
+            return view('server.router.ppp.active', ['title' => 'PPP Active', 'totalsecret' => 0, 'getsecret' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {

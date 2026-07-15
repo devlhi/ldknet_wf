@@ -17,8 +17,9 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
+                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-3">
-                                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                <select name="status" class="form-select form-select-sm">
                                     <option value="">-- Semua Status --</option>
                                     @foreach (['unpaid' => 'Belum Bayar', 'partial' => 'Sebagian', 'paid' => 'Lunas', 'void' => 'Batal'] as $k => $v)
                                         <option value="{{ $k }}" {{ $status === $k ? 'selected' : '' }}>{{ $v }}</option>
@@ -26,7 +27,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4"><input type="text" name="q" value="{{ $search }}" class="form-control form-control-sm" placeholder="Cari nomor tagihan..."></div>
-                            <div class="col-md-2"><button class="btn btn-sm btn-outline-primary">Cari</button></div>
+                            <div class="col-md-2"><button class="btn btn-sm btn-outline-primary"><i class="uil uil-eye"></i> Tampilkan Data</button></div>
                         </form>
 
                         <div class="table-responsive">
@@ -57,7 +58,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="8" class="text-center text-muted">Belum ada tagihan</td></tr>
+                                        <tr><td colspan="8" class="text-center text-muted">{{ $showData ? 'Belum ada tagihan' : 'Klik Tampilkan Data untuk memuat data.' }}</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>

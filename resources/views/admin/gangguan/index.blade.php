@@ -70,7 +70,7 @@
                         </select>
                     </div>
                     <div class="col-md-2 d-flex gap-1">
-                        <button class="btn btn-primary w-100">Terapkan</button>
+                        <button name="show_data" value="1" class="btn btn-primary w-100">Tampilkan Data</button>
                         <a href="{{ url('admin/gangguan') }}" class="btn btn-light">Reset</a>
                     </div>
                     <div class="col-12"><small class="text-muted">Untuk periode Bulanan/Tahunan, sistem mengambil bulan/tahun dari <em>Tanggal acuan</em>. Sedang menampilkan: <strong>{{ $periodeLabel }}</strong>.</small></div>

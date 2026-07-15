@@ -13,6 +13,13 @@
                     <!-- Card Body -->
                     <div class="card-body">
 
+                        @if (! ($dataLoaded ?? true))
+                            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <span>Data ONU belum dimuat dari OLT.</span>
+                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                            </div>
+                        @endif
+
                         <div class="col-lg-12">
                             <div class="row">
                                 <div class="table-responsive">

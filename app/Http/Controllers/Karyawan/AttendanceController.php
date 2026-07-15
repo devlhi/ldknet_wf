@@ -193,16 +193,20 @@ class AttendanceController extends Controller
         return redirect('karyawan/absensi')->with('success', ['Berhasil check-out']);
     }
 
-    public function history()
+    public function history(Request $request)
     {
-        $rows = HrAttendance::where('user_id', auth()->id())
-            ->orderByDesc('tanggal')
-            ->limit(60)
-            ->get();
+        $showData = (string) $request->query('show_data') === '1';
+        $rows = $showData
+            ? HrAttendance::where('user_id', auth()->id())
+                ->orderByDesc('tanggal')
+                ->limit(60)
+                ->get()
+            : collect();
 
         return view('karyawan.history', [
             'title' => 'Riwayat Absensi',
             'rows' => $rows,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

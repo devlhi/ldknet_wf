@@ -103,19 +103,29 @@ class UserController extends Controller
         }
     }
 
-    public function service()
+    public function service(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
+
         return view('user.service', [
             'title' => 'Layanan',
-            'content' => Order::where('idpel', $this->idpel())->orderByDesc('id')->get(),
+            'content' => $showData
+                ? Order::where('idpel', $this->idpel())->orderByDesc('id')->get()
+                : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
-    public function invoice()
+    public function invoice(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
+
         return view('user.invoice.index', [
             'title' => 'Data Invoice',
-            'invoice' => Invoice::where('idpel', $this->idpel())->orderByDesc('id')->get(),
+            'invoice' => $showData
+                ? Invoice::where('idpel', $this->idpel())->orderByDesc('id')->get()
+                : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -203,11 +213,16 @@ class UserController extends Controller
         return $this->invoiceDetail($id);
     }
 
-    public function invoiceHistory()
+    public function invoiceHistory(Request $request)
     {
+        $showData = (string) $request->query('show_data') === '1';
+
         return view('user.invoice.index', [
             'title' => 'Riwayat Invoice',
-            'invoice' => Invoice::where('idpel', $this->idpel())->where('status', 'Paid')->orderByDesc('id')->get(),
+            'invoice' => $showData
+                ? Invoice::where('idpel', $this->idpel())->where('status', 'Paid')->orderByDesc('id')->get()
+                : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

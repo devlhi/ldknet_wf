@@ -110,13 +110,19 @@
                                     </select>
                                 </div>
                                 <div class="col-md-4 col-xl-6 text-md-end">
+                                    <button type="button" id="showCustomerData" class="btn btn-sm btn-primary">
+                                        <i class="uil uil-eye me-1"></i> Tampilkan Data
+                                    </button>
                                     <a href="{{ url('admin/customer/exportexcel') }}" class="btn btn-sm btn-outline-success">
                                         <i class="uil uil-file-export me-1"></i> Export Excel
                                     </a>
                                 </div>
                             </div>
 
-                            <div class="table-responsive">
+                            <div id="customerDataPrompt" class="alert alert-info mb-0">
+                                Klik <strong>Tampilkan Data</strong> untuk memuat data pelanggan.
+                            </div>
+                            <div id="customerTableContainer" class="table-responsive d-none">
 
                                 <table id="datatable-customers" class="table table-bordered dt-responsive nowrap" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                     <thead>
@@ -227,36 +233,52 @@
             // Kolom aksi tidak bisa di-sort. Index menyesuaikan level developer.
             var nonOrderable = @json($isDeveloper ? [12, 13] : [11]);
 
-            var table = $('#datatable-customers').DataTable({
-                processing: true,
-                serverSide: true,
-                responsive: true,
-                order: [[0, 'asc']],
-                language: {
-                    processing: '<span class="an-dt-ring"></span> Memuat...',
-                    emptyTable: 'Tidak ada data pelanggan',
-                    zeroRecords: 'Data tidak ditemukan',
-                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ pelanggan',
-                    infoEmpty: 'Menampilkan 0 pelanggan',
-                    infoFiltered: '(disaring dari _MAX_ total)',
-                    lengthMenu: 'Tampilkan _MENU_ data',
-                    search: 'Cari:',
-                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
-                },
-                ajax: {
-                    url: '{{ url('admin/customer/data') }}',
-                    data: function (d) {
-                        d.router = $('#filterServer').val();
-                        d.status = $('#filterStatus').val();
-                    }
-                },
-                columnDefs: [
-                    { targets: nonOrderable, orderable: false, searchable: false }
-                ]
-            });
+            var table = null;
+
+            function initializeCustomerTable() {
+                if (table) {
+                    table.ajax.reload();
+                    return;
+                }
+
+                $('#customerDataPrompt').addClass('d-none');
+                $('#customerTableContainer').removeClass('d-none');
+                table = $('#datatable-customers').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    responsive: true,
+                    order: [[0, 'asc']],
+                    language: {
+                        processing: '<span class="an-dt-ring"></span> Memuat...',
+                        emptyTable: 'Tidak ada data pelanggan',
+                        zeroRecords: 'Data tidak ditemukan',
+                        info: 'Menampilkan _START_ - _END_ dari _TOTAL_ pelanggan',
+                        infoEmpty: 'Menampilkan 0 pelanggan',
+                        infoFiltered: '(disaring dari _MAX_ total)',
+                        lengthMenu: 'Tampilkan _MENU_ data',
+                        search: 'Cari:',
+                        paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                    },
+                    ajax: {
+                        url: '{{ url('admin/customer/data') }}',
+                        data: function (d) {
+                            d.show_data = 1;
+                            d.router = $('#filterServer').val();
+                            d.status = $('#filterStatus').val();
+                        }
+                    },
+                    columnDefs: [
+                        { targets: nonOrderable, orderable: false, searchable: false }
+                    ]
+                });
+            }
+
+            $('#showCustomerData').on('click', initializeCustomerTable);
 
             $('#filterServer, #filterStatus').on('change', function () {
-                table.ajax.reload();
+                if (table) {
+                    table.ajax.reload();
+                }
             });
 
             // Isi modal share dari data-* tombol yang diklik

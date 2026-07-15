@@ -37,8 +37,10 @@ class GatewayController extends Controller
      * PAYMENT GATEWAY
      * ========================================================= */
 
-    public function payment()
+    public function payment(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         $defaultGateways = PaymentGateway::where('payment_default', '1')->get();
 
         // Jika tidak ada gateway default, tampilkan semua yang enable (perilaku CI4)
@@ -50,7 +52,8 @@ class GatewayController extends Controller
 
         $provider = optional($defaultGateways->last())->name;
 
-        $method = PaymentMethod::where('provider', $provider)->get();
+        // Payment method switches = row collection, lazy-loaded.
+        $method = $showData ? PaymentMethod::where('provider', $provider)->get() : collect();
 
         return view('admin.gateway.payment.index', [
             'title' => 'Payment Gateway',
@@ -58,17 +61,21 @@ class GatewayController extends Controller
             'defaultGateways' => $gatewaysForSelect,
             'otherGateways' => $otherGateways,
             'payment' => $defaultGateways,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
-    public function methodpayment()
+    public function methodpayment(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         return view('admin.gateway.payment.method.index', [
             'title' => 'Payment Method',
-            'method' => PaymentMethod::all(),
+            'method' => $showData ? PaymentMethod::all() : collect(),
             'category' => PaymentCat::where('status', '1')->get(),
             'gateway' => PaymentGateway::where('status', 'enable')->get(),
-            'notdefault' => PaymentGateway::where('payment_default', '0')->get(),
+            'notdefault' => $showData ? PaymentGateway::where('payment_default', '0')->get() : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -208,11 +215,14 @@ class GatewayController extends Controller
         ] + $this->websiteData());
     }
 
-    public function webhook()
+    public function webhook(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         return view('admin.webhook.index', [
             'title' => 'Webhook Setting',
-            'whatsapp' => WhatsappSetting::all(),
+            'whatsapp' => $showData ? WhatsappSetting::all() : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -277,17 +287,19 @@ class GatewayController extends Controller
      * WHATSAPP GATEWAY
      * ========================================================= */
 
-    public function whatsapp()
+    public function whatsapp(Request $request)
     {
-        $cekwhatsapp = WhatsappSetting::all();
+        $showData = $request->boolean('show_data');
+        $cekwhatsapp = $showData ? WhatsappSetting::all() : collect();
 
-        if ($cekwhatsapp->isEmpty()) {
+        if ($showData && $cekwhatsapp->isEmpty()) {
             return redirect(url('admin/gateway/whatsapp/setup'));
         }
 
         return view('admin.gateway.whatsapp.index', [
             'title' => 'Whatsapp Gateway',
             'content' => $cekwhatsapp,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -506,7 +518,10 @@ class GatewayController extends Controller
 
     public function whatsappMetaTemplates(Request $request)
     {
-        $metaGateways = WhatsappSetting::all()->filter(fn ($row) => WhatsAppGatewayResolver::isMeta($row));
+        $showData = $request->boolean('show_data');
+        $metaGateways = $showData
+            ? WhatsappSetting::all()->filter(fn ($row) => WhatsAppGatewayResolver::isMeta($row))
+            : collect();
         $gateway = null;
 
         if ($request->query('gateway_id')) {
@@ -522,7 +537,7 @@ class GatewayController extends Controller
         $graphUrl = $request->query('graph_url') ?: ($gateway ? WhatsAppGatewayResolver::metaGraphUrl($gateway) : 'https://graph.facebook.com/v20.0');
         $accessToken = $request->query('access_token') ?: ($gateway->api_key ?? '');
 
-        if ($businessAccountId && $accessToken) {
+        if ($showData && $businessAccountId && $accessToken) {
             $api = new WhatsAppMetaApi($graphUrl, $accessToken);
             $response = $api->templates($businessAccountId);
             $templates = $response['data'] ?? [];
@@ -542,6 +557,7 @@ class GatewayController extends Controller
             'businessAccountId' => $businessAccountId,
             'graphUrl' => $graphUrl,
             'hasAccessToken' => $accessToken !== '',
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

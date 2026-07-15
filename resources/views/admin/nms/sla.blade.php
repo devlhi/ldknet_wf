@@ -23,9 +23,10 @@
                         <h4 class="card-title mb-0"><i class="uil uil-file-chart-alt me-1"></i> SLA Report - {{ $periodLabel }}</h4>
                         <div class="d-flex gap-2">
                             <a href="{{ url('admin/nms/sla/settings/global') }}" class="btn btn-sm btn-info text-white"><i class="uil uil-globe"></i> Pengaturan Global</a>
-                            <a href="{{ url('admin/nms/sla?period=today') }}" class="btn btn-sm {{ $period === 'today' ? 'btn-primary' : 'btn-outline-primary' }}">Hari Ini</a>
-                            <a href="{{ url('admin/nms/sla?period=month') }}" class="btn btn-sm {{ $period === 'month' ? 'btn-primary' : 'btn-outline-primary' }}">Bulan Ini</a>
-                            <a href="{{ url('admin/nms/sla?period=year') }}" class="btn btn-sm {{ $period === 'year' ? 'btn-primary' : 'btn-outline-primary' }}">Tahun Ini</a>
+                            <a href="{{ url('admin/nms/sla?period=today&show_data=1') }}" class="btn btn-sm {{ $period === 'today' ? 'btn-primary' : 'btn-outline-primary' }}">Hari Ini</a>
+                            <a href="{{ url('admin/nms/sla?period=month&show_data=1') }}" class="btn btn-sm {{ $period === 'month' ? 'btn-primary' : 'btn-outline-primary' }}">Bulan Ini</a>
+                            <a href="{{ url('admin/nms/sla?period=year&show_data=1') }}" class="btn btn-sm {{ $period === 'year' ? 'btn-primary' : 'btn-outline-primary' }}">Tahun Ini</a>
+                            <a href="{{ url('admin/nms/sla?period='.$period.'&show_data=1') }}" class="btn btn-sm btn-primary">Tampilkan Data</a>
                             <button onclick="window.print()" class="btn btn-sm btn-danger"><i class="uil uil-file-download"></i> Export PDF</button>
                             <a href="{{ url('admin/nms') }}" class="btn btn-sm btn-secondary"><i class="uil uil-arrow-left"></i> Kembali</a>
                         </div>

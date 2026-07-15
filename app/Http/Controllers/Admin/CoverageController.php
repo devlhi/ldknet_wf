@@ -40,17 +40,18 @@ class CoverageController extends Controller
         ] + $this->websiteData());
     }
 
-    public function odp()
+    public function odp(Request $request)
     {
-        $getallodp = Odp::all();
+        $showData = $request->boolean('show_data');
+        $getallodp = $showData ? Odp::all() : collect();
 
         // Jumlah pelanggan & laporan gangguan terbuka per ODP dihitung sekali
         // (hindari query di dalam loop).
-        $pelangganPerOdp = Order::selectRaw('nama_odp, COUNT(*) as jml')
+        $pelangganPerOdp = $showData ? Order::selectRaw('nama_odp, COUNT(*) as jml')
             ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
-            ->groupBy('nama_odp')->pluck('jml', 'nama_odp');
+            ->groupBy('nama_odp')->pluck('jml', 'nama_odp') : collect();
 
-        $gangguanPerOdp = Schema::hasTable('gangguan_reports')
+        $gangguanPerOdp = $showData && Schema::hasTable('gangguan_reports')
             ? GangguanReport::whereIn('status', ['baru', 'diproses'])
                 ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
                 ->selectRaw('nama_odp, COUNT(*) as jml')
@@ -60,12 +61,13 @@ class CoverageController extends Controller
         // Data ODP lengkap untuk tabel + peta (satu sumber data).
         $odpWithDetails = [];
 
+        $portsPerOdp = $showData ? Order::whereNotNull('nama_odp')->get(['nama_odp', 'port_odp'])->groupBy('nama_odp') : collect();
         foreach ($getallodp as $odp) {
-            $orders = Order::where('nama_odp', $odp->nama)->get()->toArray();
+            $orders = $portsPerOdp->get($odp->nama, collect());
 
             $totalport = (int) $odp->port;
             $allPorts = $totalport > 0 ? range(1, $totalport) : [];
-            $usedPorts = array_filter(array_column($orders, 'port_odp'), fn ($p) => $p !== null && $p !== '');
+            $usedPorts = $orders->pluck('port_odp')->filter(fn ($p) => $p !== null && $p !== '')->all();
             $availablePorts = array_values(array_diff($allPorts, $usedPorts));
 
             $odpWithDetails[] = [
@@ -86,6 +88,7 @@ class CoverageController extends Controller
             'title' => 'Data ODP',
             'odp' => $getallodp,
             'data' => $odpWithDetails,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -215,9 +218,10 @@ class CoverageController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function area()
+    public function area(Request $request)
     {
-        $areas = Schema::hasTable('area') ? DB::table('area')->get() : collect();
+        $showData = $request->boolean('show_data');
+        $areas = $showData && Schema::hasTable('area') ? DB::table('area')->get() : collect();
         $areaData = [];
 
         foreach ($areas as $area) {
@@ -234,6 +238,7 @@ class CoverageController extends Controller
         return view('admin.coverage.area', [
             'title' => 'Data Area',
             'area' => $areaData,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -274,21 +279,27 @@ class CoverageController extends Controller
         return redirect(url('admin/coverage/area'))->with('success', ['Berhasil menghapus area']);
     }
 
-    public function getCustomerMap()
+    public function getCustomerMap(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         return view('admin.coverage.customers', [
             'title' => 'Data Map Pelanggan',
-            'customers' => Order::where('status', 'Active')->get(),
-            'odps' => Odp::all(),
+            'customers' => $showData ? Order::where('status', 'Active')->get() : collect(),
+            'odps' => $showData ? Odp::all() : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
-    public function rxpower()
+    public function rxpower(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         return view('admin.coverage.rxpower', [
             'title' => 'Data Redaman Pelanggan',
-            'customers' => Order::where('status', 'Active')->get(),
-            'odps' => Odp::all(),
+            'customers' => $showData ? Order::where('status', 'Active')->get() : collect(),
+            'odps' => $showData ? Odp::all() : collect(),
+            'showData' => $showData,
             'rxPowerData' => [],
         ] + $this->websiteData());
     }

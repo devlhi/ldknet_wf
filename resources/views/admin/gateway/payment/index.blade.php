@@ -218,8 +218,14 @@
                 <div class="card overflow-hidden">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h3 class="card-title"><i class="fa fa-credit-card"></i> Payment Method</h3>
+                        <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm"><i class="uil uil-eye me-1"></i> Tampilkan Data</a>
                     </div>
                     <div class="card-body">
+                        @if (! $showData)
+                            <p class="text-center text-muted mb-0">Klik Tampilkan Data untuk memuat data.</p>
+                        @elseif ($method->isEmpty())
+                            <p class="text-center text-muted mb-0">Belum ada payment method untuk provider aktif.</p>
+                        @endif
                         <div class="form-group">
                             @foreach ($method as $row)
                                 <div class="custom-control custom-switch d-block">

@@ -17,8 +17,9 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
+                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-3">
-                                <select name="type" class="form-select form-select-sm" onchange="this.form.submit()">
+                                <select name="type" class="form-select form-select-sm">
                                     <option value="">-- Semua Tipe --</option>
                                     @foreach (['asset' => 'Aset', 'liability' => 'Liabilitas', 'equity' => 'Ekuitas', 'revenue' => 'Pendapatan', 'expense' => 'Beban'] as $k => $v)
                                         <option value="{{ $k }}" {{ $filterType === $k ? 'selected' : '' }}>{{ $v }}</option>
@@ -29,7 +30,7 @@
                                 <input type="text" name="q" value="{{ $search }}" class="form-control form-control-sm" placeholder="Cari kode / nama akun...">
                             </div>
                             <div class="col-md-2">
-                                <button class="btn btn-sm btn-outline-primary">Cari</button>
+                                <button class="btn btn-sm btn-outline-primary"><i class="uil uil-eye"></i> Tampilkan Data</button>
                             </div>
                         </form>
 
@@ -80,7 +81,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="7" class="text-center text-muted">Tidak ada akun</td></tr>
+                                        <tr><td colspan="7" class="text-center text-muted">{{ $showData ? 'Tidak ada akun' : 'Klik Tampilkan Data untuk memuat data.' }}</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>

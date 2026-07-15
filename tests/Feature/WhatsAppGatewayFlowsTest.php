@@ -144,7 +144,15 @@ class WhatsAppGatewayFlowsTest extends TestCase
     {
         $admin = $this->createUser('admin@example.test', '628111111111', 'admin');
 
+        // Initial GET (lazy): table is empty, secrets are not rendered at all.
         $this->actingAs($admin)->get('admin/webhook')
+            ->assertOk()
+            ->assertDontSee('meta-test-token')
+            ->assertDontSee('meta###')
+            ->assertSee('Tampilkan Data');
+
+        // After activation: masked API key (********) is visible, raw blob/token still hidden.
+        $this->actingAs($admin)->get('admin/webhook?show_data=1')
             ->assertOk()
             ->assertDontSee('meta-test-token')
             ->assertDontSee('meta###')

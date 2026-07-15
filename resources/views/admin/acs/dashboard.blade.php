@@ -484,6 +484,15 @@
             </div>
         @endif
 
+        @if (! ($dataLoaded ?? true))
+            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <span><i class="mdi mdi-information-outline me-2"></i> Data perangkat belum dimuat dari GenieACS. Klik tombol untuk memuat data.</span>
+                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">
+                    <i class="mdi mdi-download"></i> Tampilkan Data
+                </a>
+            </div>
+        @else
+
         {{-- Head --}}
         <div class="acs-head">
             <div class="acs-head__title">
@@ -652,11 +661,14 @@
             <div>Tidak ada device yang cocok dengan filter.</div>
         </div>
 
+        @endif
+
     </div>
 </div>
 @endsection
 
 @section('scripts')
+@if ($dataLoaded ?? true)
 <script>
     (function () {
         var search = document.getElementById('acsSearch');
@@ -690,4 +702,5 @@
         rxSel.addEventListener('change', apply);
     })();
 </script>
+@endif
 @endsection

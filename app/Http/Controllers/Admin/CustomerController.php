@@ -58,6 +58,15 @@ class CustomerController extends Controller
     // GET admin/customer/data — sumber data DataTables server-side (lazy load)
     public function customerData(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json([
+                'draw' => (int) $request->input('draw', 1),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+
         $isDeveloper = auth()->user()->level === 'developer';
         $routers = Router::pluck('nama', 'id')->all();
 

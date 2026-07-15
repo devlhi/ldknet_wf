@@ -56,6 +56,9 @@
                                         </select>
                                     </div>
                                 </form>
+                                <button type="button" class="btn btn-primary mt-3" id="showDataButton">
+                                    <i class="uil uil-eye me-1"></i> Tampilkan Data
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -153,274 +156,92 @@
 @endsection
 
 @section('scripts')
-    {{-- jQuery + DataTables sudah dimuat di layout. Jangan muat jQuery lagi dari CDN:
-         itu menimpa $ dan menghapus registrasi $.fn.DataTable sehingga tabel gagal
-         render (tbody kosong). exceljs juga dihapus — tidak ada tombol export di sini. --}}
     <script>
         var base_url = '{{ url('/') }}/';
-        $.ajaxSetup({
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            }
-        });
+        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
 
-        // Default dropdown Bulan ke bulan berjalan (dropdown Tahun sudah terisi
-        // dari DB via getTahunMasuk(); default ke opsi terakhir = tahun terbaru).
         $(function () {
             $('#bulan').val(String(new Date().getMonth() + 1));
-        });
-    </script>
+            var table = null;
+            var activated = false;
 
-    <script>
-        $(document).ready(function() {
-            // Inisialisasi datatables saat halaman dimuat pertama kali
-            var table = $('#datatable-invoices').DataTable({
-                processing: true,
-                language: {
-                    processing: '<span class="an-dt-ring"></span> Memuat...',
-                    emptyTable: 'Tidak ada data invoice',
-                    zeroRecords: 'Data tidak ditemukan',
-                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ invoice',
-                    infoEmpty: 'Menampilkan 0 invoice',
-                    infoFiltered: '(disaring dari _MAX_ total)',
-                    lengthMenu: 'Tampilkan _MENU_ data',
-                    search: 'Cari:',
-                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
-                },
-                // Konfigurasi kolom datatables sesuai dengan struktur tabel
-                columns: [{
-                        data: null,
-                        render: function(data, type, row, meta) {
-                            return meta.row + 1; // Mengembalikan nomor urut berdasarkan baris
-                        }
-                    },
-                    {
-                        data: 'idpel',
-                        render: function(data, type, row) {
-                            return row.idpel
-                        }
-                    },
-                    {
-                        data: 'code',
-                        render: function(data, type, row) {
-                            return row.code
-                        }
-                    },
-                    {
-                        data: 'nama',
-                        render: function(data, type, row) {
-                            return row.nama
-                        }
-                    },
-                    {
-                        // Link cetak/lihat invoice (port dari CI4: kolom "Print").
-                        data: 'code',
-                        orderable: false,
-                        render: function(data, type, row) {
-                            var cls = row.status === 'Paid' ? 'btn-success' : 'btn-danger';
-                            return '<a href="' + base_url + 'admin/finance/invoice/print/' + row.code +
-                                '" target="_blank" class="btn btn-sm ' + cls + '"><i class="uil uil-print"></i> Lihat</a>';
-                        }
-                    },
-                    {
-                        data: 'package',
-                        render: function(data, type, row) {
-                            return row.package
-                        }
-                    },
-                    {
-                        data: 'price',
-                        render: function(data, type, row) {
-                            // Ubah format angka menjadi format yang lebih mudah dibaca
-                            return parseFloat(data).toLocaleString('id-ID', {
-                                style: 'currency',
-                                currency: 'IDR'
-                            });
-                        }
-                    },
-                    {
-                        data: 'status',
-                        render: function(data, type, row) {
+            function initializeTable() {
+                if (table) return table;
 
-                            var statusText, statusClass;
-
-                            if (row.status === 'Paid') {
-                                statusText = 'Sudah Terbayar';
-                                statusClass = 'bg-success';
-                            } else if (row.status === 'Unpaid') {
-                                statusText = 'Belum Terbayar';
-                                statusClass = 'bg-danger';
-                            } else {
-                                statusText = row.status;
-                                statusClass = 'bg-secondary';
+                table = $('#datatable-invoices').DataTable({
+                    processing: true,
+                    language: {
+                        processing: '<span class="an-dt-ring"></span> Memuat...',
+                        emptyTable: 'Tidak ada data invoice',
+                        zeroRecords: 'Data tidak ditemukan',
+                        info: 'Menampilkan _START_ - _END_ dari _TOTAL_ invoice',
+                        infoEmpty: 'Menampilkan 0 invoice',
+                        infoFiltered: '(disaring dari _MAX_ total)',
+                        lengthMenu: 'Tampilkan _MENU_ data',
+                        search: 'Cari:',
+                        paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+                    },
+                    columns: [
+                        { data: null, render: function(data, type, row, meta) { return meta.row + 1; } },
+                        { data: 'idpel' },
+                        { data: 'code' },
+                        { data: 'nama' },
+                        {
+                            data: 'code', orderable: false,
+                            render: function(data, type, row) {
+                                var cls = row.status === 'Paid' ? 'btn-success' : 'btn-danger';
+                                return '<a href="' + base_url + 'admin/finance/invoice/print/' + row.code + '" target="_blank" class="btn btn-sm ' + cls + '"><i class="uil uil-print"></i> Lihat</a>';
                             }
-
-                            return '<span class="badge ' + statusClass + '">' + statusText + '</span>';
-                        }
-                    },
-                    {
-                        data: 'date',
-                        render: function(data, type, row) {
-                            // Ubah format data dari server menjadi format tanggal yang diinginkan
-                            var dateObj = new Date(data);
-                            var options = {
-                                month: 'long',
-                                year: 'numeric'
-                            };
-                            return dateObj.toLocaleDateString('id-ID', options);
-                        }
-                    },
-                    {
-                        data: 'status',
-                        render: function(data, type, row) {
-
-                            if (row.status === 'Unpaid') {
-                                var confirmUrl = base_url + 'admin/finance/invoice/edit/' + row.code;
-                                var payUrl = base_url + 'admin/finance/invoice/bayar/' + row.code;
-
-                                return '<div class="d-flex gap-1 flex-wrap">' +
-                                    '<a href="' + confirmUrl + '" class="btn btn-sm btn-warning"><i class="uil uil-check-circle"></i> <strong>Konfirmasi Pembayaran</strong></a>' +
-                                    '<a href="' + payUrl + '" class="btn btn-sm btn-primary"><i class="uil uil-credit-card"></i> <strong>Bayar Online</strong></a>' +
-                                    '</div>';
-                            } else {
-                                return ''; // atau kembalikan string kosong jika tidak ada tindakan untuk status lain
+                        },
+                        { data: 'package' },
+                        { data: 'price', render: function(data) { return parseFloat(data).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' }); } },
+                        {
+                            data: 'status',
+                            render: function(data, type, row) {
+                                var text = row.status;
+                                var cls = 'bg-secondary';
+                                if (row.status === 'Paid') { text = 'Sudah Terbayar'; cls = 'bg-success'; }
+                                else if (row.status === 'Unpaid') { text = 'Belum Terbayar'; cls = 'bg-danger'; }
+                                return '<span class="badge ' + cls + '">' + text + '</span>';
+                            }
+                        },
+                        { data: 'date', render: function(data) { return new Date(data).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }); } },
+                        {
+                            data: 'status', orderable: false,
+                            render: function(data, type, row) {
+                                if (row.status !== 'Unpaid') return '';
+                                return '<div class="d-flex gap-1 flex-wrap"><a href="' + base_url + 'admin/finance/invoice/edit/' + row.code + '" class="btn btn-sm btn-warning"><i class="uil uil-check-circle"></i> <strong>Konfirmasi Pembayaran</strong></a><a href="' + base_url + 'admin/finance/invoice/bayar/' + row.code + '" class="btn btn-sm btn-primary"><i class="uil uil-credit-card"></i> <strong>Bayar Online</strong></a></div>';
                             }
                         }
-                    },
-
-                ]
-            });
-
-            // Spinner lokal tabel, sama seperti halaman Customer (bukan preloader layar penuh).
-            function tableLoading(show) {
-                if (typeof table.processing === 'function') {
-                    table.processing(show);
-                    return;
-                }
-
-                $('#datatable-invoices_processing').css('display', show ? 'flex' : 'none');
-            }
-
-            // Fungsi untuk mengambil data tanpa filter saat halaman dimuat pertama kali
-            function fetchInitialData() {
-                $.ajax({
-                    url: '{{ url('finance/invoice/filter/getdata') }}',
-                    type: 'POST',
-                    dataType: 'json',
-                    beforeSend: function() {
-                        tableLoading(true);
-                    },
-                    success: function(data) {
-                        // Isi tabel dengan data tanpa filter
-                        table.rows.add(data).draw();
-                    },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                    },
-                    complete: function() {
-                        tableLoading(false);
-                    }
+                    ]
                 });
+                return table;
             }
 
-            // Panggil fungsi untuk mengambil data tanpa filter saat halaman dimuat pertama kali
-            fetchInitialData();
-
-            // Event saat elemen #bulan atau #tahun berubah
-            $('#bulan, #tahun').on('change', function() {
+            function loadData() {
+                var dataTable = initializeTable();
+                var button = $('#showDataButton');
                 var bulan = $('#bulan').val();
                 var tahun = $('#tahun').val();
+                button.prop('disabled', true).html('<i class="uil uil-spinner-alt spin-icon me-1"></i> Memuat...');
 
-                // Permintaan Ajax untuk mengambil data berdasarkan filter
-                $.ajax({
-                    url: '{{ url('finance/invoice/filter/getdata') }}',
-                    type: 'POST',
-                    dataType: 'json',
-                    data: {
-                        bulan: bulan,
-                        tahun: tahun
-                    },
-                    beforeSend: function() {
-                        // Menambahkan tampilan spinner di dalam elemen #preloader
-                        preloader.html('<div id="status"><div class="spinner"><i class="uil-shutter-alt spin-icon"></i></div></div>');
-                        showLoading();
-                    },
-
-                    success: function(data) {
-                        // Bersihkan dan muat ulang datatables dengan data yang baru
-                        table.clear().rows.add(data).draw();
-                        hideLoading();
-
-                    },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                        hideLoading();
-
-                    }
-                });
-            });
-        });
-    </script>
-
-    <!-- Tambahkan script berikut untuk mengatur interaksi dengan filter bulan dan tahun -->
-    <script>
-        // Fungsi untuk mengambil data statistik terbaru menggunakan AJAX dengan filter bulan dan tahun
-        function ambilDataStatistik() {
-            var selectedBulan = $('#bulan').val();
-            var selectedTahun = $('#tahun').val();
-
-            $.ajax({
-                url: '{{ url('finance/invoice/filter/ambil-data') }}/' + selectedBulan + '/' + selectedTahun,
-                type: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    // Perbarui total pendapatan
-
-
-                    // Perbarui total pembayaran terbayar
-                    if (data.getInvoicePaid !== null) {
-                        var formattedInvoicePaid = data.getInvoicePaid;
-                        $('#invoice-paid').text(formattedInvoicePaid);
-                    } else {
-                        $('#invoice-paid').text('Tidak Tersedia'); // Atau nilai lain yang sesuai
-                    }
-
-                    // Perbarui total pembayaran belum terbayar
-                    if (data.getInvoiceUnpaid !== null) {
-                        var formattedInvoiceUnpaid = data.getInvoiceUnpaid;
-                        $('#invoice-unpaid').text(formattedInvoiceUnpaid);
-                    } else {
-                        $('#invoice-unpaid').text('Tidak Tersedia'); // Atau nilai lain yang sesuai
-                    }
-                },
-                error: function(xhr, status, error) {
+                $.when(
+                    $.ajax({ url: '{{ url('finance/invoice/filter/getdata') }}', type: 'POST', dataType: 'json', data: { show_data: 1, bulan: bulan, tahun: tahun } }),
+                    $.ajax({ url: '{{ url('finance/invoice/filter/ambil-data') }}/' + bulan + '/' + tahun, type: 'GET', dataType: 'json', data: { show_data: 1 } })
+                ).done(function(rowsResponse, statsResponse) {
+                    dataTable.clear().rows.add(rowsResponse[0]).draw();
+                    $('#invoice-paid').text(statsResponse[0].getInvoicePaid || 0);
+                    $('#invoice-unpaid').text(statsResponse[0].getInvoiceUnpaid || 0);
+                    activated = true;
+                }).fail(function(xhr, status, error) {
                     console.error(error);
-                }
-            });
-        }
+                }).always(function() {
+                    button.prop('disabled', false).html('<i class="uil uil-eye me-1"></i> Tampilkan Data');
+                });
+            }
 
-        // Fungsi untuk menangani perubahan filter bulan dan tahun
-        function filterData() {
-            ambilDataStatistik();
-        }
-
-        // Ambil statistik awal ketika halaman dimuat
-        $(document).ready(function() {
-            // Panggil fungsi filterData untuk mengambil statistik berdasarkan filter bulan dan tahun yang terpilih
-            filterData();
-
-            // Tambahkan event listener untuk mengaktifkan pemanggilan filterData setiap kali filter bulan atau tahun berubah
-            $('#bulan, #tahun').change(function() {
-                filterData();
-            });
+            $('#showDataButton').on('click', loadData);
+            $('#bulan, #tahun').on('change', function() { if (activated) loadData(); });
         });
-
-        // Fungsi untuk mengonversi angka menjadi format Rupiah
-        function formatRupiah(angka) {
-            return parseFloat(angka).toLocaleString('id-ID', {
-                style: 'currency',
-                currency: 'IDR'
-            });
-        }
     </script>
 @endsection

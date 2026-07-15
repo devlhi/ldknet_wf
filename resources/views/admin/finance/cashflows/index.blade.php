@@ -60,6 +60,9 @@
 
 
                                 </form>
+                                <button type="button" class="btn btn-primary mt-3" id="showDataButton">
+                                    <i class="uil uil-eye me-1"></i> Tampilkan Data
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -239,243 +242,110 @@
 @endsection
 
 @section('scripts')
-    {{-- jQuery + DataTables sudah dimuat di layout. Jangan muat jQuery lagi dari CDN:
-         itu menimpa $ dan menghapus registrasi $.fn.DataTable sehingga tabel gagal render. --}}
     <script>
-        var base_url = '{{ url('/') }}/';
-        $.ajaxSetup({
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            }
-        });
+        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } });
 
-        // Default dropdown Bulan ke bulan berjalan.
+        function formatRupiah(angka) {
+            return parseFloat(angka || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' });
+        }
+
         $(function () {
             $('#bulan').val(String(new Date().getMonth() + 1));
-        });
-    </script>
 
-    <script>
-        $(document).ready(function() {
+            var table = null;
+            var activated = false;
 
-            var preloader = $('#preloader');
+            function initializeTable() {
+                if (table) {
+                    return table;
+                }
 
-            // Fungsi untuk menampilkan loading screen
-            function showLoading() {
-                $('#preloader').show();
-            }
-
-            // Fungsi untuk menyembunyikan spinner loading
-            function hideLoading() {
-                $('#preloader').hide();
-            }
-
-
-            // Inisialisasi datatables saat halaman dimuat pertama kali
-            var table = $('#datatable-cashflows').DataTable({
-                language: {
-                    emptyTable: 'Tidak ada data kas',
-                    zeroRecords: 'Data tidak ditemukan',
-                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ data',
-                    infoEmpty: 'Menampilkan 0 data',
-                    infoFiltered: '(disaring dari _MAX_ total)',
-                    lengthMenu: 'Tampilkan _MENU_ data',
-                    search: 'Cari:',
-                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
-                },
-                // Konfigurasi kolom datatables sesuai dengan struktur tabel
-                columns: [{
-                        data: null,
-                        render: function(data, type, row, meta) {
-                            return meta.row + 1; // Mengembalikan nomor urut berdasarkan baris
-                        }
+                table = $('#datatable-cashflows').DataTable({
+                    processing: true,
+                    language: {
+                        processing: '<span class="an-dt-ring"></span> Memuat...',
+                        emptyTable: 'Tidak ada data kas',
+                        zeroRecords: 'Data tidak ditemukan',
+                        info: 'Menampilkan _START_ - _END_ dari _TOTAL_ data',
+                        infoEmpty: 'Menampilkan 0 data',
+                        infoFiltered: '(disaring dari _MAX_ total)',
+                        lengthMenu: 'Tampilkan _MENU_ data',
+                        search: 'Cari:',
+                        paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
                     },
-                    {
-                        data: 'date',
-                        render: function(data, type, row) {
-                            // Ubah format data dari server menjadi format tanggal yang diinginkan
-                            var dateObj = new Date(data);
-                            var options = {
-                                day: 'numeric',
-                                month: 'long',
-                                year: 'numeric'
-                            };
-                            return dateObj.toLocaleDateString('id-ID', options);
-                        }
-                    },
-                    {
-                        data: 'category',
-                        render: function(data, type, row) {
-                            return row.category;
-
-                        }
-                    },
-                    {
-                        data: 'jenis_kategori',
-                        render: function(data, type, row) {
-                            return row.jenis_kategori;
-
-                        }
-                    },
-                    {
-                        data: 'balance',
-                        render: function(data, type, row) {
-                            var label = 'secondary', text = '';
-                            if (row.jenis_kategori == 'Pemasukan') {
-                                label = 'success';
-                                text = '+';
-                            } else if (row.jenis_kategori == 'Pengeluaran') {
-                                label = 'danger';
-                                text = '-';
+                    columns: [
+                        { data: null, render: function(data, type, row, meta) { return meta.row + 1; } },
+                        {
+                            data: 'date',
+                            render: function(data) {
+                                return new Date(data).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
                             }
-
-                            var formattedBalance = parseFloat(data).toLocaleString('id-ID', {
-                                style: 'currency',
-                                currency: 'IDR'
-                            });
-
-                            return '<span class="badge bg-' + label + '">' + text + ' ' + formattedBalance + '</span>';
-                        }
-
-                    },
-                    {
-                        data: 'asal',
-                        render: function(data, type, row) {
-
-                            return row.asal;
-                        }
-                    },
-
-                ]
-            });
-
-            // Fungsi untuk mengambil data tanpa filter saat halaman dimuat pertama kali
-            function fetchInitialData() {
-                $.ajax({
-                    url: '{{ url('finance/cash-flows/filter/getdata') }}',
-                    type: 'POST',
-                    dataType: 'json',
-                    success: function(data) {
-                        // Isi tabel dengan data tanpa filter
-                        table.rows.add(data).draw();
-                    },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                    }
+                        },
+                        { data: 'category' },
+                        { data: 'jenis_kategori' },
+                        {
+                            data: 'balance',
+                            render: function(data, type, row) {
+                                var label = 'secondary';
+                                var text = '';
+                                if (row.jenis_kategori === 'Pemasukan') {
+                                    label = 'success';
+                                    text = '+';
+                                } else if (row.jenis_kategori === 'Pengeluaran') {
+                                    label = 'danger';
+                                    text = '-';
+                                }
+                                return '<span class="badge bg-' + label + '">' + text + ' ' + formatRupiah(data) + '</span>';
+                            }
+                        },
+                        { data: 'asal' }
+                    ]
                 });
+
+                return table;
             }
 
-            // Panggil fungsi untuk mengambil data tanpa filter saat halaman dimuat pertama kali
-            showLoading();
-            fetchInitialData();
-            hideLoading();
-
-
-            // Event saat elemen #bulan atau #tahun berubah
-            $('#bulan, #tahun').on('change', function() {
-                showLoading();
-
+            function loadData() {
+                var dataTable = initializeTable();
+                var button = $('#showDataButton');
                 var bulan = $('#bulan').val();
                 var tahun = $('#tahun').val();
 
-                // Permintaan Ajax untuk mengambil data berdasarkan filter
-                $.ajax({
-                    url: '{{ url('finance/cash-flows/filter/getdata') }}',
-                    type: 'POST',
-                    dataType: 'json',
-                    data: {
-                        bulan: bulan,
-                        tahun: tahun
-                    },
+                button.prop('disabled', true).html('<i class="uil uil-spinner-alt spin-icon me-1"></i> Memuat...');
 
-                    beforeSend: function() {
-                        // Menambahkan tampilan spinner di dalam elemen #preloader
-                        $('#preloader').html('<div id="status"><div class="spinner"><i class="uil-shutter-alt spin-icon"></i></div></div>');
-                    },
-
-
-                    success: function(data) {
-                        // Bersihkan dan muat ulang datatables dengan data yang baru
-                        table.clear().rows.add(data).draw();
-                    },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                    },
-                    complete: function() {
-                        hideLoading(); // Sembunyikan spinner setelah permintaan AJAX selesai
-                    }
-                });
-
-            });
-        });
-    </script>
-
-    <!-- Tambahkan script berikut untuk mengatur interaksi dengan filter bulan dan tahun -->
-    <script>
-        // Fungsi untuk mengambil data statistik terbaru menggunakan AJAX dengan filter bulan dan tahun
-        function ambilDataStatistik() {
-            var selectedBulan = $('#bulan').val();
-            var selectedTahun = $('#tahun').val();
-
-            $.ajax({
-                url: '{{ url('finance/cash-flows/filter/ambil-data') }}/' + selectedBulan + '/' + selectedTahun,
-                type: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    // Perbarui total pendapatan
-                    if (data.getDataPemasukan !== null) {
-                        var formattedAllCredit = formatRupiah(data.getDataPemasukan);
-                        $('#total-revenue').text(formattedAllCredit);
-                    } else {
-                        $('#total-revenue').text('Rp 0'); // Tampilkan Rp 0 jika tidak ada data pemasukan
-                    }
-
-                    // Perbarui total pembayaran terbayar
-                    if (data.getDataPengeluaran !== null) {
-                        var formattedInvoicePaid = formatRupiah(data.getDataPengeluaran);
-                        $('#invoice-paid').text(formattedInvoicePaid);
-                    } else {
-                        $('#invoice-paid').text('Rp 0'); // Tampilkan Rp 0 jika tidak ada data pengeluaran
-                    }
-
-
-                    // Hitung dan perbarui data bersih (selisih antara pemasukan dan pengeluaran)
-                    var dataPemasukan = parseFloat(data.getDataPemasukan) || 0;
-                    var dataPengeluaran = parseFloat(data.getDataPengeluaran) || 0;
-                    var dataBersih = dataPemasukan - dataPengeluaran;
-                    var formattedDataBersih = formatRupiah(dataBersih);
-                    $('#data-bersih').text(formattedDataBersih);
-
-
-                },
-                error: function(xhr, status, error) {
+                $.when(
+                    $.ajax({
+                        url: '{{ url('finance/cash-flows/filter/getdata') }}',
+                        type: 'POST',
+                        dataType: 'json',
+                        data: { show_data: 1, bulan: bulan, tahun: tahun }
+                    }),
+                    $.ajax({
+                        url: '{{ url('finance/cash-flows/filter/ambil-data') }}/' + bulan + '/' + tahun,
+                        type: 'GET',
+                        dataType: 'json',
+                        data: { show_data: 1 }
+                    })
+                ).done(function(rowsResponse, statsResponse) {
+                    var stats = statsResponse[0];
+                    dataTable.clear().rows.add(rowsResponse[0]).draw();
+                    $('#total-revenue').text(formatRupiah(stats.getDataPemasukan));
+                    $('#invoice-paid').text(formatRupiah(stats.getDataPengeluaran));
+                    $('#data-bersih').text(formatRupiah((parseFloat(stats.getDataPemasukan) || 0) - (parseFloat(stats.getDataPengeluaran) || 0)));
+                    activated = true;
+                }).fail(function(xhr, status, error) {
                     console.error(error);
+                }).always(function() {
+                    button.prop('disabled', false).html('<i class="uil uil-eye me-1"></i> Tampilkan Data');
+                });
+            }
+
+            $('#showDataButton').on('click', loadData);
+            $('#bulan, #tahun').on('change', function() {
+                if (activated) {
+                    loadData();
                 }
             });
-        }
-
-        // Fungsi untuk menangani perubahan filter bulan dan tahun
-        function filterData() {
-            ambilDataStatistik();
-        }
-
-        // Ambil statistik awal ketika halaman dimuat
-        $(document).ready(function() {
-            // Panggil fungsi filterData untuk mengambil statistik berdasarkan filter bulan dan tahun yang terpilih
-            filterData();
-
-            // Tambahkan event listener untuk mengaktifkan pemanggilan filterData setiap kali filter bulan atau tahun berubah
-            $('#bulan, #tahun').change(function() {
-                filterData();
-            });
         });
-
-        // Fungsi untuk mengonversi angka menjadi format Rupiah
-        function formatRupiah(angka) {
-            return parseFloat(angka).toLocaleString('id-ID', {
-                style: 'currency',
-                currency: 'IDR'
-            });
-        }
     </script>
 @endsection

@@ -26,14 +26,16 @@ class AttendanceController extends Controller
         ];
     }
 
-    public function employees()
+    public function employees(Request $request)
     {
-        $employees = User::where('level', 'technician')->orderBy('nama')->get();
+        $showData = $request->boolean('show_data');
+        $employees = $showData ? User::where('level', 'technician')->orderBy('nama')->get() : collect();
 
         return view('admin.absensi.karyawan', [
             'title' => 'Data Karyawan',
             'employees' => $employees,
             'password' => random(5),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -174,7 +176,8 @@ class AttendanceController extends Controller
     {
         [$start, $end, $userId, $status] = $this->reportFilters($request);
 
-        $rows = $this->reportQuery($start, $end, $userId, $status)->get();
+        $showData = $request->boolean('show_data');
+        $rows = $showData ? $this->reportQuery($start, $end, $userId, $status)->get() : collect();
 
         $summary = [
             'hadir' => $rows->where('status', 'hadir')->count(),
@@ -209,6 +212,7 @@ class AttendanceController extends Controller
             'perEmployee' => $perEmployee,
             'employees' => User::where('level', 'technician')->orderBy('nama')->get(),
             'filters' => compact('start', 'end', 'userId', 'status'),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

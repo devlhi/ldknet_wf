@@ -15,14 +15,19 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
+                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-3">
                                 <label class="form-label small">Per Tanggal</label>
                                 <input type="date" name="end" value="{{ $end }}" class="form-control form-control-sm">
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
-                                <button class="btn btn-sm btn-primary">Tampilkan</button>
+                                <button class="btn btn-sm btn-primary"><i class="uil uil-eye"></i> Tampilkan Data</button>
                             </div>
                         </form>
+
+                        @unless ($showData)
+                            <div class="alert alert-info">Klik Tampilkan Data untuk memuat laporan.</div>
+                        @endunless
 
                         <div class="text-center mb-3">
                             <h5 class="mb-0">Neraca Saldo</h5>

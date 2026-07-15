@@ -22,14 +22,15 @@ class ManageController extends Controller
         ];
     }
 
-    public function users()
+    public function users(Request $request)
     {
-        $account = User::whereIn('level', ['admin', 'technician', 'finance'])->get();
+        $showData = $request->boolean('show_data');
 
         return view('admin.user.management', [
             'title' => 'User Management',
-            'account' => $account,
+            'account' => $showData ? User::whereIn('level', ['admin', 'technician', 'finance'])->get() : collect(),
             'password' => random(5),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -105,13 +106,14 @@ class ManageController extends Controller
         return redirect('admin/manage/user')->with('success', ['Berhasil mengupdate password tersebut']);
     }
 
-    public function coupon()
+    public function coupon(Request $request)
     {
-        $coupon = Coupon::all();
+        $showData = $request->boolean('show_data');
 
         return view('admin.coupon.management', [
             'title' => 'Coupon Management',
-            'content' => $coupon,
+            'content' => $showData ? Coupon::all() : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

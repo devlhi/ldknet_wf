@@ -3,6 +3,7 @@
 @section('content')
 <div class="page-content">
     <div class="container-fluid">
+        <form method="GET" class="mb-3"><button type="submit" name="show_data" value="1" class="btn btn-primary">Tampilkan Data</button></form>
         <div class="row">
             <div class="col-12">
                 @if (session('auth_errors'))
@@ -777,6 +778,7 @@ function drawFiberLink(link, pointA, pointB) {
     });
 }
 
+@if ($showData)
 fetch('{{ url("admin/nms/map-data") }}')
     .then(r => r.json())
     .then(res => {
@@ -801,6 +803,7 @@ fetch('{{ url("admin/nms/map-data") }}')
         return fetchStatusForMarkers(res.data);
     })
     .catch(err => console.error('Map data error:', err));
+@endif
 
 function fetchStatusForMarkers(devices) {
     devices.forEach(function(d) {

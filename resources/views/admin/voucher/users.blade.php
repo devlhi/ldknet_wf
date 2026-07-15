@@ -31,8 +31,11 @@
                     </div>
                 @endif
 
-                <div>
-                    <button type="button" class="btn btn-success waves-effect waves-light mb-3" data-bs-toggle="modal" data-bs-target="#myModal"><i class="mdi mdi-plus me-1"></i> Add Reseller</button>
+                <div class="d-flex gap-2 mb-3">
+                    <form method="GET">
+                        <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
+                    </form>
+                    <button type="button" class="btn btn-success waves-effect waves-light" data-bs-toggle="modal" data-bs-target="#myModal"><i class="mdi mdi-plus me-1"></i> Add Reseller</button>
                 </div>
 
                 <div class="card">
@@ -109,19 +112,23 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @php ($i = 1)
-                                @foreach ($account as $row)
-                                    <tr>
-                                        <td>{{ $i++ }}</td>
-                                        <td>{{ $row->nama }}</td>
-                                        <td>{{ $row->email }}</td>
-                                        <td>{{ $row->nomor }}</td>
-                                        <td>{{ $row->level }}</td>
-                                        <td>{{ $row->balance }}</td>
-                                        <td>{{ $row->status_account }}</td>
-                                        <td><a href="{{ url('admin/manage/user/edit/' . $row->id) }}" class="btn btn-sm btn-primary"><i class="uil-edit"></i> Edit Data</a></td>
-                                    </tr>
-                                @endforeach
+                                @if (! $showData)
+                                    <tr><td colspan="8" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
+                                @else
+                                    @php ($i = 1)
+                                    @foreach ($account as $row)
+                                        <tr>
+                                            <td>{{ $i++ }}</td>
+                                            <td>{{ $row->nama }}</td>
+                                            <td>{{ $row->email }}</td>
+                                            <td>{{ $row->nomor }}</td>
+                                            <td>{{ $row->level }}</td>
+                                            <td>{{ $row->balance }}</td>
+                                            <td>{{ $row->status_account }}</td>
+                                            <td><a href="{{ url('admin/manage/user/edit/' . $row->id) }}" class="btn btn-sm btn-primary"><i class="uil-edit"></i> Edit Data</a></td>
+                                        </tr>
+                                    @endforeach
+                                @endif
                             </tbody>
                         </table>
                     </div>

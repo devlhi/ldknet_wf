@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Website;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -157,28 +158,30 @@ class GangguanController extends Controller
         $status = $request->input('status');
         $kategori = $request->input('kategori');
 
-        $rekap = $this->rekapFor($p['start'], $p['end']);
-        $breakdown = $this->slaBreakdown($p['start'], $p['end'], $p['periode']);
+        $showData = $request->boolean('show_data');
+        $rekap = $showData ? $this->rekapFor($p['start'], $p['end']) : [
+            'totalPeriode' => 0, 'rekapStatus' => collect(), 'rekapKategori' => collect(),
+            'avgRespon' => null, 'avgSelesai' => null,
+        ];
+        $breakdown = $showData ? $this->slaBreakdown($p['start'], $p['end'], $p['periode']) : [];
 
         // Laporan terlambat & gangguan massal = kondisi "saat ini" (tidak terikat periode).
         $batasSla = now()->subHours(max(1, (int) $setting->sla_response_hours));
-        $overdue = GangguanReport::where('status', 'baru')->whereNull('responded_at')->where('created_at', '<', $batasSla)->count();
-        $massal = GangguanReport::massalAlerts((int) $setting->massal_threshold, (int) $setting->massal_window_hours);
+        $overdue = $showData ? GangguanReport::where('status', 'baru')->whereNull('responded_at')->where('created_at', '<', $batasSla)->count() : 0;
+        $massal = $showData ? GangguanReport::massalAlerts((int) $setting->massal_threshold, (int) $setting->massal_window_hours) : collect();
 
         $listQuery = GangguanReport::query()
             ->whereBetween('created_at', [$p['start'], $p['end']])
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($kategori, fn ($q) => $q->where('kategori', $kategori));
 
-        $openFilteredCount = (clone $listQuery)
+        $openFilteredCount = $showData ? (clone $listQuery)
             ->whereIn('status', ['baru', 'diproses'])
-            ->count();
+            ->count() : 0;
 
-        $list = $listQuery
-            ->with('handler')
-            ->orderByDesc('created_at')
-            ->paginate(20)
-            ->withQueryString();
+        $list = $showData
+            ? $listQuery->with('handler')->orderByDesc('created_at')->paginate(20)->withQueryString()
+            : new LengthAwarePaginator([], 0, 20);
 
         return view('admin.gangguan.index', [
             'title' => 'Laporan Gangguan',
@@ -198,6 +201,7 @@ class GangguanController extends Controller
             'massal' => $massal,
             'list' => $list,
             'openFilteredCount' => $openFilteredCount,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -208,8 +212,12 @@ class GangguanController extends Controller
     public function cetak(Request $request)
     {
         $p = $this->resolvePeriode($request);
-        $rekap = $this->rekapFor($p['start'], $p['end']);
-        $breakdown = $this->slaBreakdown($p['start'], $p['end'], $p['periode']);
+        $showData = $request->boolean('show_data');
+        $rekap = $showData ? $this->rekapFor($p['start'], $p['end']) : [
+            'totalPeriode' => 0, 'rekapStatus' => collect(), 'rekapKategori' => collect(),
+            'avgRespon' => null, 'avgSelesai' => null,
+        ];
+        $breakdown = $showData ? $this->slaBreakdown($p['start'], $p['end'], $p['periode']) : [];
 
         $status = $request->input('status');
         $kategori = $request->input('kategori');

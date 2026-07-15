@@ -8,6 +8,9 @@
                 <div class="card">
                     <div class="card-body">
                         <h4 class="card-title">{{ $title }}</h4>
+                        <form method="GET" class="mb-3">
+                            <button type="submit" name="show_data" value="1" class="btn btn-primary">Tampilkan Data</button>
+                        </form>
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped">
                                 <thead>
@@ -21,23 +24,27 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse ($invoice as $row)
-                                        <tr>
-                                            <td>{{ $row->code }}</td>
-                                            <td>{{ $row->package }}</td>
-                                            <td>{{ function_exists('rupiah') ? rupiah($row->price) : $row->price }}</td>
-                                            <td>{{ $row->status }}</td>
-                                            <td>{{ $row->expdate }}</td>
-                                            <td>
-                                                <a href="{{ url('user/invoice/detail/'.$row->code) }}" class="btn btn-sm btn-info">Detail</a>
-                                                @if ($row->status !== 'Paid')
-                                                    <a href="{{ url('user/invoice/payment/'.$row->code) }}" class="btn btn-sm btn-primary">Bayar</a>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr><td colspan="6" class="text-center">Data tidak ditemukan</td></tr>
-                                    @endforelse
+                                    @if (! $showData)
+                                        <tr><td colspan="6" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
+                                    @else
+                                        @forelse ($invoice as $row)
+                                            <tr>
+                                                <td>{{ $row->code }}</td>
+                                                <td>{{ $row->package }}</td>
+                                                <td>{{ function_exists('rupiah') ? rupiah($row->price) : $row->price }}</td>
+                                                <td>{{ $row->status }}</td>
+                                                <td>{{ $row->expdate }}</td>
+                                                <td>
+                                                    <a href="{{ url('user/invoice/detail/'.$row->code) }}" class="btn btn-sm btn-info">Detail</a>
+                                                    @if ($row->status !== 'Paid')
+                                                        <a href="{{ url('user/invoice/payment/'.$row->code) }}" class="btn btn-sm btn-primary">Bayar</a>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="6" class="text-center">Data tidak ditemukan</td></tr>
+                                        @endforelse
+                                    @endif
                                 </tbody>
                             </table>
                         </div>

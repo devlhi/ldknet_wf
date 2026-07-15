@@ -26,6 +26,13 @@
                             <!-- Card Body -->
                             <div class="card-body">
 
+                                @if (! ($dataLoaded ?? true))
+                                    <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                        <span>Data PPP Active belum dimuat dari RouterOS.</span>
+                                        <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                                    </div>
+                                @endif
+
                                 <div class="col-lg-12">
                                     <div class="row">
 

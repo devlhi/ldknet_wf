@@ -84,7 +84,7 @@
                     </div>
                 </div>
                 <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary" id="filterButton"><i class="uil-search me-1"></i> Filter</button>
+                    <button class="btn btn-primary" id="filterButton"><i class="uil-eye me-1"></i> Tampilkan Data</button>
                     <button class="btn btn-outline-secondary" id="refreshButton"><i class="uil-refresh me-1"></i> Refresh</button>
                 </div>
             </div>
@@ -170,7 +170,7 @@
                 url: "{{ url('admin/finance/report/filter') }}",
                 type: "POST",
                 dataType: 'json',
-                data: { paket: paket, status: status, penerima: penerima, bulan: bulan, tahun: tahun },
+                data: { show_data: 1, paket: paket, status: status, penerima: penerima, bulan: bulan, tahun: tahun },
                 success: function(data) {
                     filteredTable.empty();
 
@@ -252,12 +252,12 @@
                         $("#export").hide();
                     }
 
-                    button.prop('disabled', false).html('<i class="uil-search me-1"></i> Filter');
+                    button.prop('disabled', false).html('<i class="uil-eye me-1"></i> Tampilkan Data');
                 },
                 error: function(xhr, status, error) {
                     console.error(error);
                     filteredTable.html('<tr><td colspan="9" class="text-center text-danger py-3">Gagal memuat data. Silakan refresh halaman lalu coba lagi.</td></tr>');
-                    button.prop('disabled', false).html('<i class="uil-search me-1"></i> Filter');
+                    button.prop('disabled', false).html('<i class="uil-eye me-1"></i> Tampilkan Data');
                 }
             });
         });
