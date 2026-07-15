@@ -25,13 +25,18 @@
                                         <div class="form-group">
                                             <label class="col-md-2 control-label">Url Media </label>
                                             <div class="col-md-12">
-                                                <input type="text" name="url" class="form-control" placeholder="Url Media">
+                                                <input type="url" name="url" class="form-control" placeholder="https://domain.com/media.jpg" required>
                                             </div>
                                         </div>
                                         <div class="form-group">
                                             <label class="col-md-2 control-label">Media Type</label>
                                             <div class="col-md-12">
-                                                <input type="text" name="type" class="form-control" placeholder="audio / video / image / pdf / xls /xlsx /doc /docx /zip">
+                                                <select name="type" class="form-select" required>
+                                                    <option value="image">Image</option>
+                                                    <option value="video">Video</option>
+                                                    <option value="audio">Audio</option>
+                                                    <option value="document">Document</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="form-group">

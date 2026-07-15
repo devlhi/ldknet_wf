@@ -218,10 +218,22 @@ class GatewayController extends Controller
 
     public function webhookUpdate(Request $request)
     {
-        WhatsappSetting::where('id', $request->post('id'))->update([
-            'api_url' => $request->post('api_url'),
-            'api_key' => $request->post('api_key'),
-            'sender' => $request->post('sender'),
+        $validated = $request->validate([
+            'id' => ['required', 'integer'],
+            'api_url' => ['required', 'url:http,https', 'max:2048'],
+            'api_key' => ['nullable', 'string'],
+            'sender' => ['required', 'string', 'max:15'],
+        ]);
+        $gateway = WhatsappSetting::findOrFail($validated['id']);
+
+        if (WhatsAppGatewayResolver::isMeta($gateway)) {
+            return redirect(url('admin/webhook'))->with('auth_errors', ['Setting Meta hanya dapat diubah dari menu WhatsApp Gateway.']);
+        }
+
+        $gateway->update([
+            'api_url' => $validated['api_url'],
+            'api_key' => filled($validated['api_key'] ?? null) ? $validated['api_key'] : $gateway->api_key,
+            'sender' => $validated['sender'],
         ]);
 
         return redirect(url('admin/webhook'))->with('success', ['Berhasil update webhook']);
@@ -277,6 +289,13 @@ class GatewayController extends Controller
             'title' => 'Whatsapp Gateway',
             'content' => $cekwhatsapp,
         ] + $this->websiteData());
+    }
+
+    public function whatsappDelete(WhatsappSetting $gateway)
+    {
+        $gateway->delete();
+
+        return redirect(url('admin/whatsapp'))->with('success', ['Gateway WhatsApp berhasil dihapus.']);
     }
 
     public function whatsappEdit($id)
@@ -395,6 +414,7 @@ class GatewayController extends Controller
 
     public function whatsappUpdateNumber(Request $request)
     {
+        $gateway = WhatsappSetting::findOrFail((int) $request->post('id'));
         $provider = $request->post('provider', 'wablas');
         $nama = $provider === 'meta'
             ? 'Meta Official'
@@ -402,7 +422,8 @@ class GatewayController extends Controller
 
         $phoneNumberId = $request->post('meta_phone_number_id') ?: $request->post('sender');
 
-        if (empty($request->post('api_key')) || empty($provider === 'meta' ? $phoneNumberId : $request->post('sender'))) {
+        $apiKey = $request->filled('api_key') ? (string) $request->post('api_key') : (string) $gateway->api_key;
+        if ($apiKey === '' || empty($provider === 'meta' ? $phoneNumberId : $request->post('sender'))) {
             return redirect(url('admin/whatsapp/edit/'.$request->post('id')))
                 ->withInput()
                 ->with('auth_errors', ['API Key / Access Token dan Sender / Phone Number ID wajib diisi']);
@@ -430,7 +451,7 @@ class GatewayController extends Controller
         WhatsappSetting::where('id', $request->post('id'))->update([
             'nama' => $nama,
             'api_url' => $apiUrl,
-            'api_key' => $request->post('api_key'),
+            'api_key' => $apiKey,
             'sender' => $sender,
             'mode' => $request->post('mode') ?? 'off',
         ]);
@@ -453,6 +474,14 @@ class GatewayController extends Controller
 
     private function metaSettingsFromRequest(Request $request): array
     {
+        $existingAppSecret = '';
+        if ($request->filled('id')) {
+            $existingGateway = WhatsappSetting::find((int) $request->post('id'));
+            if ($existingGateway && WhatsAppGatewayResolver::isMeta($existingGateway)) {
+                $existingAppSecret = WhatsAppGatewayResolver::metaAppSecret($existingGateway);
+            }
+        }
+
         return [
             'graph_url' => $request->post('meta_graph_url') ?: $request->post('api_url') ?: 'https://graph.facebook.com/v20.0',
             'verify_token' => $request->post('meta_verify_token') ?: 'landaknet-meta-webhook',
@@ -460,9 +489,9 @@ class GatewayController extends Controller
             // Phone Number ID Meta bisa 16+ digit → tidak muat di kolom sender varchar(15),
             // jadi disimpan di blob ini. Field form "sender" dipakai sebagai fallback input.
             'phone_number_id' => $request->post('meta_phone_number_id') ?: $request->post('sender') ?: '',
-            // App Secret Meta untuk validasi signature webhook (opsional). Disimpan
-            // di blob setting, bukan .env.
-            'app_secret' => $request->post('meta_app_secret') ?: '',
+            'app_secret' => $request->filled('meta_app_secret')
+                ? (string) $request->post('meta_app_secret')
+                : $existingAppSecret,
             'language' => $request->post('meta_language') ?: 'id',
             'templates' => [
                 'tagihan' => $request->post('meta_template_tagihan') ?: 'notif_tagihan',
@@ -665,38 +694,28 @@ class GatewayController extends Controller
 
     public function whatsappSendMessage(Request $request)
     {
-        $datawhatsapp = WhatsAppGatewayResolver::active();
+        $validated = $request->validate([
+            'received' => ['required', 'string', 'max:30'],
+            'message' => ['required', 'string', 'max:4000'],
+        ]);
+        $gateway = WhatsAppGatewayResolver::active();
 
-        if (! $datawhatsapp) {
+        if (! $gateway) {
             return redirect(url('admin/gateway/whatsapp/setup'));
         }
 
-        $response = WhatsAppNotifier::sendText($request->post('received'), $request->post('message'));
+        try {
+            $response = WhatsAppNotifier::sendText($validated['received'], $validated['message']);
+        } catch (\Throwable) {
+            return redirect(url('admin/whatsapp/message/text-message'))
+                ->withInput()
+                ->with('auth_errors', ['Pengiriman gagal: gateway WhatsApp tidak dapat dihubungi.']);
+        }
 
-        $result = json_decode($response, true);
-
-        if ($result && isset($result['status']) && $result['status'] === false) {
-            $msg = $result['msg'] ?? '';
-
-            if (isset($result['errors'])) {
-                if (is_string($result['errors'])) {
-                    $errors = [$result['errors']];
-                } elseif (is_array($result['errors']) && isset($result['errors']['message'])) {
-                    $errors = $result['errors']['message'];
-                } else {
-                    $errors = [];
-                }
-            } else {
-                $errors = [];
-            }
-
-            $errorMessage = 'Pengiriman gagal: '.$msg;
-
-            if (! empty($errors)) {
-                $errorMessage .= ' '.implode(', ', (array) $errors);
-            }
-
-            return redirect(url('admin/whatsapp/message/text-message'))->with('auth_errors', [$errorMessage]);
+        if (! WhatsAppNotifier::responseSucceeded($response, $gateway)) {
+            return redirect(url('admin/whatsapp/message/text-message'))
+                ->withInput()
+                ->with('auth_errors', ['Pengiriman gagal: '.WhatsAppNotifier::responseError($response)]);
         }
 
         return redirect(url('admin/whatsapp/message/text-message'))->with('success', ['Pengiriman berhasil : Sukses mengirimkan pesan tersebut ']);

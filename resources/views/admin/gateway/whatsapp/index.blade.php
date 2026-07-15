@@ -81,7 +81,7 @@
                                                     <a href="{{ url('admin/whatsapp/meta/templates') }}" class="btn btn-sm btn-success"><i class="uil uil-comment-alt-lines"></i> Templates</a>
                                                 @endif
 
-                                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#delete-{{ $row->id }}"><i class="uil uil-trash"></i>Delete</button>
+                                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#delete-{{ $row->id }}"><i class="uil uil-trash"></i> Delete</button>
 
                                                 <!--- Modal Delete -->
                                                 <div class="modal fade" id="delete-{{ $row->id }}" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
@@ -92,11 +92,14 @@
                                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                             </div>
                                                             <div class="modal-body">
-                                                                Apakah anda ingin menghapus Layanan <b><u>{{ $row->nama }}</u></b> ?
+                                                                Apakah Anda ingin menghapus gateway <b><u>{{ $row->nama }}</u></b>?
                                                             </div>
                                                             <div class="modal-footer">
                                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                                                <a class="btn btn-primary" href="{{ url('admin/services/delete/'.$row->id) }}">Yes</a>
+                                                                <form method="post" action="{{ url('admin/whatsapp/delete/'.$row->id) }}">
+                                                                    @csrf
+                                                                    <button type="submit" class="btn btn-primary">Yes</button>
+                                                                </form>
                                                             </div>
                                                         </div>
                                                     </div>

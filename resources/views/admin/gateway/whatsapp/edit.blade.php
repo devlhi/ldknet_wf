@@ -34,10 +34,20 @@
                                 <input type="hidden" name="id" value="{{ $row->id }}">
                                 <input type="hidden" name="type" value="{{ $row->type }}">
                                 @php
-                                    $isMeta = str_contains(strtolower((string) $row->nama), 'meta') || str_contains((string) $row->api_url, 'graph.facebook.com') || str_starts_with((string) $row->api_url, 'meta###');
+                                    $isMeta = \App\Support\WhatsAppGatewayResolver::isMeta($row);
                                     $metaSettings = \App\Support\WhatsAppGatewayResolver::metaSettings($row);
                                     $metaTemplates = $metaSettings['templates'] ?? [];
                                 @endphp
+
+                                @if (! $isMeta)
+                                    <div class="alert alert-warning">
+                                        <strong>Callback URL Gateway Lama:</strong>
+                                        <div class="input-group input-group-sm mt-1">
+                                            <input type="text" class="form-control" id="legacyWebhookUrl" value="{{ url('webhook/whatsapp').'?token='.\App\Support\WhatsAppGatewayResolver::legacyWebhookToken() }}" readonly>
+                                            <button type="button" class="btn btn-outline-primary copy-btn" data-copy-target="legacyWebhookUrl"><i class="uil uil-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                @endif
 
                                 <div class="alert alert-info">
                                     <div class="mb-2">
@@ -89,7 +99,7 @@
 
                                     <div class="mb-3">
                                         <label for="apikey" class="form-label">{{ $isMeta ? 'Access Token (Meta System User)' : 'API Key Whatsapp Gateway' }}</label>
-                                        <input type="text" class="form-control" name="api_key" value="{{ $row->api_key }}" required>
+                                        <input type="password" class="form-control" name="api_key" value="" placeholder="Sudah tersimpan, kosongkan jika tidak diubah" autocomplete="new-password">
                                     </div>
 
                                     <div class="mb-3">
@@ -121,9 +131,12 @@
                                         </div>
 
                                         <div class="mb-3">
-                                            <label class="form-label">App Secret <span class="text-muted">(opsional)</span></label>
-                                            <input type="text" class="form-control" name="meta_app_secret" value="{{ $metaSettings['app_secret'] ?? '' }}" placeholder="Dari Meta App Dashboard → Settings → Basic → App Secret" autocomplete="off">
-                                            <small class="text-muted">Bila diisi, webhook memvalidasi tanda tangan tiap pesan masuk (anti pesan palsu). Kosongkan untuk melewati validasi.</small>
+                                            <label class="form-label">App Secret</label>
+                                            <input type="password" class="form-control" name="meta_app_secret" value="" placeholder="{{ ($metaSettings['app_secret'] ?? '') !== '' ? 'Sudah tersimpan, kosongkan jika tidak diubah' : 'Meta App Dashboard → Settings → Basic → App Secret' }}" autocomplete="new-password">
+                                            <small class="text-muted">Wajib untuk memvalidasi tanda tangan pesan masuk. Secret tersimpan tidak pernah ditampilkan kembali.</small>
+                                            @if (($metaSettings['app_secret'] ?? '') === '')
+                                                <div class="alert alert-danger mt-2 mb-0">Webhook Meta saat ini belum terlindungi signature. Isi App Secret sebelum digunakan di produksi.</div>
+                                            @endif
                                         </div>
 
                                         <div class="mb-3">

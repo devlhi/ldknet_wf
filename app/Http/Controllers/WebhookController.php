@@ -17,6 +17,7 @@ use App\Models\WhatsappSetting;
 use App\Support\WhatsAppGatewayResolver;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -207,15 +208,34 @@ class WebhookController extends Controller
 
     public function whatsapp()
     {
-        header('content-type: application/json');
-        $data = json_decode(file_get_contents('php://input'), true);
-        file_put_contents(storage_path('logs/whatsapp.txt'), '['.date('Y-m-d H:i:s')."]\n".json_encode($data, JSON_PRETTY_PRINT)."\n\n", FILE_APPEND);
+        $gateway = WhatsAppGatewayResolver::active();
+        if (! $gateway || WhatsAppGatewayResolver::isMeta($gateway)) {
+            return response()->json(['status' => 'ignored', 'message' => 'Legacy gateway inactive']);
+        }
+
+        $data = request()->json()->all();
+        if (! is_string($data['message'] ?? null) || ! is_string($data['from'] ?? null)) {
+            return response()->json(['status' => 'invalid payload'], 422);
+        }
+
+        $command = strtolower((string) strtok(trim($data['message']), " \n\t"));
+        $sensitiveCommands = [
+            '/regisuser', '/regisppp', '/regishs', '/addhs', '/disabledhs',
+            '/openhs', '/openppp', '/gantipass', '/gpass', '/delhost',
+            '/cekpaket', '/cekrouter', '/cekhs', '/cekppp', '/cekredaman', '/cekdata',
+        ];
+        $token = (string) request()->query('token', request()->header('X-Webhook-Token', ''));
+        if (in_array($command, $sensitiveCommands, true) && ! hash_equals(WhatsAppGatewayResolver::legacyWebhookToken(), $token)) {
+            Log::warning('WhatsApp legacy webhook command sensitif ditolak: token tidak valid', [
+                'ip_hash' => hash('sha256', (string) request()->ip()),
+                'command' => $command,
+            ]);
+
+            return response()->json(['status' => 'invalid token'], 403);
+        }
 
         $result = false;
-
-        // ===== DEBUG MODE - Edit true/false =====
-        $debugMode = true;  // true = ON, false = OFF
-        // ========================================
+        $debugMode = false;
 
         // ===== WHITELIST ID GRUP - Edit manual di sini =====
         // Daftar ID grup WhatsApp yang diizinkan untuk akses bot
@@ -378,25 +398,14 @@ class WebhookController extends Controller
                 }
             } else {
                 if ($debugMode) {
-                    file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG] User found in DB: NO\n', FILE_APPEND);
-                }
-
-                // Jika dari grup yang di-whitelist, berikan akses dengan level default
-                if ($isFromGroup) {
-                    $level = 'admin'; // Level default untuk user di grup yang di-whitelist
-                    if ($debugMode) {
-                        file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG] Group member auto-allowed with level: '.$level."\n\n", FILE_APPEND);
-                    }
-                    $search = true; // Set true agar bisa lanjut
-                } else {
-                    // Jika dari personal chat, harus terdaftar di database
-                    if ($debugMode) {
-                        file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG] ACCESS DENIED - User not registered\n\n', FILE_APPEND);
-                    }
+                    Log::debug('WhatsApp legacy webhook: nomor pengirim tidak terdaftar', [
+                        'sender_hash' => hash('sha256', (string) $result),
+                        'is_group' => $isFromGroup,
+                    ]);
                 }
             }
 
-            if ($search == true) {
+            if (! empty($search)) {
                 $pesan = str_replace('-', ' ', $pesan);
 
                 // Pisahkan pesan berdasarkan spasi
@@ -407,6 +416,15 @@ class WebhookController extends Controller
 
                 // Initialize response variable (berbeda dari $result yang untuk nomor)
                 $response = null;
+
+                $adminCommands = [
+                    '/regisuser', '/regisppp', '/regishs', '/addhs', '/disabledhs',
+                    '/openhs', '/openppp', '/gantipass', '/cekpaket', '/cekrouter',
+                    '/cekhs', '/cekppp', '/cekredaman', '/cekdata',
+                ];
+                if (in_array($command, $adminCommands, true) && ! in_array($level, ['admin', 'developer'], true)) {
+                    return response()->json(['text' => '⛔ Command ini hanya untuk Admin/Developer.']);
+                }
 
                 $webhook = $this->whatsappModel->getWebhook();
                 $statuswebhook = null; // Inisialisasi status webhook
@@ -520,7 +538,7 @@ class WebhookController extends Controller
 
                                     foreach ($getServices as $rowservice) {
                                         $idservice = $rowservice->id;
-                                        if ($paket === $idservice) {
+                                        if ((string) $paket === (string) $idservice) {
                                             $foundservice = true;
                                             break;
                                         }
@@ -530,13 +548,14 @@ class WebhookController extends Controller
 
                                     foreach ($getRouter as $row) {
                                         $idnya = $row->id;
-                                        if ($router === $idnya) {
+                                        if ((string) $router === (string) $idnya) {
                                             $found = true;
                                             break;
                                         }
                                     }
 
                                     if ($foundservice && $found) {
+                                        $customerEmail = str_contains($email, '@') ? $email : $email.'@gmail.com';
 
                                         $paketlayanan = $this->adminModel->getServicesByID($paket);
                                         foreach ($paketlayanan->getResult() as $datalayanan) {
@@ -559,7 +578,7 @@ class WebhookController extends Controller
 
                                         $insertOrders = [
                                             'idpel' => $kode,
-                                            'email' => $email.'@gmail.com',
+                                            'email' => $customerEmail,
                                             'nama' => $nama,
                                             'paket' => $namapaket,
                                             'alamat' => $alamat,
@@ -572,7 +591,7 @@ class WebhookController extends Controller
                                         ];
 
                                         $insertUsers = [
-                                            'email' => $email.'@gmail.com',
+                                            'email' => $customerEmail,
                                             'nama' => $nama,
                                             'nomor' => $nomor,
                                             'password' => password_hash($password, PASSWORD_DEFAULT),
@@ -595,10 +614,8 @@ class WebhookController extends Controller
                                                 $indo = date('Y-m-d', strtotime($masa));
                                                 $tglindo = tanggal_indo($indo);
                                                 $linkweb = url('/');
-                                                $tambahan = '@gmail.com';
-                                                $tambahannya = $email.$tambahan;
                                                 $message = str_replace('{nama_customer}', $nama, $message);
-                                                $message = str_replace('{email}', $tambahannya, $message);
+                                                $message = str_replace('{email}', $customerEmail, $message);
 
                                                 $message = str_replace('{id_pelanggan}', $kode, $message);
                                                 $message = str_replace('{expdate}', $tglindo, $message);
@@ -607,7 +624,7 @@ class WebhookController extends Controller
                                                 $message = str_replace('{password}', $password, $message);
 
                                                 // Password sengaja tidak dikirim ke template Meta (ditolak Meta di kategori UTILITY); password tetap dikirim via email.
-                                                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_PELANGGAN_BARU, $nomor, $message, [$nama, $tambahannya, $kode, $tglindo, $namapaket, $linkweb]);
+                                                WhatsAppNotifier::sendNotification(WhatsAppNotifier::EVENT_PELANGGAN_BARU, $nomor, $message, [$nama, $customerEmail, $kode, $tglindo, $namapaket, $linkweb]);
 
                                                 $text = 'Berhasil melakukan penambahan customer';
                                                 $response = [
@@ -694,26 +711,29 @@ class WebhookController extends Controller
 
                                     foreach ($getServices as $rowservice) {
                                         $idservice = $rowservice->id;
-                                        if ($paket === $idservice) {
+                                        if ((string) $paket === (string) $idservice) {
                                             $foundservice = true;
                                             break;
                                         }
                                     }
-                                    $paketlayanan = $this->adminModel->getServicesByID($paket);
-                                    foreach ($paketlayanan->getResult() as $datalayanan) {
-                                        $pppprofile = $datalayanan->ppp_profile;
+                                    $pppprofile = null;
+                                    if ($foundservice) {
+                                        $paketlayanan = $this->adminModel->getServicesByID($paket);
+                                        foreach ($paketlayanan->getResult() as $datalayanan) {
+                                            $pppprofile = $datalayanan->ppp_profile;
+                                        }
                                     }
 
                                     $found = false;
                                     foreach ($getRouter as $row) {
                                         $idnya = $row->id;
-                                        if ($router === $idnya) {
+                                        if ((string) $router === (string) $idnya) {
                                             $found = true;
                                             break;
                                         }
                                     }
 
-                                    if ($pppprofile == null) {
+                                    if ($foundservice && $pppprofile === null) {
                                         $text = '*ERROR:* Lakukan sinkronisasi PPP terlebih dahulu pada server website';
                                         $response = [
                                             'text' => $text,
@@ -826,7 +846,7 @@ class WebhookController extends Controller
 
                                     foreach ($getServices as $rowservice) {
                                         $idservice = $rowservice->id;
-                                        if ($paket === $idservice) {
+                                        if ((string) $paket === (string) $idservice) {
                                             $foundservice = true;
                                             break;
                                         }
@@ -841,14 +861,14 @@ class WebhookController extends Controller
                                     $found = false;
                                     foreach ($getRouter as $row) {
                                         $idnya = $row->id;
-                                        if ($router === $idnya) {
+                                        if ((string) $router === (string) $idnya) {
                                             $found = true;
                                             break;
                                         }
                                     }
 
-                                    // Validasi mode harus hotspot
-                                    if ($modenya !== 'hotspot') {
+                                    // Validasi mode hanya setelah ID layanan ditemukan.
+                                    if ($foundservice && $modenya !== 'hotspot') {
                                         $text = "❌ *ERROR: Paket bukan untuk Hotspot!*\n\n";
                                         $text .= "Paket yang dipilih mode: *$modenya*\n";
                                         $text .= "Gunakan paket dengan mode: *hotspot*\n\n";
@@ -985,7 +1005,7 @@ class WebhookController extends Controller
 
                                     foreach ($getServices as $rowservice) {
                                         $idservice = $rowservice->id;
-                                        if ($paket === $idservice) {
+                                        if ((string) $paket === (string) $idservice) {
                                             $foundservice = true;
                                             break;
                                         }
@@ -995,7 +1015,7 @@ class WebhookController extends Controller
 
                                     foreach ($getRouter as $row) {
                                         $idnya = $row->id;
-                                        if ($router === $idnya) {
+                                        if ((string) $router === (string) $idnya) {
                                             $found = true;
                                             break;
                                         }
@@ -1419,13 +1439,6 @@ class WebhookController extends Controller
                             // Cek mode: ppp, hs, atau default (untuk member)
                             $mode = isset($params[1]) ? strtolower(trim($params[1])) : '';
 
-                            // Debug log
-                            if ($debugMode) {
-                                file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Raw params: '.json_encode($params)."\n", FILE_APPEND);
-                                file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Mode detected: '.$mode."\n", FILE_APPEND);
-                                file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Level: '.$level."\n", FILE_APPEND);
-                            }
-
                             // Mode untuk Admin/Developer: /gpass ppp atau /gpass hs
                             if (($mode === 'ppp' || $mode === 'hs') && ($level == 'admin' || $level == 'developer')) {
                                 $username = '';
@@ -1436,23 +1449,12 @@ class WebhookController extends Controller
                                     return trim($val) !== '';
                                 }));
 
-                                // Debug after filter
-                                if ($debugMode) {
-                                    file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Filtered params: '.json_encode($params)."\n", FILE_APPEND);
-                                }
-
                                 for ($i = 0; $i < count($params); $i++) {
                                     if (trim($params[$i]) === 'username' && isset($params[$i + 1])) {
                                         $username = trim($params[$i + 1]);
                                     } elseif (trim($params[$i]) === 'password' && isset($params[$i + 1])) {
                                         $password = trim($params[$i + 1]);
                                     }
-                                }
-
-                                // Debug parsed values
-                                if ($debugMode) {
-                                    file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Username: '.$username."\n", FILE_APPEND);
-                                    file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Password: '.$password."\n\n", FILE_APPEND);
                                 }
 
                                 if ($username !== '' && $password !== '') {
@@ -1621,12 +1623,6 @@ class WebhookController extends Controller
                                         }
                                     }
                                 } else {
-                                    if ($debugMode) {
-                                        file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] ERROR: Username or Password empty!\n', FILE_APPEND);
-                                        file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Username check: "'.$username.'" (empty: '.($username === '' ? 'YES' : 'NO').")\n", FILE_APPEND);
-                                        file_put_contents(storage_path('logs/whatsapp.txt'), '[DEBUG /gpass] Password check: "'.$password.'" (empty: '.($password === '' ? 'YES' : 'NO').")\n\n", FILE_APPEND);
-                                    }
-
                                     $text = "❌ *ERROR: Format tidak sesuai!*\n\n";
                                     if ($mode === 'ppp') {
                                         $text .= "📝 Format:\n";
@@ -2759,76 +2755,116 @@ class WebhookController extends Controller
             return response()->json(['status' => 'ignored', 'message' => 'Webhook off']);
         }
 
-        $messages = data_get($payload, 'entry.0.changes.0.value.messages', []);
-        if (! is_array($messages) || $messages === []) {
-            return response()->json(['status' => 'ok']);
-        }
-
         $gateway = WhatsAppGatewayResolver::active();
         if (! $gateway || ! WhatsAppGatewayResolver::isMeta($gateway)) {
             return response()->json(['status' => 'ignored', 'message' => 'Meta gateway inactive']);
         }
 
         $api = WhatsAppGatewayResolver::make($gateway);
-        $contacts = data_get($payload, 'entry.0.changes.0.value.contacts', []);
+        foreach ((array) data_get($payload, 'entry', []) as $entry) {
+            foreach ((array) data_get($entry, 'changes', []) as $change) {
+                $value = (array) data_get($change, 'value', []);
+                $contacts = (array) data_get($value, 'contacts', []);
 
-        foreach ($messages as $message) {
-            $from = data_get($message, 'from');
-            $text = $this->metaMessageText($message);
-            $contact = collect($contacts)->firstWhere('wa_id', $from);
-            $fromName = data_get($contact, 'profile.name');
-            $type = (string) data_get($message, 'type', 'text');
-            $metaMessageId = (string) data_get($message, 'id', '');
-            $existingMessage = $metaMessageId !== ''
-                ? WaInboxMessage::where('meta_message_id', $metaMessageId)->first()
-                : null;
-
-            // Meta dapat mengulang webhook. Untuk gambar, retry hanya mengisi file yang
-            // sebelumnya gagal diunduh, tanpa membuat pesan/laporan/balasan kedua kali.
-            if ($existingMessage) {
-                if ($type === 'image') {
-                    $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
-                }
-
-                continue;
-            }
-
-            if ($from && $text !== '') {
-                WaInboxMessage::create([
-                    'from_number' => $from,
-                    'from_name' => $fromName,
-                    'direction' => 'in',
-                    'body' => $text,
-                    'message_type' => $type,
-                    'meta_message_id' => $metaMessageId ?: null,
-                    'status' => 'received',
-                    'created_at' => now(),
-                ]);
-
-                if ($type === 'image') {
-                    $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
-                }
-
-                // Serap otomatis jadi laporan gangguan bila terindikasi keluhan.
-                GangguanReport::capture($from, $fromName, $text, 'meta');
-
-                $reply = $this->handleMetaTextCommand($text);
-                if ($reply !== null) {
-                    $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $from, $reply);
-                    WaInboxMessage::create([
-                        'from_number' => $from,
-                        'from_name' => $fromName,
-                        'direction' => 'out',
-                        'body' => $reply,
-                        'message_type' => 'text',
-                        'status' => 'sent',
-                        'created_at' => now(),
-                    ]);
+                foreach ((array) data_get($value, 'messages', []) as $message) {
+                    if (is_array($message)) {
+                        $this->handleMetaMessage($api, $gateway, $message, $contacts);
+                    }
                 }
             }
         }
 
         return response()->json(['status' => 'ok']);
+    }
+
+    private function handleMetaMessage(WhatsAppMetaApi $api, WhatsappSetting $gateway, array $message, array $contacts): void
+    {
+        $metaMessageId = (string) data_get($message, 'id', '');
+        if ($metaMessageId === '') {
+            $this->processMetaMessage($api, $gateway, $message, $contacts);
+
+            return;
+        }
+
+        $lock = Cache::lock('wa-meta-msg:'.sha1($metaMessageId), 30);
+        if (! $lock->block(5)) {
+            return;
+        }
+
+        try {
+            $this->processMetaMessage($api, $gateway, $message, $contacts);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function processMetaMessage(WhatsAppMetaApi $api, WhatsappSetting $gateway, array $message, array $contacts): void
+    {
+        $from = (string) data_get($message, 'from', '');
+        $text = $this->metaMessageText($message);
+        $contact = collect($contacts)->firstWhere('wa_id', $from);
+        $fromName = data_get($contact, 'profile.name');
+        $type = (string) data_get($message, 'type', 'text');
+        $metaMessageId = (string) data_get($message, 'id', '');
+
+        if ($metaMessageId !== '' && WaInboxMessage::where('meta_message_id', $metaMessageId)->exists()) {
+            if ($type === 'image') {
+                $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
+            }
+
+            return;
+        }
+
+        if ($from === '' || $text === '') {
+            return;
+        }
+
+        WaInboxMessage::create([
+            'from_number' => $from,
+            'from_name' => $fromName,
+            'direction' => 'in',
+            'body' => $text,
+            'message_type' => $type,
+            'meta_message_id' => $metaMessageId ?: null,
+            'status' => 'received',
+            'created_at' => now(),
+        ]);
+
+        if ($type === 'image') {
+            $this->storeMetaImage($api, (string) data_get($message, 'image.id', ''), $metaMessageId);
+        }
+
+        GangguanReport::capture($from, $fromName, $text, 'meta');
+
+        $reply = $this->handleMetaTextCommand($text);
+        if ($reply === null) {
+            return;
+        }
+
+        try {
+            $response = $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $from, $reply);
+            $responseJson = json_decode((string) $response, true);
+            $replyMessageId = (string) data_get($responseJson, 'messages.0.id', '');
+            $status = is_array($responseJson) && ! isset($responseJson['error']) && $replyMessageId !== '' ? 'sent' : 'failed';
+        } catch (\Throwable $e) {
+            Log::warning('Auto-reply WhatsApp Meta gagal dikirim', [
+                'recipient_hash' => hash('sha256', $from),
+                'error' => $e->getMessage(),
+            ]);
+            $replyMessageId = '';
+            $status = 'failed';
+        }
+
+        WaInboxMessage::create([
+            'from_number' => $from,
+            'from_name' => $fromName,
+            'direction' => 'out',
+            'body' => $reply,
+            'message_type' => 'text',
+            'meta_message_id' => $replyMessageId ?: null,
+            'status' => $status,
+            'created_at' => now(),
+        ]);
     }
 
     private function storeMetaImage(WhatsAppMetaApi $api, string $mediaId, string $metaMessageId): void

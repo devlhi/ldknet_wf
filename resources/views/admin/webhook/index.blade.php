@@ -8,6 +8,13 @@
                 <div class="card">
                     <div class="card-body">
                         <h4 class="card-title">{{ $title }}</h4>
+                        @if (session('auth_errors'))
+                            <div class="alert alert-danger">
+                                @foreach (session('auth_errors') as $msg)
+                                    <p class="mb-0">{{ $msg }}</p>
+                                @endforeach
+                            </div>
+                        @endif
                         @if (session('success'))
                             <div class="alert alert-success">
                                 @foreach (session('success') as $msg)
@@ -27,16 +34,20 @@
                                 </thead>
                                 <tbody>
                                     @forelse ($whatsapp as $row)
+                                        @php $isMeta = \App\Support\WhatsAppGatewayResolver::isMeta($row); @endphp
                                         <tr>
-                                            <td>{{ $row->sender }}</td>
-                                            <td>{{ $row->api_url }}</td>
-                                            <td>{{ substr($row->api_key, 0, 8) }}...</td>
+                                            <td>{{ $isMeta ? 'Meta Official' : $row->sender }}</td>
+                                            <td>{{ $isMeta ? \App\Support\WhatsAppGatewayResolver::metaGraphUrl($row) : $row->api_url }}</td>
+                                            <td>********</td>
                                             <td>
-                                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editWebhookModal"
-                                                        data-id="{{ $row->id }}"
-                                                        data-api-url="{{ $row->api_url }}"
-                                                        data-api-key="{{ $row->api_key }}"
-                                                        data-sender="{{ $row->sender }}">Edit</button>
+                                                @if ($isMeta)
+                                                    <a href="{{ url('admin/whatsapp/edit/'.$row->id) }}" class="btn btn-sm btn-primary">Edit di WhatsApp Gateway</a>
+                                                @else
+                                                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editWebhookModal"
+                                                            data-id="{{ $row->id }}"
+                                                            data-api-url="{{ $row->api_url }}"
+                                                            data-sender="{{ $row->sender }}">Edit</button>
+                                                @endif
                                             </td>
                                         </tr>
                                     @empty
@@ -72,7 +83,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">API Key</label>
-                        <input type="text" name="api_key" id="wh_api_key" class="form-control">
+                        <input type="password" name="api_key" id="wh_api_key" class="form-control" placeholder="Kosongkan jika tidak ingin mengubah">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -91,7 +102,7 @@ document.getElementById('editWebhookModal').addEventListener('show.bs.modal', fu
     document.getElementById('editWebhookForm').action = '{{ url("admin/webhook/update") }}';
     document.getElementById('wh_sender').value = button.getAttribute('data-sender');
     document.getElementById('wh_api_url').value = button.getAttribute('data-api-url');
-    document.getElementById('wh_api_key').value = button.getAttribute('data-api-key');
+    document.getElementById('wh_api_key').value = '';
     var idInput = document.createElement('input');
     idInput.type = 'hidden';
     idInput.name = 'id';

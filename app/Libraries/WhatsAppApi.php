@@ -41,7 +41,8 @@ class WhatsAppApi
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
             ],
-            CURLOPT_SSL_VERIFYPEER => false, // Matikan verifikasi sertifikat SSL
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
 
         ]);
 
@@ -80,7 +81,8 @@ class WhatsAppApi
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
             ],
-            CURLOPT_SSL_VERIFYPEER => false, // Matikan verifikasi sertifikat SSL
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
 
         ]);
 

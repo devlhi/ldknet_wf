@@ -36,7 +36,7 @@ class WhatsAppNotifier
         self::EVENT_BUKA_ISOLIR => 'notif_buka_isolir',
     ];
 
-    public static function sendText(string $number, string $message): mixed
+    public static function sendText(string $number, string $message, bool $logOutbound = true): mixed
     {
         $gateway = WhatsAppGatewayResolver::active();
         if (! $gateway) {
@@ -44,12 +44,14 @@ class WhatsAppNotifier
         }
 
         $response = WhatsAppGatewayResolver::make($gateway)->sendMessage(WhatsAppGatewayResolver::sender($gateway), $number, $message);
-        self::logOutbound($gateway, $number, $message, 'text', $response);
+        if ($logOutbound) {
+            self::logOutbound($gateway, $number, $message, 'text', $response);
+        }
 
         return $response;
     }
 
-    public static function sendMedia(string $number, string $type, string $caption, string $url): mixed
+    public static function sendMedia(string $number, string $type, string $caption, string $url, bool $logOutbound = true): mixed
     {
         $gateway = WhatsAppGatewayResolver::active();
         if (! $gateway) {
@@ -57,7 +59,9 @@ class WhatsAppNotifier
         }
 
         $response = WhatsAppGatewayResolver::make($gateway)->sendMessageMedia(WhatsAppGatewayResolver::sender($gateway), $number, $type, $caption, $url);
-        self::logOutbound($gateway, $number, '['.ucfirst($type).'] '.$caption."\n".$url, 'media', $response);
+        if ($logOutbound) {
+            self::logOutbound($gateway, $number, '['.ucfirst($type).'] '.$caption."\n".$url, 'media', $response);
+        }
 
         return $response;
     }
@@ -212,7 +216,15 @@ class WhatsAppNotifier
     {
         $number = preg_replace('/\D+/', '', $number);
 
-        return str_starts_with($number, '0') ? '62'.substr($number, 1) : $number;
+        if (str_starts_with($number, '0')) {
+            return '62'.substr($number, 1);
+        }
+
+        if ($number !== '' && ! str_starts_with($number, '62')) {
+            return '62'.$number;
+        }
+
+        return $number;
     }
 
     /**
@@ -243,6 +255,52 @@ class WhatsAppNotifier
         }
 
         return null;
+    }
+
+    public static function responseSucceeded(mixed $response, ?WhatsappSetting $gateway = null): bool
+    {
+        if ($response === null || $response === false || $response === '') {
+            return false;
+        }
+
+        $gateway ??= WhatsAppGatewayResolver::active();
+        $result = is_string($response) ? json_decode($response, true) : (is_array($response) ? $response : null);
+        if (! is_array($result)) {
+            return false;
+        }
+
+        if ($gateway && WhatsAppGatewayResolver::isMeta($gateway)) {
+            return filled(data_get($result, 'messages.0.id')) && ! isset($result['error']);
+        }
+
+        $status = $result['status'] ?? null;
+        $success = $result['success'] ?? null;
+        $messageId = $result['message_id'] ?? $result['id'] ?? null;
+
+        return ! isset($result['error'])
+            && empty($result['errors'])
+            && $success !== false
+            && $status !== false
+            && $status !== 'error'
+            && $status !== 'failed'
+            && (filled($messageId) || $status === true || $success === true || $status === 'success');
+    }
+
+    public static function responseError(mixed $response): string
+    {
+        $result = is_string($response) ? json_decode($response, true) : (is_array($response) ? $response : null);
+        if (! is_array($result)) {
+            return 'Gateway tidak memberikan respons yang valid.';
+        }
+
+        $error = data_get($result, 'error.message')
+            ?? data_get($result, 'errors.message')
+            ?? data_get($result, 'errors')
+            ?? data_get($result, 'msg');
+
+        return is_scalar($error) && trim((string) $error) !== ''
+            ? Str::limit(trim((string) $error), 300)
+            : 'Pesan ditolak oleh gateway WhatsApp.';
     }
 
     public static function templateName(string $event): string

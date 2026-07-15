@@ -140,6 +140,64 @@ class WhatsAppInboxMediaTest extends TestCase
             ->assertJsonPath('messages.0.media_url', url($mediaUrl));
     }
 
+    public function test_meta_webhook_processes_all_entries_and_changes(): void
+    {
+        $payload = [
+            'entry' => [
+                ['changes' => [
+                    ['value' => [
+                        'contacts' => [['wa_id' => '628111111111', 'profile' => ['name' => 'Satu']]],
+                        'messages' => [['from' => '628111111111', 'id' => 'wamid.batch-1', 'type' => 'text', 'text' => ['body' => 'Pesan satu']]],
+                    ]],
+                    ['value' => [
+                        'contacts' => [['wa_id' => '628222222222', 'profile' => ['name' => 'Dua']]],
+                        'messages' => [['from' => '628222222222', 'id' => 'wamid.batch-2', 'type' => 'text', 'text' => ['body' => 'Pesan dua']]],
+                    ]],
+                ]],
+                ['changes' => [[
+                    'value' => [
+                        'contacts' => [['wa_id' => '628333333333', 'profile' => ['name' => 'Tiga']]],
+                        'messages' => [['from' => '628333333333', 'id' => 'wamid.batch-3', 'type' => 'text', 'text' => ['body' => 'Pesan tiga']]],
+                    ],
+                ]]],
+            ],
+        ];
+
+        $this->postJson('webhook/whatsapp/meta', $payload)->assertOk();
+
+        $this->assertSame(3, WaInboxMessage::whereIn('meta_message_id', ['wamid.batch-1', 'wamid.batch-2', 'wamid.batch-3'])->count());
+        $this->assertSame('Tiga', WaInboxMessage::where('meta_message_id', 'wamid.batch-3')->value('from_name'));
+    }
+
+    public function test_meta_auto_reply_is_recorded_failed_when_graph_rejects_it(): void
+    {
+        Http::fake([
+            'https://graph.facebook.com/v20.0/meta/messages' => Http::response([
+                'error' => ['message' => 'Invalid recipient'],
+            ], 400),
+        ]);
+
+        $this->postJson('webhook/whatsapp/meta', [
+            'entry' => [[
+                'changes' => [[
+                    'value' => [
+                        'contacts' => [['wa_id' => '628444444444', 'profile' => ['name' => 'Empat']]],
+                        'messages' => [[
+                            'from' => '628444444444',
+                            'id' => 'wamid.help-failed',
+                            'type' => 'text',
+                            'text' => ['body' => '/help'],
+                        ]],
+                    ],
+                ]],
+            ]],
+        ])->assertOk();
+
+        $reply = WaInboxMessage::where('from_number', '628444444444')->where('direction', 'out')->firstOrFail();
+        $this->assertSame('failed', $reply->status);
+        $this->assertNull($reply->meta_message_id);
+    }
+
     public function test_duplicate_webhook_retries_missing_image_without_duplicating_message(): void
     {
         $image = base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');

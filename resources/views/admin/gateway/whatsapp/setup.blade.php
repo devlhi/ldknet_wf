@@ -87,6 +87,19 @@
                                 </div>
                             </div>
 
+                            <div id="legacyOnlyFields" style="display:{{ $isMetaPrefill ? 'none' : 'block' }};">
+                                <div class="mb-3 row">
+                                    <label class="col-sm-3 col-form-label">Callback URL</label>
+                                    <div class="col-sm-9">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="legacyWebhookUrl" value="{{ url('webhook/whatsapp').'?token='.\App\Support\WhatsAppGatewayResolver::legacyWebhookToken() }}" readonly>
+                                            <button class="btn btn-outline-secondary" type="button" onclick="copyMetaField('legacyWebhookUrl', this)"><i class="uil uil-copy"></i> Salin</button>
+                                        </div>
+                                        <small class="text-muted">Gunakan URL lengkap bertoken ini di dashboard gateway lama.</small>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div id="metaOnlyFields" style="display:{{ $isMetaPrefill ? 'block' : 'none' }};">
                                 <hr>
                                 <h6 class="text-primary">Pengaturan Khusus Meta Official</h6>
@@ -106,6 +119,14 @@
                                             <button class="btn btn-outline-secondary" type="button" onclick="copyMetaField('metaVerifyToken', this)"><i class="uil uil-copy"></i> Salin</button>
                                         </div>
                                         <small class="text-muted">Token ini dipakai saat verifikasi webhook di Meta App Dashboard (kolom "Verifikasi token"). Harus sama persis.</small>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3 row">
+                                    <label class="col-sm-3 col-form-label">App Secret</label>
+                                    <div class="col-sm-9">
+                                        <input type="password" class="form-control" name="meta_app_secret" placeholder="Meta App Dashboard → Settings → Basic → App Secret" autocomplete="new-password">
+                                        <small class="text-muted">Wajib untuk memvalidasi signature webhook dan mencegah pesan masuk palsu.</small>
                                     </div>
                                 </div>
 
@@ -222,6 +243,7 @@ Mohon pada saat melakukan setup whatsapp ini, nomor sudah konek ke
     const providerSelect = document.getElementById('providerSelect');
     const form = providerSelect.closest('form');
     const metaOnlyFields = document.getElementById('metaOnlyFields');
+    const legacyOnlyFields = document.getElementById('legacyOnlyFields');
     const apiUrlInput = document.getElementById('apiUrlInput');
     const apiKeyLabel = document.getElementById('apiKeyLabel');
     const senderLabel = document.getElementById('senderLabel');
@@ -232,6 +254,7 @@ Mohon pada saat melakukan setup whatsapp ini, nomor sudah konek ke
     function toggleProviderUi() {
         const isMeta = providerSelect.value === 'meta';
         metaOnlyFields.style.display = isMeta ? 'block' : 'none';
+        legacyOnlyFields.style.display = isMeta ? 'none' : 'block';
         apiKeyLabel.textContent = isMeta ? 'Access Token (Meta)' : 'API Key';
         senderLabel.textContent = isMeta ? 'Phone Number ID (Meta)' : 'Nomor Sender';
         apiUrlInput.placeholder = isMeta ? 'https://graph.facebook.com/v20.0' : 'URL gateway lama, contoh: https://botnew.autosend.my.id';

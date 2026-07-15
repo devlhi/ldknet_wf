@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Libraries\WhatsAppApi;
 use App\Models\SmtpSetting;
 use App\Models\User;
 use App\Models\Website;
@@ -87,25 +86,23 @@ class BroadcastController extends Controller
     // POST admin/cms/broadcast/whatsapp/send (CI4: AdminController::sendbroadcastwhatsapp -> WhatsappController::sendbroadcast)
     public function sendbroadcastwhatsapp(Request $request)
     {
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:4000'],
+        ]);
         $getAccount = User::where('status_account', 'Active')->get();
         $gateway = WhatsAppGatewayResolver::active();
 
-        $message = (string) $request->input('message');
-
-        // Mengubah format HTML ke format WhatsApp
-        $text = strip_tags($message);
-        $text = str_replace('<br>', "\n", $text);
-        $text = str_replace('&nbsp;', "\n", $text);
+        $text = html_entity_decode(strip_tags(str_ireplace(['<br>', '<br/>', '<br />'], "\n", $validated['message'])));
 
         if (! $gateway) {
             return redirect('admin/cms/broadcast/whatsapp')->with('auth_errors', ['Whatsapp Gateway Mode Blast tidak aktif ! ']);
         }
 
-        foreach ($getAccount as $dataAccount) {
-            WhatsAppNotifier::sendText($dataAccount->nomor, $text);
-        }
+        [$sent, $failed] = $this->broadcastResults($getAccount, function (User $account) use ($text) {
+            return WhatsAppNotifier::sendText($account->nomor, $text, false);
+        }, $gateway);
 
-        return redirect('admin/cms/broadcast/whatsapp')->with('success', ['Pengiriman berhasil : Sukses mengirimkan broadcast ']);
+        return $this->broadcastRedirect('broadcast', $sent, $failed);
     }
 
     // POST admin/cms/broadcast/sendmedia (CI4: AdminController::sendbroadcastmedia -> WhatsappController::sendbroadcastmedia)
@@ -113,21 +110,52 @@ class BroadcastController extends Controller
     // via WhatsAppApi::sendMessageMedia ke semua akun aktif, mengikuti form pada view broadcast whatsapp.
     public function sendbroadcastmedia(Request $request)
     {
+        $validated = $request->validate([
+            'url' => ['required', 'url:https', 'max:2048'],
+            'type' => ['required', 'string', 'in:image,video,audio,document'],
+            'caption' => ['nullable', 'string', 'max:1024'],
+        ]);
         $getAccount = User::where('status_account', 'Active')->get();
         $gateway = WhatsAppGatewayResolver::active();
-
-        $url = $request->input('url');
-        $type = $request->input('type');
-        $caption = (string) $request->input('caption');
 
         if (! $gateway) {
             return redirect('admin/cms/broadcast/whatsapp')->with('auth_errors', ['Whatsapp Gateway Mode Blast tidak aktif ! ']);
         }
 
-        foreach ($getAccount as $dataAccount) {
-            WhatsAppNotifier::sendMedia($dataAccount->nomor, $type, $caption, $url);
+        [$sent, $failed] = $this->broadcastResults($getAccount, function (User $account) use ($validated) {
+            return WhatsAppNotifier::sendMedia(
+                $account->nomor,
+                $validated['type'],
+                (string) ($validated['caption'] ?? ''),
+                $validated['url'],
+                false
+            );
+        }, $gateway);
+
+        return $this->broadcastRedirect('broadcast media', $sent, $failed);
+    }
+
+    private function broadcastResults($accounts, callable $send, $gateway): array
+    {
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($accounts as $account) {
+            try {
+                WhatsAppNotifier::responseSucceeded($send($account), $gateway) ? $sent++ : $failed++;
+            } catch (\Throwable) {
+                $failed++;
+            }
         }
 
-        return redirect('admin/cms/broadcast/whatsapp')->with('success', ['Pengiriman berhasil : Sukses mengirimkan broadcast media ']);
+        return [$sent, $failed];
+    }
+
+    private function broadcastRedirect(string $label, int $sent, int $failed)
+    {
+        $message = ucfirst($label)." selesai. Berhasil: {$sent}, gagal: {$failed}.";
+        $key = $failed > 0 ? 'auth_errors' : 'success';
+
+        return redirect('admin/cms/broadcast/whatsapp')->with($key, [$message]);
     }
 }

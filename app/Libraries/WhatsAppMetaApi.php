@@ -425,6 +425,10 @@ class WhatsAppMetaApi
             return '62'.substr($number, 1);
         }
 
+        if ($number !== '' && ! str_starts_with($number, '62')) {
+            return '62'.$number;
+        }
+
         return $number;
     }
 

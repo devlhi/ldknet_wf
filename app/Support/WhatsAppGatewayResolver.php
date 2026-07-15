@@ -14,11 +14,12 @@ class WhatsAppGatewayResolver
 
     public static function isMeta(WhatsappSetting $gateway): bool
     {
-        if (str_contains(strtolower((string) $gateway->nama), 'meta')) {
+        $apiUrl = trim((string) $gateway->api_url);
+        if (str_starts_with($apiUrl, 'meta###') || str_starts_with($apiUrl, 'graph.facebook.com###')) {
             return true;
         }
 
-        return str_contains((string) $gateway->api_url, 'graph.facebook.com') || str_starts_with((string) $gateway->api_url, 'meta###');
+        return strtolower((string) parse_url($apiUrl, PHP_URL_HOST)) === 'graph.facebook.com';
     }
 
     public static function providerLabel(WhatsappSetting $gateway): string
@@ -76,6 +77,11 @@ class WhatsAppGatewayResolver
         }
 
         return (string) (config('services.whatsapp_meta.verify_token') ?? 'landaknet-meta-webhook');
+    }
+
+    public static function legacyWebhookToken(): string
+    {
+        return hash_hmac('sha256', 'whatsapp-legacy-webhook', (string) config('app.key'));
     }
 
     public static function metaSettings(WhatsappSetting $gateway): array

@@ -30,6 +30,7 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::match(['get', 'post'], 'whatsapp/edit/{any}', [GatewayController::class, 'whatsappEdit']);
     Route::match(['get', 'post'], 'whatsapp/setup', [GatewayController::class, 'whatsappSetup']);
     Route::post('whatsapp/add/number', [GatewayController::class, 'whatsappAdd']);
+    Route::post('whatsapp/delete/{gateway}', [GatewayController::class, 'whatsappDelete']);
     Route::match(['get', 'post'], 'whatsapp/message/text-message', [GatewayController::class, 'whatsappTextMessage']);
     Route::post('whatsapp/message/text-message/send', [GatewayController::class, 'whatsappSendMessage']);
     Route::get('whatsapp/inbox', [WhatsAppInboxController::class, 'index']);
