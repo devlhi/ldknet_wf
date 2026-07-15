@@ -206,7 +206,8 @@ class WhatsAppInboxMediaTest extends TestCase
             'signature_mode' => 'auto',
             'reply_to_message_id' => $inbound->id,
         ])->assertRedirect('admin/whatsapp/inbox?number=628123456789')
-            ->assertSessionHas('success');
+            ->assertSessionHas('success')
+            ->assertSessionHas('wa_text_sent', true);
 
         $message = WaInboxMessage::where('meta_message_id', 'wamid.outbound-text-1')->firstOrFail();
         $this->assertSame('out', $message->direction);

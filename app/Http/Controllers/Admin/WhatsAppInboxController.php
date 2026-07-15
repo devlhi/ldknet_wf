@@ -10,6 +10,7 @@ use App\Support\WhatsAppGatewayResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class WhatsAppInboxController extends Controller
@@ -91,7 +92,7 @@ class WhatsAppInboxController extends Controller
                 'message_type' => $msg->message_type,
                 'media_url' => $msg->hasMedia() ? url('admin/whatsapp/inbox/media/'.$msg->id) : null,
                 'can_reply' => $msg->direction === 'in' && (string) $msg->meta_message_id !== '',
-                'created_at' => optional($msg->created_at)->format('d M H:i'),
+                'created_at' => optional($msg->created_at)->format('H:i'),
             ])->values(),
             'can_reply_text' => $canReplyText,
             'conversations' => $this->conversations()->map(fn ($conv) => [
@@ -187,7 +188,15 @@ class WhatsAppInboxController extends Controller
             'created_at' => now(),
         ]);
 
-        Storage::disk('local')->put(WaInboxMessage::mediaPath($metaMessageId), $contents);
+        if (! Storage::disk('local')->put(WaInboxMessage::mediaPath($metaMessageId), $contents)) {
+            Log::warning('Salinan lokal gambar WhatsApp keluar gagal disimpan', [
+                'message_id_hash' => hash('sha256', $metaMessageId),
+                'inbox_message_id' => $message->id,
+            ]);
+
+            return redirect('admin/whatsapp/inbox?number='.$validated['number'])
+                ->with('success', ['Gambar berhasil dikirim ke pelanggan, tetapi preview lokal gagal disimpan.']);
+        }
 
         return redirect('admin/whatsapp/inbox?number='.$validated['number'])->with('success', ['Gambar berhasil dikirim.']);
     }
@@ -269,7 +278,9 @@ class WhatsAppInboxController extends Controller
             'created_at' => now(),
         ]);
 
-        return redirect('admin/whatsapp/inbox?number='.$validated['number'])->with('success', ['Pesan berhasil dikirim.']);
+        return redirect('admin/whatsapp/inbox?number='.$validated['number'])
+            ->with('success', ['Pesan berhasil dikirim.'])
+            ->with('wa_text_sent', true);
     }
 
     private function replyWindowIsOpen($lastIncomingAt): bool

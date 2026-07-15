@@ -408,7 +408,7 @@
                                             <span class="wa-message-meta">
                                                 {{ optional($msg->created_at)->format('H:i') }}
                                                 @if ($out)
-                                                    &middot; {{ $failed ? '✗' : '✓✓' }}
+                                                    &middot; {{ $failed ? '✗' : '✓' }}
                                                 @endif
                                             </span>
                                             @if ($canReplyText && $msg->direction === 'in' && filled($msg->meta_message_id))
@@ -489,6 +489,7 @@
     var inboxBaseUrl = '{{ url('admin/whatsapp/inbox') }}';
     var thread = document.getElementById('chatThread');
     var canReplyText = @json($canReplyText);
+    var textSendSucceeded = @json((bool) session('wa_text_sent'));
     var replyToMessageId = document.getElementById('replyToMessageId');
     var replyPreview = document.getElementById('replyPreview');
     var replyPreviewText = document.getElementById('replyPreviewText');
@@ -509,7 +510,7 @@
         var badge = isTemplate
             ? '<span class="wa-template-label">Notifikasi: ' + escapeHtml((msg.message_type || '').replace('template:', '')) + '</span>'
             : '';
-        var statusMark = out ? ' &middot; ' + (failed ? '✗' : '✓✓') : '';
+        var statusMark = out ? ' &middot; ' + (failed ? '✗' : '✓') : '';
         var media = msg.media_url
             ? '<a class="wa-media" href="' + escapeHtml(msg.media_url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(msg.media_url) + '" alt="Gambar chat"></a>'
             : '';
@@ -575,30 +576,49 @@
         filterConversations();
     }
 
-    function pollInbox() {
-        if (!thread) return;
-        var number = thread.getAttribute('data-number');
-        var lastId = parseInt(thread.getAttribute('data-last-id') || '0', 10);
-        if (!number) return;
+    var isSubmitting = false;
+    var isPolling = false;
+    var replyWindowExpiryHandled = false;
+    var replyForm = document.getElementById('replyForm');
+    if (replyForm) {
+        replyForm.addEventListener('submit', function () {
+            isSubmitting = true;
+            saveDraft();
+        });
+    }
 
-        fetch(pollUrl + '?number=' + encodeURIComponent(number) + '&after_id=' + lastId, {
+    function pollInbox() {
+        if (isPolling) return;
+        isPolling = true;
+        var number = thread ? thread.getAttribute('data-number') : '';
+        var lastId = thread ? parseInt(thread.getAttribute('data-last-id') || '0', 10) : 0;
+
+        var params = new URLSearchParams();
+        if (number) params.set('number', number);
+        if (lastId > 0) params.set('after_id', lastId);
+
+        fetch(pollUrl + '?' + params.toString(), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); })
         .then(function (data) {
             setConnStatus(true);
             if (!data || !data.messages) return;
-            if (data.messages.length) {
+
+            if (data.messages.length && thread && !isSubmitting) {
                 data.messages.forEach(function (msg) {
+                    if (thread.querySelector('[data-message-id="' + msg.id + '"]')) return;
                     thread.insertAdjacentHTML('beforeend', renderMessage(msg));
                     if (msg.id > lastId) { thread.setAttribute('data-last-id', msg.id); }
                 });
                 scrollIfNeeded();
             }
+
             refreshConversations(data.conversations || []);
             updateWindowStatus(data.can_reply_text);
         })
-        .catch(function () { setConnStatus(false); });
+        .catch(function () { setConnStatus(false); })
+        .finally(function () { isPolling = false; });
     }
 
     function setConnStatus(online) {
@@ -623,10 +643,48 @@
         if (!replyBox) return;
         var hasForm = document.getElementById('replyForm');
         if (canReply && !hasForm) {
-            location.reload(); // state berubah, reload untuk menampilkan form balas
+            location.reload();
         } else if (!canReply && hasForm) {
+            var draft = replyTextarea ? replyTextarea.value.trim() : '';
+            if (draft !== '' && !replyWindowExpiryHandled) {
+                replyWindowExpiryHandled = true;
+                saveDraft();
+                if (!confirm('Jendela balas 24 jam telah habis. Pesan yang Anda ketik belum terkirim dan telah disimpan sebagai draft. Muat ulang halaman?')) return;
+            } else if (draft !== '') {
+                return;
+            }
             location.reload();
         }
+    }
+
+    function draftKey() {
+        if (!thread) return null;
+        return 'wa_draft_' + thread.getAttribute('data-number');
+    }
+
+    function saveDraft() {
+        var key = draftKey();
+        if (!key || !replyTextarea) return;
+        try { localStorage.setItem(key, replyTextarea.value); } catch (e) {}
+    }
+
+    function loadDraft() {
+        var key = draftKey();
+        if (!key || !replyTextarea) return;
+        try {
+            var val = localStorage.getItem(key);
+            if (val) {
+                replyTextarea.value = val;
+                replyTextarea.style.height = 'auto';
+                replyTextarea.style.height = Math.min(replyTextarea.scrollHeight, 120) + 'px';
+            }
+        } catch (e) {}
+    }
+
+    function clearDraft() {
+        var key = draftKey();
+        if (!key) return;
+        try { localStorage.removeItem(key); } catch (e) {}
     }
 
     function filterConversations() {
@@ -645,10 +703,14 @@
     var searchInput = document.getElementById('waSearchInput');
     if (searchInput) searchInput.addEventListener('input', filterConversations);
 
+    if (textSendSucceeded) clearDraft();
+
     if (replyTextarea) {
+        loadDraft();
         replyTextarea.addEventListener('input', function () {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            saveDraft();
         });
     }
 
