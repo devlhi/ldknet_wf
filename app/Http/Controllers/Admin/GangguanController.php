@@ -224,14 +224,19 @@ class GangguanController extends Controller
 
         // Batasi baris riwayat pada PDF agar tidak membengkak (mis. periode tahunan).
         $maxRows = 1000;
-        $listQuery = GangguanReport::query()
-            ->whereBetween('created_at', [$p['start'], $p['end']])
-            ->with('handler')
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->when($kategori, fn ($q) => $q->where('kategori', $kategori))
-            ->orderByDesc('created_at');
-        $totalList = $listQuery->count();
-        $list = $listQuery->limit($maxRows)->get();
+        if ($showData) {
+            $listQuery = GangguanReport::query()
+                ->whereBetween('created_at', [$p['start'], $p['end']])
+                ->with('handler')
+                ->when($status, fn ($q) => $q->where('status', $status))
+                ->when($kategori, fn ($q) => $q->where('kategori', $kategori))
+                ->orderByDesc('created_at');
+            $totalList = $listQuery->count();
+            $list = $listQuery->limit($maxRows)->get();
+        } else {
+            $totalList = 0;
+            $list = collect();
+        }
 
         $website = Website::first();
 

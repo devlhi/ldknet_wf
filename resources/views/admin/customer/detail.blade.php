@@ -116,6 +116,12 @@
                         </div>
                         <br>
 
+                        @if (! ($showData ?? true))
+                            <div class="alert alert-info d-flex align-items-center justify-content-between">
+                                <span>Data router pelanggan belum dimuat.</span>
+                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                            </div>
+                        @else
                         @php
                             if (!empty($statusppp)) {
                                 $css = 'green';
@@ -160,7 +166,7 @@
 
                                         function requestDatta() {
                                             $.ajax({
-                                                url: '{{ url('router/traffic/pppoe/'.$traffics) }}',
+                                                url: '{{ url('router/traffic/pppoe/'.$traffics) }}?show_data=1',
                                                 dataType: "json",
                                                 success: function(data) {
                                                     var midata = (typeof data === 'string') ? JSON.parse(data) : data;
@@ -273,6 +279,7 @@
 
                                 </div>
                             </div>
+                        @endif
                         @endif
                     </div>
                     <!-- end row -->

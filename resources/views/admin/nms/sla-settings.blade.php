@@ -95,7 +95,7 @@ function loadInterfaces() {
     select.innerHTML = '<option value="">-- Memuat interface... --</option>';
     select.disabled = true;
 
-    fetch('{{ url("admin/nms/device/poll") }}/' + deviceId)
+    fetch('{{ url("admin/nms/device/poll") }}/' + deviceId + '?show_data=1')
         .then(r => r.json())
         .then(data => {
             var ports = [];

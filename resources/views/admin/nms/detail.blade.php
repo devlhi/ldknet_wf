@@ -19,6 +19,12 @@
             </div>
         </div>
 
+        @if (! $showData)
+            <div class="alert alert-info d-flex align-items-center justify-content-between">
+                <span>Data device belum dimuat.</span>
+                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+            </div>
+        @else
         <div class="row">
             <div class="col-lg-4">
                 <div class="card">
@@ -83,6 +89,7 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 </div>
 @endsection
@@ -92,10 +99,11 @@
 @endsection
 
 @section('scripts')
+@if ($showData)
 <script src="{{ asset('assets/libs/apexcharts/apexcharts.min.js') }}"></script>
 <script>
 var deviceId = {{ $device->id }};
-var pollUrl = '{{ url("admin/nms/device/poll/".$device->id) }}';
+var pollUrl = '{{ url("admin/nms/device/poll/".$device->id) }}?show_data=1';
 var availablePorts = [];
 
 function escapeHtml(value) {
@@ -207,7 +215,7 @@ function loadChart() {
 
     if (!port) return;
 
-    fetch('{{ url("admin/nms/device/metrics") }}/' + deviceId + '/' + encodeURIComponent(port))
+    fetch('{{ url("admin/nms/device/metrics") }}/' + deviceId + '/' + encodeURIComponent(port) + '?show_data=1')
         .then(r => r.json())
         .then(res => {
             var filtered = res.data.filter(m => m.metric_type === metric);
@@ -258,4 +266,5 @@ document.getElementById('metricSelect').addEventListener('change', loadChart);
 
 pollDevice();
 </script>
+@endif
 @endsection

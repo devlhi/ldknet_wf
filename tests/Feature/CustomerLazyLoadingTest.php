@@ -29,6 +29,13 @@ class CustomerLazyLoadingTest extends TestCase
             $table->string('title')->nullable();
             $table->string('logo')->nullable();
         });
+        Schema::create('invoice', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code');
+            $table->string('idpel');
+            $table->date('date')->nullable();
+            $table->string('status');
+        });
         Schema::create('router', function (Blueprint $table): void {
             $table->id();
             $table->string('nama');
@@ -41,6 +48,7 @@ class CustomerLazyLoadingTest extends TestCase
             $table->string('id_router')->nullable();
             $table->string('mode')->nullable();
             $table->string('pppoe_user')->nullable();
+            $table->date('date')->nullable();
             $table->date('expdate')->nullable();
             $table->string('status');
             $table->string('alamat')->nullable();
@@ -79,6 +87,40 @@ class CustomerLazyLoadingTest extends TestCase
             'data' => [],
         ]);
         $this->assertFalse(collect($queries)->contains(fn (string $sql): bool => str_contains(strtolower($sql), 'orders')));
+    }
+
+    public function test_customer_detail_requires_show_data_to_connect_router(): void
+    {
+        DB::table('orders')->insert([
+            'idpel' => 'CUST-001',
+            'nama' => 'Customer Test',
+            'paket' => '10 Mbps',
+            'id_router' => 99,
+            'mode' => 'pppoe',
+            'date' => '2026-01-01',
+            'expdate' => '2026-12-31',
+            'status' => 'Active',
+        ]);
+        DB::table('router')->insert([
+            'id' => 99,
+            'nama' => 'Router Test',
+        ]);
+
+        // Detail page without show_data should load with placeholder notice
+        $response = $this->actingAs($this->user)->get('/admin/customer/detail/CUST-001');
+        $response->assertOk()
+            ->assertSee('Data router pelanggan belum dimuat.')
+            ->assertSee('Tampilkan Data');
+    }
+
+    public function test_customer_filter_endpoint_is_guarded_without_activation(): void
+    {
+        $response = $this->actingAs($this->user)->getJson('/admin/customer/filter');
+        $response->assertOk()
+            ->assertExactJson([
+                'status' => 'success',
+                'data' => [],
+            ]);
     }
 
     public function test_customer_endpoint_loads_rows_after_activation(): void

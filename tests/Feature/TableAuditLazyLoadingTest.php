@@ -234,6 +234,17 @@ class TableAuditLazyLoadingTest extends TestCase
 
         $this->actingAs($this->user)->getJson('/admin/nms/map-data')
             ->assertExactJson(['data' => [], 'links' => []]);
+        $this->actingAs($this->user)->get('/admin/nms/device/detail/1')
+            ->assertOk()
+            ->assertSee('Tampilkan Data')
+            ->assertDontSee('pollDevice();', false);
+        $this->actingAs($this->user)->getJson('/admin/nms/device/poll/1')
+            ->assertBadRequest()
+            ->assertJson(['error' => 'Data tidak diaktifkan']);
+        $this->actingAs($this->user)->getJson('/admin/nms/device/status/1')
+            ->assertExactJson(['status' => 'unknown']);
+        $this->actingAs($this->user)->getJson('/admin/nms/device/metrics/1/ether1')
+            ->assertExactJson(['data' => []]);
 
         auth()->logout();
 

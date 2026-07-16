@@ -329,6 +329,7 @@
                     dataType: 'json',
                     data: {
                         interface: selectedInterface,
+                        show_data: 1,
                         _token: csrfToken
                     },
                     success: function(data) {

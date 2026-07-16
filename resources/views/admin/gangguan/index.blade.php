@@ -7,7 +7,7 @@
     <div class="container-fluid">
         @php
             $exportUrl = url('admin/gangguan/cetak').'?'.http_build_query(array_filter([
-                'periode' => $periode, 'tanggal' => $tanggal, 'status' => $statusFilter, 'kategori' => $kategoriFilter,
+                'periode' => $periode, 'tanggal' => $tanggal, 'status' => $statusFilter, 'kategori' => $kategoriFilter, 'show_data' => $showData ? '1' : null,
             ], fn ($v) => $v !== null && $v !== ''));
         @endphp
         <div class="row">

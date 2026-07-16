@@ -810,7 +810,7 @@ fetch('{{ url("admin/nms/map-data") }}?show_data=1')
 
 function fetchStatusForMarkers(devices) {
     devices.forEach(function(d) {
-        fetch('{{ url("admin/nms/device/status") }}/' + d.id)
+        fetch('{{ url("admin/nms/device/status") }}/' + d.id + '?show_data=1')
             .then(r => r.json())
             .then(res => {
                 onlineDevices[d.id] = res.status;
@@ -830,7 +830,7 @@ function fetchStatusForMarkers(devices) {
                 if (res.status === 'up' && markers[d.id]) {
                     markers[d.id].openPopup();
                     // Poll device untuk dapat data SFP RX/TX terbaru
-                    fetch('{{ url("admin/nms/device/poll") }}/' + d.id)
+                    fetch('{{ url("admin/nms/device/poll") }}/' + d.id + '?show_data=1')
                         .then(r => r.json())
                         .then(pollRes => {
                             if (pollRes.error || !pollRes.ports) return;
@@ -915,7 +915,7 @@ function loadDevicePorts(side) {
     if (!id) return;
 
     if (loading) loading.classList.remove('d-none');
-    fetch('{{ url("admin/nms/device/poll") }}/' + id)
+    fetch('{{ url("admin/nms/device/poll") }}/' + id + '?show_data=1')
         .then(function(r) { return r.json(); })
         .then(function(res) {
             fillPortDatalist(side, res.ports || []);

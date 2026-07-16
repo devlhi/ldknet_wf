@@ -430,7 +430,7 @@ class CustomerController extends Controller
     }
 
     // GET admin/customer/detail/{id} (CI4: AdminController::customer_detail)
-    public function customer_detail($id = null)
+    public function customer_detail(Request $request, $id = null)
     {
         if ($id == null) {
             return redirect('admin/customers');
@@ -456,6 +456,22 @@ class CustomerController extends Controller
 
         $datacustomer = Order::where('idpel', $id)->get();
         $pppoe = optional($datacustomer->last())->pppoe_user;
+
+        $showData = $request->boolean('show_data');
+
+        if (! $showData) {
+            return view('admin.customer.detail', [
+                'title' => 'Detail Pelanggan',
+                'customer' => $customer,
+                'invoice' => $invoice,
+                'datacustomer' => $datacustomer,
+                'statusppp' => [],
+                'interface' => [],
+                'traffics' => $pppoe,
+                'mode' => $mode,
+                'showData' => false,
+            ] + $this->websiteData());
+        }
 
         if (Router::count() === 0) {
             return redirect('admin/customers')->with('auth_errors', ['Tidak ada server pada database, silahkan tambah server terlebih dahulu']);
@@ -497,6 +513,7 @@ class CustomerController extends Controller
             'interface' => $getinterface,
             'traffics' => $pppoe,
             'mode' => $mode,
+            'showData' => true,
         ] + $this->websiteData());
     }
 
@@ -935,6 +952,10 @@ class CustomerController extends Controller
     // GET admin/customer/filter — filter pelanggan berdasarkan router (CI4: ambilDataFilterCustomer)
     public function ambilDataFilterCustomer(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json(['status' => 'success', 'data' => []]);
+        }
+
         $routerId = $request->get('router');
         $query = Order::select('orders.*', 'router.nama as router_nama')
             ->leftJoin('router', 'orders.id_router', '=', 'router.id');

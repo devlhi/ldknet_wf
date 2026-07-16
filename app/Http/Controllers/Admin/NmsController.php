@@ -358,18 +358,23 @@ class NmsController extends Controller
         return redirect(url('admin/nms'))->with('success', ['Device berhasil dihapus']);
     }
 
-    public function deviceDetail($id)
+    public function deviceDetail(Request $request, $id)
     {
         $device = NmsDevice::findOrFail($id);
 
         return view('admin.nms.detail', [
             'title' => 'Detail Device: '.$device->nama,
             'device' => $device,
+            'showData' => $request->boolean('show_data'),
         ] + $this->websiteData());
     }
 
-    public function poll($id)
+    public function poll(Request $request, $id)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json(['error' => 'Data tidak diaktifkan'], 400);
+        }
+
         $device = NmsDevice::findOrFail($id);
 
         if (in_array($device->tipe, ['mikrotik', 'crs'])) {
@@ -832,8 +837,12 @@ class NmsController extends Controller
         return $hours.'h '.$mins.'m '.$secs.'s';
     }
 
-    public function metricsHistory($id, $port)
+    public function metricsHistory(Request $request, $id, $port)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json(['data' => []]);
+        }
+
         $metrics = NmsMetric::where('device_id', $id)
             ->where('port_name', $port)
             ->orderByDesc('recorded_at')
@@ -845,8 +854,12 @@ class NmsController extends Controller
         return response()->json(['data' => $metrics]);
     }
 
-    public function checkStatus($id)
+    public function checkStatus(Request $request, $id)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json(['status' => 'unknown']);
+        }
+
         $device = NmsDevice::findOrFail($id);
         $port = (int) $device->port;
         $connected = @fsockopen($device->ip, $port, $errno, $errstr, 2);

@@ -644,8 +644,12 @@ class RouterController extends Controller
         return redirect(url('server/router/setting'))->with('auth_errors', ['Mikrotik not connected !']);
     }
 
-    public function getTraffic()
+    public function getTraffic(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json([]);
+        }
+
         $router = $this->currentRouter() ?? Router::first();
 
         if ($router && $this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -662,8 +666,12 @@ class RouterController extends Controller
         ], 503);
     }
 
-    public function getTrafficPPPOE($pppoe)
+    public function getTrafficPPPOE(Request $request, $pppoe)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json([]);
+        }
+
         $order = DB::table('orders')->where('pppoe_user', $pppoe)->first();
         $router = $order?->id_router ? Router::find($order->id_router) : $this->currentRouter();
 
@@ -681,13 +689,17 @@ class RouterController extends Controller
         ], 503);
     }
 
-    public function getBandwithPPPOE($pppoe)
+    public function getBandwithPPPOE(Request $request, $pppoe)
     {
-        return $this->getTrafficPPPOE($pppoe);
+        return $this->getTrafficPPPOE($request, $pppoe);
     }
 
     public function getTrafficFixes(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json([]);
+        }
+
         $interface = $request->post('interface');
         $router = $this->currentRouter() ?? Router::first();
 
