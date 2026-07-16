@@ -218,34 +218,47 @@ class NmsController extends Controller
         return redirect(url('admin/nms/sla'))->with('success', ['Pengaturan Global SLA berhasil diterapkan ke '.$count.' device']);
     }
 
-    public function mapData()
+    public function mapData(Request $request)
     {
+        $isPublic = ! auth()->check();
+
+        if (! $isPublic && ! $request->boolean('show_data')) {
+            return response()->json([
+                'data' => [],
+                'links' => [],
+            ]);
+        }
+
         $devices = NmsDevice::select('id', 'nama', 'tipe', 'ip', 'port', 'latitude', 'longitude', 'lokasi', 'status')
             ->whereNotNull('latitude')
             ->where('latitude', '!=', '')
+            ->get();
+
+        $metricTypes = ['sfp_rx_power', 'sfp_tx_power', 'sfp_temperature', 'link_status', 'onu_count'];
+        $latestMetricIds = NmsMetric::whereIn('device_id', $devices->pluck('id'))
+            ->whereIn('metric_type', $metricTypes)
+            ->selectRaw('MAX(id)')
+            ->groupBy('device_id', 'port_name', 'metric_type');
+        $metricsByDevice = NmsMetric::whereIn('id', $latestMetricIds)
             ->get()
-            ->map(function ($device) {
-                $latestMetrics = NmsMetric::where('device_id', $device->id)
-                    ->whereIn('metric_type', ['sfp_rx_power', 'sfp_tx_power', 'sfp_temperature', 'link_status', 'onu_count'])
-                    ->orderByDesc('recorded_at')
-                    ->orderByDesc('id')
-                    ->get()
-                    ->groupBy('port_name')
-                    ->map(fn ($ports) => $ports->keyBy('metric_type'))
-                    ->map(fn ($metrics) => [
-                        'port_name' => $metrics->first()->port_name,
-                        'rx_power' => $metrics->get('sfp_rx_power')?->value,
-                        'tx_power' => $metrics->get('sfp_tx_power')?->value,
-                        'temperature' => $metrics->get('sfp_temperature')?->value,
-                        'link_status' => $metrics->get('link_status')?->value,
-                        'onu_count' => $metrics->get('onu_count')?->value,
-                    ])
-                    ->values();
+            ->groupBy('device_id');
 
-                $device->sfp_ports = $latestMetrics->filter(fn ($p) => $p['rx_power'] !== null || $p['tx_power'] !== null || $p['onu_count'] !== null)->values();
+        $devices->each(function ($device) use ($metricsByDevice) {
+            $latestMetrics = $metricsByDevice->get($device->id, collect())
+                ->groupBy('port_name')
+                ->map(fn ($ports) => $ports->keyBy('metric_type'))
+                ->map(fn ($metrics) => [
+                    'port_name' => $metrics->first()->port_name,
+                    'rx_power' => $metrics->get('sfp_rx_power')?->value,
+                    'tx_power' => $metrics->get('sfp_tx_power')?->value,
+                    'temperature' => $metrics->get('sfp_temperature')?->value,
+                    'link_status' => $metrics->get('link_status')?->value,
+                    'onu_count' => $metrics->get('onu_count')?->value,
+                ])
+                ->values();
 
-                return $device;
-            });
+            $device->sfp_ports = $latestMetrics->filter(fn ($p) => $p['rx_power'] !== null || $p['tx_power'] !== null || $p['onu_count'] !== null)->values();
+        });
 
         $links = NmsLink::with(['deviceA:id,nama,latitude,longitude', 'deviceB:id,nama,latitude,longitude'])
             ->where('status', 'active')
@@ -915,9 +928,9 @@ class NmsController extends Controller
         ]);
     }
 
-    public function publicMapData()
+    public function publicMapData(Request $request)
     {
-        return $this->mapData();
+        return $this->mapData($request);
     }
 
     public function publicDeviceStatus($id)

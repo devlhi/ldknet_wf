@@ -34,6 +34,14 @@
                 </div>
             @endif
 
+            @unless ($showData)
+                <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <span>Data ODP dan jalur kabel belum dimuat.</span>
+                    <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                </div>
+            @endunless
+
+            @if ($showData)
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex flex-wrap gap-3 mb-2 small text-muted">
@@ -47,11 +55,13 @@
                     </div>
                 </div>
             </div>
+            @endif
         </div>
     </div>
 @endsection
 
 @section('scripts')
+@if ($showData)
 <script src="{{ asset('leaflet/leaflet.js') }}"></script>
 <script>
 (function () {
@@ -171,4 +181,5 @@
     processQueue();
 })();
 </script>
+@endif
 @endsection

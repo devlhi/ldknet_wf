@@ -55,41 +55,46 @@ class AccountingController extends Controller
         return $query->get()->keyBy('account_id');
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $accountCount = AccAccount::count();
-        $journalCount = AccJournal::count();
-        $contactCount = AccContact::count();
+        $showData = $request->boolean('show_data');
+
+        $accounts = $showData ? AccAccount::get(['id', 'type', 'is_cash', 'opening_balance']) : collect();
+        $accountCount = $accounts->count();
+        $journalCount = $showData ? AccJournal::count() : 0;
+        $contactCount = $showData ? AccContact::count() : 0;
 
         $start = now()->startOfMonth()->toDateString();
         $end = now()->endOfMonth()->toDateString();
-        $balances = $this->accountBalances($start, $end);
+        $balances = $showData ? $this->accountBalances($start, $end) : collect();
 
         $income = 0;
         $expense = 0;
         $cash = 0;
-        $allBalances = $this->accountBalances(null, $end);
+        $allBalances = $showData ? $this->accountBalances(null, $end) : collect();
 
-        foreach (AccAccount::all() as $acc) {
-            $b = $balances->get($acc->id);
-            if ($b) {
-                if ($acc->type === 'revenue') {
-                    $income += ((float) $b->total_credit - (float) $b->total_debit);
-                } elseif ($acc->type === 'expense') {
-                    $expense += ((float) $b->total_debit - (float) $b->total_credit);
+        if ($showData) {
+            foreach ($accounts as $acc) {
+                $b = $balances->get($acc->id);
+                if ($b) {
+                    if ($acc->type === 'revenue') {
+                        $income += ((float) $b->total_credit - (float) $b->total_debit);
+                    } elseif ($acc->type === 'expense') {
+                        $expense += ((float) $b->total_debit - (float) $b->total_credit);
+                    }
                 }
-            }
 
-            if ($acc->is_cash) {
-                $ab = $allBalances->get($acc->id);
-                if ($ab) {
-                    $cash += ((float) $ab->total_debit - (float) $ab->total_credit);
+                if ($acc->is_cash) {
+                    $ab = $allBalances->get($acc->id);
+                    if ($ab) {
+                        $cash += ((float) $ab->total_debit - (float) $ab->total_credit);
+                    }
+                    $cash += (float) $acc->opening_balance;
                 }
-                $cash += (float) $acc->opening_balance;
             }
         }
 
-        $recentJournals = AccJournal::orderByDesc('date')->orderByDesc('id')->limit(10)->get();
+        $recentJournals = $showData ? AccJournal::orderByDesc('date')->orderByDesc('id')->limit(10)->get() : collect();
 
         return view('admin.accounting.index', [
             'title' => 'Dashboard Akuntansi',
@@ -101,6 +106,7 @@ class AccountingController extends Controller
             'netProfit' => $income - $expense,
             'cash' => $cash,
             'recentJournals' => $recentJournals,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

@@ -746,19 +746,21 @@ class FinanceController extends Controller
         return redirect('admin/finance/invoice')->with('success', ['Berhasil menghapus '.count($codes).' invoice']);
     }
 
-    public function generateInvoice()
+    public function generateInvoice(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
         $currentYear = (int) date('Y');
         $currentMonth = (int) date('n');
         $years = range($currentYear, 2020);
 
         return view('admin.finance.invoice.generate', [
             'title' => 'Generate Invoice',
-            'customers' => Order::all(),
-            'paket' => Service::where('status', 'Tersedia')->orderBy('id', 'ASC')->get(),
+            'customers' => $showData ? Order::get(['idpel', 'nama', 'paket']) : collect(),
             'years' => $years,
             'currentYear' => $currentYear,
             'currentMonth' => $currentMonth,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

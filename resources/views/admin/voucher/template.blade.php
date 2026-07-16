@@ -28,6 +28,14 @@
                                 </div>
                             @endif
 
+                            @unless ($showData)
+                                <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-0">
+                                    <span>Data template pesan belum dimuat.</span>
+                                    <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
+                                </div>
+                            @endunless
+
+                            @if ($showData)
                             @forelse ($content as $row)
                             <form autocomplete="off" name="formadd" method="post" action="{{ url('server/voucher/update/template') }}">
                                 @csrf
@@ -61,6 +69,7 @@
                                     Belum ada template pesan voucher. Impor tabel template dari instalasi lama untuk mengelola template di sini.
                                 </div>
                             @endforelse
+                            @endif
                         </div>
                     </div>
                 </div>

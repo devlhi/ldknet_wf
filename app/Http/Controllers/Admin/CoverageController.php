@@ -131,27 +131,32 @@ class CoverageController extends Controller
      * Peta jaringan: tampilkan titik pusat/OLT, semua ODP, dan jalur kabel fiber
      * hub->ODP (mengikuti jalan via OSRM, hasil di-cache). Basemap bisa dipilih.
      */
-    public function peta()
+    public function peta(Request $request)
     {
         $setting = CoverageMapSetting::current();
+        $showData = $request->boolean('show_data');
 
-        $odps = Odp::whereNotNull('latitude')
+        $odps = $showData ? Odp::whereNotNull('latitude')
             ->where('latitude', '!=', '')
             ->whereNotNull('longitude')
             ->where('longitude', '!=', '')
-            ->get(['id', 'nama', 'kode', 'port', 'latitude', 'longitude']);
+            ->get(['id', 'nama', 'kode', 'port', 'latitude', 'longitude']) : collect();
 
         // Cache jalur kabel per ODP (path + src_hash) untuk dibandingkan di sisi klien.
-        $cables = CoverageCable::all()->keyBy('odp_id')->map(fn ($c) => [
-            'path' => $c->path,
-            'src_hash' => $c->src_hash,
-        ]);
+        $cables = $showData ? CoverageCable::whereIn('odp_id', $odps->pluck('id'))
+            ->get(['odp_id', 'path', 'src_hash'])
+            ->keyBy('odp_id')
+            ->map(fn ($c) => [
+                'path' => $c->path,
+                'src_hash' => $c->src_hash,
+            ]) : collect();
 
         return view('admin.coverage.peta', [
             'title' => 'Peta Jaringan',
             'setting' => $setting,
             'odps' => $odps,
             'cables' => $cables,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

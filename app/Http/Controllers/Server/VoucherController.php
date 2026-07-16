@@ -41,31 +41,68 @@ class VoucherController extends Controller
         session()->now('auth_errors', ['Tabel data voucher belum ada di database ini — hubungi developer untuk mengimpor tabel logs_voucher/orders_voucher/template_message_voucher dari instalasi lama.']);
     }
 
-    public function home()
+    public function home(Request $request)
     {
         $daysInMonth = (int) date('t');
+        $showData = $request->boolean('show_data');
+        $tablesReady = $showData && $this->voucherTablesReady();
 
-        if (! $this->voucherTablesReady()) {
+        if ($showData && ! $tablesReady) {
             $this->missingTablesWarning();
+        }
 
-            return view('admin.voucher.home', [
-                'title' => 'Dashboard Voucher',
-                'month' => 0, 'vcrmonth' => 0, 'today' => 0, 'vcrtoday' => 0,
-                'yesterday' => 0, 'vcrystrdy' => 0,
-                'reportByDay' => collect(), 'daysInMonth' => $daysInMonth,
-            ] + $this->websiteData());
+        $summary = [
+            'month' => 0, 'vcrmonth' => 0,
+            'today' => 0, 'vcrtoday' => 0,
+            'yesterday' => 0, 'vcrystrdy' => 0,
+            'reportByDay' => collect(),
+        ];
+
+        if ($tablesReady) {
+            $todayStr = date('Y-m-d');
+            $yesterdayStr = date('Y-m-d', strtotime('-1 day'));
+            $monthStart = date('Y-m-01');
+            $monthEnd = date('Y-m-t');
+
+            // Optimasi: hitung semua summary voucher dalam satu query agregat.
+            $rawSums = DB::table('logs_voucher')
+                ->selectRaw('
+                    SUM(CASE WHEN DATE(date) = ? THEN harga ELSE 0 END) as sum_today,
+                    COUNT(CASE WHEN DATE(date) = ? THEN 1 END) as count_today,
+                    SUM(CASE WHEN DATE(date) = ? THEN harga ELSE 0 END) as sum_yesterday,
+                    COUNT(CASE WHEN DATE(date) = ? THEN 1 END) as count_yesterday,
+                    SUM(CASE WHEN DATE(date) BETWEEN ? AND ? THEN harga ELSE 0 END) as sum_month,
+                    COUNT(CASE WHEN DATE(date) BETWEEN ? AND ? THEN 1 END) as count_month
+                ', [
+                    $todayStr, $todayStr,
+                    $yesterdayStr, $yesterdayStr,
+                    $monthStart, $monthEnd,
+                    $monthStart, $monthEnd,
+                ])
+                ->first();
+
+            $summary = [
+                'month' => $rawSums->sum_month ?? 0,
+                'vcrmonth' => $rawSums->count_month ?? 0,
+                'today' => $rawSums->sum_today ?? 0,
+                'vcrtoday' => $rawSums->count_today ?? 0,
+                'yesterday' => $rawSums->sum_yesterday ?? 0,
+                'vcrystrdy' => $rawSums->count_yesterday ?? 0,
+                'reportByDay' => $this->reportByDayThisMonth(),
+            ];
         }
 
         return view('admin.voucher.home', [
             'title' => 'Dashboard Voucher',
-            'month' => $this->reportMonth(),
-            'vcrmonth' => $this->vcrMonth(),
-            'today' => $this->reportToday(),
-            'vcrtoday' => $this->vcrToday(),
-            'yesterday' => $this->reportYesterday(),
-            'vcrystrdy' => $this->vcrYesterday(),
-            'reportByDay' => $this->reportByDayThisMonth(),
+            'month' => $summary['month'],
+            'vcrmonth' => $summary['vcrmonth'],
+            'today' => $summary['today'],
+            'vcrtoday' => $summary['vcrtoday'],
+            'yesterday' => $summary['yesterday'],
+            'vcrystrdy' => $summary['vcrystrdy'],
+            'reportByDay' => $summary['reportByDay'],
             'daysInMonth' => $daysInMonth,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -176,16 +213,18 @@ class VoucherController extends Controller
         ] + $this->websiteData());
     }
 
-    public function templateMessage()
+    public function templateMessage(Request $request)
     {
-        $hasTable = Schema::hasTable('template_message_voucher');
-        if (! $hasTable) {
+        $showData = $request->boolean('show_data');
+        $hasTable = $showData && Schema::hasTable('template_message_voucher');
+        if ($showData && ! $hasTable) {
             $this->missingTablesWarning();
         }
 
         return view('admin.voucher.template', [
             'title' => 'Template Message',
             'content' => $hasTable ? DB::table('template_message_voucher')->get() : collect(),
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -197,42 +236,6 @@ class VoucherController extends Controller
         ]);
 
         return redirect(url('server/voucher/template/message'))->with('success', ['Data berhasil diupdate']);
-    }
-
-    private function reportMonth()
-    {
-        return DB::table('logs_voucher')
-            ->whereMonth('date', date('m'))
-            ->whereYear('date', date('Y'))
-            ->sum('harga');
-    }
-
-    private function reportToday()
-    {
-        return DB::table('logs_voucher')->whereDate('date', date('Y-m-d'))->sum('harga');
-    }
-
-    private function reportYesterday()
-    {
-        return DB::table('logs_voucher')->whereDate('date', date('Y-m-d', strtotime('-1 day')))->sum('harga');
-    }
-
-    private function vcrToday()
-    {
-        return DB::table('logs_voucher')->whereDate('date', date('Y-m-d'))->count();
-    }
-
-    private function vcrYesterday()
-    {
-        return DB::table('logs_voucher')->whereDate('date', date('Y-m-d', strtotime('-1 day')))->count();
-    }
-
-    private function vcrMonth()
-    {
-        return DB::table('logs_voucher')
-            ->whereMonth('date', date('m'))
-            ->whereYear('date', date('Y'))
-            ->count();
     }
 
     private function reportByDayThisMonth()

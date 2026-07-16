@@ -274,6 +274,7 @@
 @endsection
 
 @section('css')
+@if ($showData)
 <link rel="stylesheet" href="{{ asset('leaflet/leaflet.css') }}">
 <style>
 .nms-device-icon.nms-marker-online {
@@ -396,9 +397,11 @@
     }
 }
 </style>
+@endif
 @endsection
 
 @section('scripts')
+@if ($showData)
 <script src="{{ asset('leaflet/leaflet.js') }}"></script>
 <script>
 function escapeHtml(value) {
@@ -779,7 +782,7 @@ function drawFiberLink(link, pointA, pointB) {
 }
 
 @if ($showData)
-fetch('{{ url("admin/nms/map-data") }}')
+fetch('{{ url("admin/nms/map-data") }}?show_data=1')
     .then(r => r.json())
     .then(res => {
         res.data.forEach(d => {
@@ -816,6 +819,12 @@ function fetchStatusForMarkers(devices) {
                     map.removeLayer(markers[d.id]);
                 }
                 markers[d.id] = renderMarker(d);
+
+                var statusElement = document.getElementById('conn-status-' + d.id);
+                if (statusElement) {
+                    statusElement.className = res.status === 'up' ? 'badge bg-success' : 'badge bg-danger';
+                    statusElement.textContent = res.status === 'up' ? 'UP' : 'DOWN';
+                }
 
                 // Auto-open popup untuk device online, lalu poll untuk ambil data SFP live
                 if (res.status === 'up' && markers[d.id]) {
@@ -865,30 +874,16 @@ function fetchStatusForMarkers(devices) {
                     map.removeLayer(markers[d.id]);
                 }
                 markers[d.id] = renderMarker(d);
+
+                var statusElement = document.getElementById('conn-status-' + d.id);
+                if (statusElement) {
+                    statusElement.className = 'badge bg-danger';
+                    statusElement.textContent = 'DOWN';
+                }
             });
     });
 }
 
-var deviceIds = @json($devices->pluck('id'));
-deviceIds.forEach(function(id) {
-    var el = document.getElementById('conn-status-' + id);
-    if (!el) return;
-    fetch('{{ url("admin/nms/device/status") }}/' + id)
-        .then(r => r.json())
-        .then(res => {
-            if (res.status === 'up') {
-                el.className = 'badge bg-success';
-                el.textContent = 'UP';
-            } else {
-                el.className = 'badge bg-danger';
-                el.textContent = 'DOWN';
-            }
-        })
-        .catch(() => {
-            el.className = 'badge bg-danger';
-            el.textContent = 'DOWN';
-        });
-});
 
 function fillPortDatalist(side, ports) {
     var list = document.getElementById('port_' + side + '_list');
@@ -962,4 +957,5 @@ document.querySelectorAll('.swal-delete').forEach(function(link) {
     });
 });
 </script>
+@endif
 @endsection
