@@ -322,9 +322,8 @@
         collapsed: true
     }).addTo(map);
 
-    var mapDataUrl = '{{ url("nms/monitor/data/map") }}';
-    var statusBaseUrl = '{{ url("nms/monitor/data/status") }}/';
-    var pollBaseUrl = '{{ url("admin/nms/device/poll") }}/';
+    var mapDataUrl = @json($mapDataUrl);
+    var statusUrls = @json($statusUrls);
     var refreshInProgress = false;
 
     function setStats(total, online, offline) {
@@ -364,36 +363,9 @@
     }
 
     function pollSfpPorts(d, shouldOpenPopup) {
-        if (onlineDevices[d.id] !== 'up') return;
-
-        fetch(pollBaseUrl + d.id)
-            .then(r => r.json())
-            .then(pollRes => {
-                if (pollRes.error || !pollRes.ports) return;
-
-                var sfpPorts = [];
-                pollRes.ports.forEach(function(p) {
-                    var hasSfpData = (p.rx_power !== null && p.rx_power !== undefined && p.rx_power !== '') ||
-                                     (p.tx_power !== null && p.tx_power !== undefined && p.tx_power !== '');
-                    if (hasSfpData) {
-                        sfpPorts.push({
-                            port_name: p.name,
-                            rx_power: p.rx_power,
-                            tx_power: p.tx_power
-                        });
-                    }
-                });
-
-                d.sfp_ports = sfpPorts;
-                if (markers[d.id]) {
-                    map.removeLayer(markers[d.id]);
-                }
-                markers[d.id] = renderMarker(d);
-                if (shouldOpenPopup && markers[d.id]) {
-                    markers[d.id].openPopup();
-                }
-            })
-            .catch(() => {});
+        if (shouldOpenPopup && markers[d.id]) {
+            markers[d.id].openPopup();
+        }
     }
 
     function renderDeviceMarkers(devices, openDeviceId) {
@@ -431,7 +403,7 @@
         }
 
         return Promise.all(devices.map(function(d) {
-            return fetch(statusBaseUrl + d.id)
+            return fetch(statusUrls[d.id])
                 .then(r => r.json())
                 .then(function(res2) {
                     return { device: d, status: res2.status === 'up' ? 'up' : 'down' };

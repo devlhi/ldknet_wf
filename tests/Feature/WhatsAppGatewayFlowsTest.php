@@ -214,18 +214,18 @@ class WhatsAppGatewayFlowsTest extends TestCase
     {
         Http::fake([
             'https://graph.facebook.com/v20.0/meta-phone-id/messages' => Http::sequence()
+                ->push(['messages' => [['id' => 'wamid.broadcast-admin']]])
                 ->push(['messages' => [['id' => 'wamid.broadcast-ok']]])
                 ->push(['error' => ['message' => 'Invalid recipient']], 400),
         ]);
-        $admin = $this->createUser('admin@example.test', '628111111111', 'admin');
-        $admin->update(['status_account' => 'Inactive']);
+        $admin = $this->createUser('admin@example.test', '', 'admin');
         $this->createUser('one@example.test', '081200000001', 'user');
         $this->createUser('two@example.test', '081200000002', 'user');
 
         $this->actingAs($admin)->post('admin/cms/broadcast/whatsapp/send', [
             'message' => 'Informasi layanan',
         ])->assertRedirect('admin/cms/broadcast/whatsapp')
-            ->assertSessionHas('auth_errors', fn ($errors) => str_contains($errors[0], 'Berhasil: 1, gagal: 1'));
+            ->assertSessionHas('auth_errors', fn ($errors) => str_contains($errors[0], 'Berhasil: 2, gagal: 1'));
 
         $this->assertSame(0, WaInboxMessage::count());
     }

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class TableAuditLazyLoadingTest extends TestCase
@@ -219,7 +220,7 @@ class TableAuditLazyLoadingTest extends TestCase
         }
     }
 
-    public function test_nms_map_data_requires_activation_for_admin_but_remains_public(): void
+    public function test_nms_map_data_requires_activation_for_admin_and_signature_for_public(): void
     {
         DB::table('nms_devices')->insert([
             'nama' => 'NMS-LAZY',
@@ -236,7 +237,9 @@ class TableAuditLazyLoadingTest extends TestCase
 
         auth()->logout();
 
-        $this->getJson('/nms/monitor/data/map')
+        $this->getJson('/nms/monitor/data/map')->assertForbidden();
+
+        $this->getJson(URL::signedRoute('nms.public.map-data'))
             ->assertOk()
             ->assertJsonPath('data.0.nama', 'NMS-LAZY');
     }

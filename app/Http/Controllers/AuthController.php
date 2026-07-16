@@ -128,7 +128,7 @@ class AuthController extends Controller
             return redirect('auth/login')->with('auth_errors', ['Akun anda belum diverifikasi, mohon cek email inbox / spam anda !']);
         }
 
-        if (in_array($user->level, ['user', 'technician'], true) && ! $user->isActive()) {
+        if ($user->status_account !== null && ! $user->isActive()) {
             return redirect('auth/login')->with('auth_errors', ['Akun anda nonaktif, hubungi Admin']);
         }
 

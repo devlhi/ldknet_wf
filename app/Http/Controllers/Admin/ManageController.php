@@ -80,30 +80,54 @@ class ManageController extends Controller
 
     public function deleteUser($id)
     {
-        $account = User::where('id', $id)->get();
+        $account = User::find($id);
 
-        if ($account->isEmpty()) {
+        if (! $account) {
             return redirect('admin/manage/user');
         }
 
-        User::where('id', $id)->delete();
+        if (! $this->canManageAccount($account) || $account->is(auth()->user())) {
+            abort(403);
+        }
+
+        $account->delete();
 
         return redirect('admin/manage/user')->with('success', ['Berhasil menghapus user']);
     }
 
     public function updateUsers(Request $request, $id)
     {
-        $account = User::where('id', $id)->get();
+        $account = User::find($id);
 
-        if ($account->isEmpty()) {
+        if (! $account) {
             return redirect('admin/manage/user');
         }
 
-        User::where('id', $id)->update([
-            'password' => Hash::make((string) $request->input('password')),
+        if (! $this->canManageAccount($account)) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:8',
+        ]);
+
+        $account->update([
+            'password' => Hash::make($validated['password']),
         ]);
 
         return redirect('admin/manage/user')->with('success', ['Berhasil mengupdate password tersebut']);
+    }
+
+    private function canManageAccount(User $account): bool
+    {
+        $actor = auth()->user();
+
+        if ($actor->level === 'developer') {
+            return in_array($account->level, ['developer', 'admin', 'technician', 'finance'], true);
+        }
+
+        return $actor->level === 'admin'
+            && in_array($account->level, ['admin', 'technician', 'finance'], true);
     }
 
     public function coupon(Request $request)

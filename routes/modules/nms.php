@@ -8,8 +8,12 @@ Route::get('/nms/monitor', [NmsController::class, 'publicMonitor'])
     ->name('nms.public.monitor')
     ->middleware('signed');
 
-Route::get('/nms/monitor/data/map', [NmsController::class, 'publicMapData']);
-Route::get('/nms/monitor/data/status/{id}', [NmsController::class, 'publicDeviceStatus']);
+Route::get('/nms/monitor/data/map', [NmsController::class, 'publicMapData'])
+    ->name('nms.public.map-data')
+    ->middleware('signed');
+Route::get('/nms/monitor/data/status/{id}', [NmsController::class, 'publicDeviceStatus'])
+    ->name('nms.public.device-status')
+    ->middleware('signed');
 
 Route::middleware(['auth', 'level:admin,developer'])->prefix('admin/nms')->group(function () {
     Route::get('/', [NmsController::class, 'index']);

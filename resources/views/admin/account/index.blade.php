@@ -85,7 +85,7 @@
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="btn-close"></button>
                             </div>
                         @endif
-                        <form action="{{ url('admin/account/changepassword') }}" method="POST" enctype="multipart/form-data">
+                        <form action="{{ url($user->level === 'finance' ? 'finance/account/changepassword' : 'admin/account/changepassword') }}" method="POST">
                             @csrf
 
                             <div class="mb-3">

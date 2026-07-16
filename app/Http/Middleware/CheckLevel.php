@@ -23,9 +23,8 @@ class CheckLevel
             return redirect('auth/login');
         }
 
-        // Karyawan (technician) yang dinonaktifkan admin langsung diputus sesi
-        // pada request berikutnya, tidak menunggu logout manual.
-        if ($user->level === 'technician' && ! $user->isActive()) {
+        // Akun yang dinonaktifkan admin langsung diputus sesi pada request berikutnya.
+        if ($user->status_account !== null && ! $user->isActive()) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

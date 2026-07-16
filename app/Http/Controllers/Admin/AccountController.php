@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\Website;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -48,10 +47,12 @@ class AccountController extends Controller
             return redirect()->back()->with('auth_errors', ['Password saat ini salah']);
         }
 
-        User::where('email', $user->email)->update([
+        $user->update([
             'password' => Hash::make((string) $request->input('new_password')),
         ]);
 
-        return redirect('admin/account')->with('success', ['Password berhasil diganti']);
+        $accountUrl = $user->level === 'finance' ? 'finance/account' : 'admin/account';
+
+        return redirect($accountUrl)->with('success', ['Password berhasil diganti']);
     }
 }

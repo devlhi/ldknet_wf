@@ -12,6 +12,8 @@ use App\Services\Accounting\JournalPoster;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AccSalesInvoiceController extends Controller
 {
@@ -184,20 +186,25 @@ class AccSalesInvoiceController extends Controller
 
     public function pay(Request $request, $id)
     {
-        $invoice = AccSalesInvoice::findOrFail($id);
-
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01',
-            'account_id' => 'required|exists:acc_accounts,id',
+            'account_id' => [
+                'required',
+                Rule::exists('acc_accounts', 'id')->where(fn ($query) => $query->where('is_cash', true)),
+            ],
             'date' => 'required|date',
         ]);
 
-        $outstanding = (float) $invoice->total - (float) $invoice->paid;
-        if ($validated['amount'] > $outstanding + 0.005) {
-            return redirect()->back()->with('auth_errors', ['Nominal pembayaran melebihi sisa tagihan (Rp '.number_format($outstanding, 0, ',', '.').')']);
-        }
+        DB::transaction(function () use ($id, $validated) {
+            $invoice = AccSalesInvoice::lockForUpdate()->findOrFail($id);
+            $outstanding = (float) $invoice->total - (float) $invoice->paid;
 
-        DB::transaction(function () use ($invoice, $validated) {
+            if ($validated['amount'] > $outstanding + 0.005) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Nominal pembayaran melebihi sisa tagihan (Rp '.number_format($outstanding, 0, ',', '.').')',
+                ]);
+            }
+
             $arAccount = $this->poster->accountId('1-10100'); // Piutang Usaha
 
             $this->poster->post([
@@ -220,7 +227,7 @@ class AccSalesInvoiceController extends Controller
             ]);
         });
 
-        return redirect(url('admin/accounting/sales/detail/'.$invoice->id))->with('success', ['Pembayaran berhasil dicatat']);
+        return redirect(url('admin/accounting/sales/detail/'.$id))->with('success', ['Pembayaran berhasil dicatat']);
     }
 
     private function postSalesJournal(AccSalesInvoice $invoice): void
@@ -325,12 +332,25 @@ class AccSalesInvoiceController extends Controller
             'due_date' => 'nullable|date',
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
-            'discount' => 'nullable|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
-            'items.*.qty' => 'required|numeric|min:0',
+            'items.*.qty' => 'required|numeric|gt:0',
             'items.*.price' => 'required|numeric|min:0',
+            'discount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+                    $subtotal = collect($request->input('items', []))->sum(
+                        fn (array $item): float => (float) ($item['qty'] ?? 0) * (float) ($item['price'] ?? 0)
+                    );
+
+                    if ((float) $value > $subtotal) {
+                        $fail('Diskon tidak boleh melebihi subtotal.');
+                    }
+                },
+            ],
             'items.*.account_id' => 'nullable|exists:acc_accounts,id',
             'items.*.product_id' => 'nullable|exists:acc_products,id',
         ]);

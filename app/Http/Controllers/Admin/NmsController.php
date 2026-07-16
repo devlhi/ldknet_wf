@@ -222,6 +222,10 @@ class NmsController extends Controller
     {
         $isPublic = ! auth()->check();
 
+        if ($isPublic && ! $request->hasValidSignature()) {
+            abort(403);
+        }
+
         if (! $isPublic && ! $request->boolean('show_data')) {
             return response()->json([
                 'data' => [],
@@ -230,6 +234,7 @@ class NmsController extends Controller
         }
 
         $devices = NmsDevice::select('id', 'nama', 'tipe', 'ip', 'port', 'latitude', 'longitude', 'lokasi', 'status')
+            ->when($isPublic, fn ($query) => $query->where('status', 'active'))
             ->whereNotNull('latitude')
             ->where('latitude', '!=', '')
             ->get();
@@ -923,6 +928,10 @@ class NmsController extends Controller
             'title' => 'Network Monitor',
             'devices' => $devices,
             'links' => $links,
+            'mapDataUrl' => URL::signedRoute('nms.public.map-data'),
+            'statusUrls' => $devices->mapWithKeys(fn ($device) => [
+                $device->id => URL::signedRoute('nms.public.device-status', ['id' => $device->id]),
+            ]),
             'titletext' => $website->title ?? 'LandakNet',
             'logo' => $website->logo ?? '',
         ]);
@@ -935,6 +944,13 @@ class NmsController extends Controller
 
     public function publicDeviceStatus($id)
     {
-        return $this->checkStatus($id);
+        $device = NmsDevice::where('status', 'active')->findOrFail($id);
+        $latestStatus = NmsMetric::where('device_id', $device->id)
+            ->where('metric_type', 'ping_status')
+            ->orderByDesc('recorded_at')
+            ->orderByDesc('id')
+            ->value('value');
+
+        return response()->json(['status' => $latestStatus === 'up' ? 'up' : 'down']);
     }
 }
