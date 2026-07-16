@@ -3,7 +3,19 @@
 @section('content')
     <div class="page-content">
         <div class="container-fluid">
-            <div class="row">
+            @unless ($showData)
+                <div class="card mb-4">
+                    <div class="card-body text-center py-5">
+                        <h4 class="mb-2">Data dashboard belum dimuat</h4>
+                        <p class="text-muted mb-3">Klik tombol untuk memuat ringkasan keuangan, pelanggan, invoice, dan perangkat.</p>
+                        <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary">
+                            <i class="uil uil-eye me-1"></i> Tampilkan Data
+                        </a>
+                    </div>
+                </div>
+            @endunless
+
+            <div class="row" @unless($showData) style="display:none" @endunless>
                 <div class="col-md-6 col-xl-4">
                     <div class="card">
                         <div class="card-body">
@@ -117,13 +129,10 @@
 
                                 <div class="tab-pane" id="tab-transactions" role="tabpanel">
                                     <h4 class="card-title mb-4">Transaksi terakhir</h4>
-                                    <div id="transactions-content">
-                                        <div class="text-center py-5">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p class="text-muted mt-2">Klik tab ini untuk memuat data transaksi</p>
-                                        </div>
+                                    <div id="transactions-content" class="text-center py-4">
+                                        <button type="button" id="transactions-show-data" class="btn btn-primary">
+                                            <i class="uil uil-eye me-1"></i> Tampilkan Data
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -372,7 +381,7 @@
             const container = document.getElementById('transactions-content');
             container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="text-muted mt-2">Memuat data transaksi...</p></div>';
 
-            fetch('{{ url(request()->segment(1)."/dashboard/transactions") }}', {
+            fetch('{{ url(request()->segment(1)."/dashboard/transactions") }}?show_data=1', {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
             .then(res => res.json())
@@ -400,16 +409,18 @@
                 if (target === '#tab-customers') {
                     setTimeout(renderCustomersChart, 300);
                 }
-                if (target === '#tab-transactions') {
-                    setTimeout(loadTransactions, 300);
-                }
                 financeChart.updateOptions({}, false, true);
                 invoiceStatusChart.updateOptions({}, false, true);
             });
         });
 
+        const transactionsShowButton = document.getElementById('transactions-show-data');
+        if (transactionsShowButton) {
+            transactionsShowButton.addEventListener('click', loadTransactions);
+        }
+
         // ---------- Statistik MikroTik (async) ----------
-        const mikrotikUrl = '{{ url(request()->segment(1)."/dashboard/mikrotik") }}';
+        const mikrotikUrl = '{{ url(request()->segment(1)."/dashboard/mikrotik") }}?show_data=1';
         const mkRefreshBtn = document.getElementById('mikrotik-refresh');
         const mkPlaceholder = document.getElementById('mikrotik-placeholder');
         const mkLoading = document.getElementById('mikrotik-loading');

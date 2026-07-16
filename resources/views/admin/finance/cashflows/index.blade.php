@@ -52,7 +52,7 @@
                                         <label for="inputtahun" class="form-label">Tahun</label>
                                         <select class="form-select" aria-label="Default select example" name="tahun" id="tahun">
                                             @foreach ($tahun as $row)
-                                                <option value="{{ $row->tahun }}">{{ $row->tahun }}</option>
+                                                <option value="{{ $row->tahun }}" @selected((int) $row->tahun === 2026)>{{ $row->tahun }}</option>
                                             @endforeach
                                         </select>
                                     </div>

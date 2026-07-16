@@ -34,15 +34,16 @@ class UserController extends Controller
         return auth()->user()->idpel ?? session('idpel');
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $showData = $request->boolean('show_data');
         $idpel = $this->idpel();
 
-        $order = Order::where('idpel', $idpel)->orderByDesc('id')->first();
-        $invoice = Invoice::where('idpel', $idpel)
+        $order = $showData ? Order::where('idpel', $idpel)->orderByDesc('id')->first() : null;
+        $invoice = $showData ? Invoice::where('idpel', $idpel)
             ->where('status', 'Unpaid')
             ->orderByDesc('id')
-            ->first();
+            ->first() : null;
 
         // Cek status koneksi ke router (online/offline). Kegagalan router
         // ditelan agar dashboard tetap tampil walau router tak terjangkau.
@@ -55,6 +56,7 @@ class UserController extends Controller
             'online' => $online,
             'mode' => $order->mode ?? null,
             'traffics' => $order->pppoe_user ?? null,
+            'showData' => $showData,
         ] + $this->websiteData());
     }
 

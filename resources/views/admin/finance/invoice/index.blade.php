@@ -49,9 +49,14 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label for="inputtahun" class="form-label">Tahun</label>
+                                        @php
+                                            $defaultYear = collect($tahun)->contains(fn ($row) => (int) $row->tahun === 2026)
+                                                ? 2026
+                                                : (int) (collect($tahun)->first()->tahun ?? 2026);
+                                        @endphp
                                         <select class="form-select" aria-label="Default select example" name="tahun" id="tahun">
                                             @foreach ($tahun as $row)
-                                                <option value="{{ $row->tahun }}">{{ $row->tahun }}</option>
+                                                <option value="{{ $row->tahun }}" @selected((int) $row->tahun === $defaultYear)>{{ $row->tahun }}</option>
                                             @endforeach
                                         </select>
                                     </div>

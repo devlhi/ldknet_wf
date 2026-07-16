@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -23,6 +24,18 @@ class FinanceLazyLoadingTest extends TestCase
             $table->string('level');
             $table->integer('verify_account')->default(1);
             $table->string('status_account')->default('Active');
+        });
+        Schema::create('website', function (Blueprint $table): void {
+            $table->id();
+            $table->string('title')->nullable();
+            $table->string('logo')->nullable();
+        });
+        Schema::create('invoice', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code')->nullable();
+            $table->date('date')->nullable();
+            $table->string('status')->nullable();
+            $table->string('account')->nullable();
         });
     }
 
@@ -47,6 +60,24 @@ class FinanceLazyLoadingTest extends TestCase
             'getInvoicePaid' => 0,
             'getInvoiceUnpaid' => 0,
         ]);
+    }
+
+    public function test_invoice_data_requires_activation_and_defaults_to_year_2026(): void
+    {
+        DB::table('invoice')->insert([
+            'code' => 'INV-LAZY',
+            'date' => '2025-01-01',
+            'status' => 'Unpaid',
+            'account' => 'user',
+        ]);
+
+        $response = $this->actingAs($this->financeUser())->get('/finance/invoice');
+
+        $response->assertOk()
+            ->assertSee('Tampilkan Data')
+            ->assertSee('id="datatable-invoices"', false)
+            ->assertSee('value="2026" selected', false)
+            ->assertDontSee('INV-LAZY');
     }
 
     public function test_finance_report_filters_return_empty_payload_without_activation(): void

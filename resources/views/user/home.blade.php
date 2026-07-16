@@ -3,6 +3,19 @@
 @section('content')
 <div class="page-content">
     <div class="container-fluid">
+        @unless ($showData)
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h4 class="mb-2">Data layanan belum dimuat</h4>
+                    <p class="text-muted mb-3">Klik tombol untuk memuat tagihan, layanan, status koneksi, dan monitor trafik.</p>
+                    <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary">
+                        <i class="uil uil-eye me-1"></i> Tampilkan Data
+                    </a>
+                </div>
+            </div>
+        @endunless
+
+        @if ($showData)
         <div class="row">
             <div class="col-md-6">
                 @if ($invoice)
@@ -69,6 +82,7 @@
                 </div>
             </div>
         @endif
+        @endif
     </div>
 </div>
 @endsection
@@ -83,7 +97,7 @@
 
             function requestData() {
                 $.ajax({
-                    url: '{{ url('router/traffic/pppoe/' . $traffics) }}',
+                    url: '{{ url('router/traffic/pppoe/' . $traffics) }}?show_data=1',
                     dataType: "json",
                     success: function(data) {
                         var midata = (typeof data === 'string') ? JSON.parse(data) : data;

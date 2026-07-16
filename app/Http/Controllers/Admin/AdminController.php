@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Report;
 use App\Models\Router;
 use App\Models\Website;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
@@ -23,8 +24,32 @@ class AdminController extends Controller
         ];
     }
 
-    public function index()
+    public function index(Request $request)
     {
+        $showData = $request->boolean('show_data');
+
+        if (! $showData) {
+            return view('admin.home', [
+                'title' => 'Dashboard',
+                'credit' => 0,
+                'debit' => 0,
+                'totalpsb' => 0,
+                'tunggakanJumlah' => 0,
+                'tunggakanRupiah' => 0,
+                'totalIsolir' => 0,
+                'chartData' => [
+                    'labels' => collect(range(1, 12))->map(fn ($month) => bulan($month))->values(),
+                    'income' => collect(array_fill(0, 12, 0)),
+                    'expense' => collect(array_fill(0, 12, 0)),
+                    'newCustomers' => collect(array_fill(0, 12, 0)),
+                    'invoiceStatusLabels' => ['Paid', 'Unpaid', 'Pending', 'Success', 'Error'],
+                    'invoiceStatus' => collect(array_fill(0, 5, 0)),
+                ],
+                'routers' => collect(),
+                'showData' => false,
+            ] + $this->websiteData());
+        }
+
         $credit = Invoice::whereMonth('expdate', now()->month)
             ->whereYear('expdate', now()->year)
             ->where('status', 'Paid')
@@ -102,11 +127,16 @@ class AdminController extends Controller
             'totalIsolir' => $totalIsolir,
             'chartData' => $chartData,
             'routers' => Router::all(['id', 'nama', 'ip']),
+            'showData' => true,
         ] + $this->websiteData());
     }
 
-    public function transactions()
+    public function transactions(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json(['data' => []]);
+        }
+
         $gettransaction = Invoice::where('status', 'Paid')
             ->where('account', 'user')
             ->orderByDesc('last_update')
@@ -132,8 +162,15 @@ class AdminController extends Controller
      * Dipanggil async (AJAX) supaya koneksi RouterOS yang lambat tidak
      * memblokir load halaman dashboard.
      */
-    public function mikrotikStats()
+    public function mikrotikStats(Request $request)
     {
+        if (! $request->boolean('show_data')) {
+            return response()->json([
+                'data' => [],
+                'summary' => ['online' => 0, 'total' => 0, 'offline' => 0, 'pppActive' => 0, 'hotspotActive' => 0],
+            ]);
+        }
+
         $routers = Router::all();
 
         $stats = $routers->map(function ($router) {

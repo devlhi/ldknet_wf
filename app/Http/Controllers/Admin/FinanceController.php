@@ -226,13 +226,19 @@ class FinanceController extends Controller
 
     public function reportCashFlows()
     {
+        $years = Report::selectRaw('YEAR(date) AS tahun')
+            ->groupByRaw('YEAR(date)')
+            ->orderByRaw('YEAR(date) ASC')
+            ->get();
+
+        if (! $years->contains(fn ($row) => (int) $row->tahun === 2026)) {
+            $years->push((object) ['tahun' => 2026]);
+        }
+
         return view('admin.finance.report.cash-flows', [
             'title' => 'Laporan',
             'katkas' => Katkas::all(),
-            'tahun' => Report::selectRaw('YEAR(date) AS tahun')
-                ->groupByRaw('YEAR(date)')
-                ->orderByRaw('YEAR(date) ASC')
-                ->get(),
+            'tahun' => $years->sortBy('tahun')->values(),
         ] + $this->websiteData());
     }
 
@@ -294,15 +300,21 @@ class FinanceController extends Controller
 
     public function reportNewCustomers()
     {
+        // Tabel psb legacy praktis tidak terisi; pelanggan baru yang benar
+        // berada di orders.date (tanggal pelanggan dibuat/aktif).
+        $years = Order::selectRaw('YEAR(date) AS tahun')
+            ->whereRaw('YEAR(date) > 0')
+            ->groupByRaw('YEAR(date)')
+            ->orderByRaw('YEAR(date) ASC')
+            ->get();
+
+        if (! $years->contains(fn ($row) => (int) $row->tahun === 2026)) {
+            $years->push((object) ['tahun' => 2026]);
+        }
+
         return view('admin.finance.report.new_customers', [
             'title' => 'Laporan',
-            // Tabel psb legacy praktis tidak terisi; pelanggan baru yang benar
-            // berada di orders.date (tanggal pelanggan dibuat/aktif).
-            'tahun' => Order::selectRaw('YEAR(date) AS tahun')
-                ->whereRaw('YEAR(date) > 0')
-                ->groupByRaw('YEAR(date)')
-                ->orderByRaw('YEAR(date) ASC')
-                ->get(),
+            'tahun' => $years->sortBy('tahun')->values(),
         ] + $this->websiteData());
     }
 
@@ -1295,11 +1307,21 @@ class FinanceController extends Controller
     {
         // Saring tahun 0 (invoice legacy dengan date '0000-00-00' -> YEAR()=0)
         // supaya tidak muncul opsi "Tahun 0" di dropdown filter.
-        return Invoice::selectRaw('YEAR(date) AS tahun')
-            ->whereRaw('YEAR(date) > 0')
-            ->groupByRaw('YEAR(date)')
-            ->orderByRaw('YEAR(date) ASC')
+        $yearExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "CAST(strftime('%Y', date) AS INTEGER)"
+            : 'YEAR(date)';
+
+        $years = Invoice::selectRaw($yearExpression.' AS tahun')
+            ->whereRaw($yearExpression.' > 0')
+            ->groupByRaw($yearExpression)
+            ->orderByRaw($yearExpression.' ASC')
             ->get();
+
+        if (! $years->contains(fn ($row) => (int) $row->tahun === 2026)) {
+            $years->push((object) ['tahun' => 2026]);
+        }
+
+        return $years->sortBy('tahun')->values();
     }
 
     private function generateInvoiceCode()
