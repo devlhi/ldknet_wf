@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\GangguanReport;
+use App\Models\GangguanSetting;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -44,6 +46,39 @@ class GangguanBulkCloseTest extends TestCase
             $table->dateTime('responded_at')->nullable();
             $table->boolean('auto_reply_sent')->default(false);
             $table->timestamps();
+        });
+        Schema::create('odp', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->integer('port')->default(8);
+            $table->string('latitude')->nullable();
+            $table->string('longitude')->nullable();
+        });
+        Schema::create('orders', function (Blueprint $table) {
+            $table->id();
+            $table->string('idpel')->nullable();
+            $table->string('nama')->nullable();
+            $table->string('nomor')->nullable();
+            $table->string('status')->nullable();
+            $table->string('nama_odp')->nullable();
+        });
+        Schema::create('gangguan_setting', function (Blueprint $table) {
+            $table->id();
+            $table->boolean('auto_reply_enabled')->default(true);
+            $table->text('auto_reply_text')->nullable();
+            $table->integer('sla_response_hours')->default(3);
+            $table->integer('massal_threshold')->default(3);
+            $table->integer('massal_window_hours')->default(6);
+            $table->text('massal_broadcast_text')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('whatsapp_setting', function (Blueprint $table) {
+            $table->id();
+            $table->string('type')->nullable();
+            $table->string('mode')->nullable();
+            $table->string('api_url')->nullable();
+            $table->string('api_key')->nullable();
+            $table->string('sender')->nullable();
         });
 
         Carbon::setTestNow(Carbon::parse('2026-07-13 10:00:00'));
@@ -176,6 +211,46 @@ class GangguanBulkCloseTest extends TestCase
         $response->assertRedirect(url('user'));
         $this->assertSame('baru', $report->fresh()->status);
         $this->assertNull($report->fresh()->resolved_at);
+    }
+
+    public function test_broadcast_rejects_unknown_and_ambiguous_odp_ids(): void
+    {
+        $admin = $this->createUser('admin');
+        GangguanSetting::create(array_merge(GangguanSetting::defaults(), [
+            'massal_broadcast_text' => 'Gangguan {odp}{nama}',
+        ]));
+        $firstId = DB::table('odp')->insertGetId(['nama' => 'Gontang001(Mayam Heri)']);
+        DB::table('odp')->insert(['nama' => 'Gontang001(Mayam Anton)']);
+
+        $this->actingAs($admin)->post('admin/gangguan/broadcast-odp', [
+            'odp_id' => 999,
+        ])->assertSessionHas('auth_errors');
+        $this->actingAs($admin)->post('admin/gangguan/broadcast-odp', [
+            'odp_id' => $firstId,
+        ])->assertSessionHas('auth_errors');
+    }
+
+    public function test_broadcast_accepts_unique_legacy_assignment_and_ignores_other_odps(): void
+    {
+        $admin = $this->createUser('admin');
+        GangguanSetting::create(array_merge(GangguanSetting::defaults(), [
+            'massal_broadcast_text' => 'Gangguan {odp}{nama}',
+        ]));
+        $odpId = DB::table('odp')->insertGetId(['nama' => 'Aping001(P.Hengin)']);
+        DB::table('odp')->insert(['nama' => 'ODP Lain']);
+        DB::table('orders')->insert([
+            ['nama' => 'Target', 'nomor' => '628111111112', 'status' => 'Active', 'nama_odp' => ' APING001(P.HENG '],
+            ['nama' => 'Inactive', 'nomor' => '628111111113', 'status' => 'Inactive', 'nama_odp' => 'aping001(p.heng'],
+            ['nama' => 'Other', 'nomor' => '628111111114', 'status' => 'Active', 'nama_odp' => 'ODP Lain'],
+        ]);
+
+        $response = $this->actingAs($admin)->post('admin/gangguan/broadcast-odp', [
+            'odp_id' => $odpId,
+        ]);
+
+        $response->assertSessionHas('success', [
+            'Broadcast gangguan massal ODP Aping001(P.Hengin) terkirim ke 1 pelanggan.',
+        ]);
     }
 
     private function createUser(string $level): User

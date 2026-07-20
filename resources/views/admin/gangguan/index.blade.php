@@ -112,7 +112,7 @@
                         <div class="modal-content">
                             <form method="POST" action="{{ url('admin/gangguan/broadcast-odp') }}">
                                 @csrf
-                                <input type="hidden" name="nama_odp" value="{{ $m->nama_odp }}">
+                                <input type="hidden" name="odp_id" value="{{ $m->odp_id }}">
                                 <div class="modal-header">
                                     <h6 class="modal-title">Kirim info gangguan — {{ $m->nama_odp }}</h6>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

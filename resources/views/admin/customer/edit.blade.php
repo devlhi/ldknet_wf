@@ -211,12 +211,12 @@
                                             <input type="hidden" value="{{ $row->idpel }}" name="idpel">
                                             <div class="mb-3">
                                                 <label class="form-label">Nama ODP</label>
-                                                <select class="form-control select2" id="nama-odp-select" name="nama_odp">
-                                                    @if ($row->nama_odp == null)
+                                                <select class="form-control select2" id="nama-odp-select" name="odp_id">
+                                                    @if ($selectedOdpId === null)
                                                         <option value="" disabled selected>Pilih Data ODP</option>
                                                     @endif
                                                     @foreach ($getodp as $dataodp)
-                                                        <option value="{{ $dataodp->nama }}" @selected($row->nama_odp === $dataodp->nama)>{{ $dataodp->nama }}</option>
+                                                        <option value="{{ $dataodp->id }}" @selected($selectedOdpId === $dataodp->id)>{{ $dataodp->nama }}</option>
                                                     @endforeach
                                                 </select>
                                             </div>
@@ -258,8 +258,8 @@
             var currentIdpel = @json($row->idpel);
             var currentPort = String(parseInt(@json((string) $row->port_odp), 10) || '');
 
-            function updatePortOptions(namaODP) {
-                if (namaODP === "" || namaODP === null) {
+            function updatePortOptions(odpId) {
+                if (odpId === "" || odpId === null) {
                     // Nonaktifkan dropdown port jika nama ODP belum dipilih
                     $("#port-odp-select").prop("disabled", true);
                     $("#port-odp-select").empty().append($('<option>', {
@@ -274,7 +274,7 @@
                         url: '{{ url('/get-ports') }}',
                         method: 'POST',
                         data: {
-                            namaODP: namaODP,
+                            odp_id: odpId,
                             _token: '{{ csrf_token() }}'
                         },
                         dataType: 'json',
@@ -287,7 +287,7 @@
                                 method: 'GET',
                                 dataType: 'json',
                                 success: function(responseUsedPorts) {
-                                    var usedPortsData = responseUsedPorts.data[namaODP] || [];
+                                    var usedPortsData = responseUsedPorts.data[String(odpId)] || [];
 
                                     $("#port-odp-select").empty();
 
@@ -328,13 +328,13 @@
             }
 
             $("#nama-odp-select").on("change", function() {
-                var selectedNamaODP = $(this).val();
-                updatePortOptions(selectedNamaODP);
+                var selectedOdpId = $(this).val();
+                updatePortOptions(selectedOdpId);
             });
 
             // Inisialisasi saat halaman dimuat
-            var defaultSelectedNamaODP = $("#nama-odp-select").val();
-            updatePortOptions(defaultSelectedNamaODP);
+            var defaultSelectedOdpId = $("#nama-odp-select").val();
+            updatePortOptions(defaultSelectedOdpId);
         });
     </script>
 @endsection

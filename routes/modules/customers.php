@@ -13,6 +13,7 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::get('customer/export', [CustomerController::class, 'exportCSV']);
     Route::get('customer/exportexcel', [CustomerController::class, 'exportExcel']);
     Route::get('customer/detail/{any}', [CustomerController::class, 'customer_detail']);
+    Route::get('customer/connection/{any}', [CustomerController::class, 'connectionStatus']);
     Route::get('customer/edit/{any}', [CustomerController::class, 'customer_edit']);
     Route::get('customers/edit/{any}', [CustomerController::class, 'customer_edit']);
     Route::post('customer/update', [CustomerController::class, 'customerUpdateData']);

@@ -9,9 +9,16 @@
         <div class="container-fluid">
         <div class="row">
                 <div class="col-12">
-                    <div class="page-title-box d-flex align-items-center justify-content-between">
+                    <div class="page-title-box d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <h4 class="mb-0">Coverage ODP</h4>
-                        <button type="button" class="btn btn-success" id="btnAddOdp"><i class="mdi mdi-plus me-1"></i> Tambah ODP</button>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a href="{{ url('admin/coverage/get/coordinat') }}" class="btn btn-light"><i class="mdi mdi-crosshairs-gps me-1"></i> Ambil Koordinat</a>
+                            @if ($odcs->isNotEmpty())
+                                <button type="button" class="btn btn-success" id="btnAddOdp"><i class="mdi mdi-plus me-1"></i> Tambah ODP</button>
+                            @else
+                                <a href="{{ url('admin/coverage/odc') }}" class="btn btn-warning"><i class="mdi mdi-source-branch me-1"></i> Tambah ODC dahulu</a>
+                            @endif
+                        </div>
                     </div>
                 </div>
             </div>
@@ -53,6 +60,7 @@
                                             <th>No</th>
                                             <th>Nama ODP</th>
                                             <th>Kode</th>
+                                            <th>ODC</th>
                                             <th>Total Port</th>
                                             <th>Terpakai</th>
                                             <th>Sisa Port</th>
@@ -69,6 +77,13 @@
                                                 <td>{{ $i++ }}</td>
                                                 <td>{{ $row['nama'] }}</td>
                                                 <td>{{ $row['kode'] ?: '-' }}</td>
+                                                <td>
+                                                    @if ($row['odc_name'])
+                                                        <span class="badge bg-info">{{ $row['odc_name'] }}</span>
+                                                    @else
+                                                        <span class="badge bg-warning text-dark">Belum di-assign</span>
+                                                    @endif
+                                                </td>
                                                 <td>{{ $row['total_port'] }}</td>
                                                 <td>{{ $row['used_ports'] }}</td>
                                                 <td>{{ count($row['available_ports']) ? implode(', ', $row['available_ports']) : '—' }}</td>
@@ -92,6 +107,7 @@
                                                         data-id="{{ $row['id'] }}"
                                                         data-nama="{{ $row['nama'] }}"
                                                         data-kode="{{ $row['kode'] }}"
+                                                        data-odc-id="{{ $row['odc_id'] }}"
                                                         data-port="{{ $row['total_port'] }}"
                                                         data-lat="{{ $row['latitude'] }}"
                                                         data-lng="{{ $row['longitude'] }}"><i class="mdi mdi-pencil"></i></button>
@@ -142,6 +158,18 @@
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Kode (opsional)</label>
                                 <input type="text" name="kode" id="odpKode" class="form-control" placeholder="Kode ODP">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">ODC</label>
+                                <select name="odc_id" id="odpOdc" class="form-select" required>
+                                    <option value="">Pilih ODC</option>
+                                    @foreach ($odcs as $odc)
+                                        <option value="{{ $odc->id }}">{{ $odc->name }}{{ $odc->code ? ' ('.$odc->code.')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                                @if ($odcs->isEmpty())
+                                    <small class="text-danger">Tambahkan ODC terlebih dahulu pada menu Data ODC.</small>
+                                @endif
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Jumlah Port</label>
@@ -226,6 +254,7 @@
     var form = document.getElementById('odpForm');
     var fNama = document.getElementById('odpNama');
     var fKode = document.getElementById('odpKode');
+    var fOdc = document.getElementById('odpOdc');
     var fPort = document.getElementById('odpPort');
     var fLat = document.getElementById('odpLat');
     var fLng = document.getElementById('odpLng');
@@ -258,6 +287,7 @@
             form.action = updateBase + '/' + d.id;
             fNama.value = d.nama || '';
             fKode.value = d.kode || '';
+            fOdc.value = d.odcId || '';
             fPort.value = d.port || '';
             fLat.value = d.lat || '';
             fLng.value = d.lng || '';
@@ -279,14 +309,15 @@
         if (!isNaN(lat) && !isNaN(lng)) setPoint(lat, lng, true);
     });
 
-    document.getElementById('btnAddOdp').addEventListener('click', function () { openModal('add'); });
+    var addButton = document.getElementById('btnAddOdp');
+    if (addButton) addButton.addEventListener('click', function () { openModal('add'); });
     // Delegasi: tetap jalan walau DataTables memaginasi/menyusun ulang baris.
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('.btn-edit-odp');
         if (!btn) return;
         openModal('edit', {
             id: btn.dataset.id, nama: btn.dataset.nama, kode: btn.dataset.kode,
-            port: btn.dataset.port, lat: btn.dataset.lat, lng: btn.dataset.lng
+            odcId: btn.dataset.odcId, port: btn.dataset.port, lat: btn.dataset.lat, lng: btn.dataset.lng
         });
     });
 

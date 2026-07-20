@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\GangguanReport;
 use App\Models\GangguanSetting;
+use App\Models\Odp;
 use App\Models\Order;
 use App\Models\Website;
+use App\Support\OdpAssignment;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -391,10 +393,14 @@ class GangguanController extends Controller
      */
     public function broadcastOdp(Request $request)
     {
-        $namaOdp = trim((string) $request->input('nama_odp'));
-        if ($namaOdp === '') {
-            return redirect('admin/gangguan')->with('auth_errors', ['ODP tidak valid']);
+        $odps = Odp::query()->get();
+        $odp = $request->filled('odp_id')
+            ? $odps->firstWhere('id', (int) $request->input('odp_id'))
+            : OdpAssignment::resolve($odps, $request->input('nama_odp'));
+        if (! $odp || ! OdpAssignment::isStoredNameUnique($odps, $odp)) {
+            return redirect('admin/gangguan')->with('auth_errors', ['ODP tidak valid atau relasi ODP ambigu']);
         }
+        $namaOdp = $odp->nama;
 
         $setting = GangguanSetting::current();
         $template = trim((string) $setting->massal_broadcast_text);
@@ -402,7 +408,8 @@ class GangguanController extends Controller
             return redirect('admin/gangguan')->with('auth_errors', ['Teks broadcast gangguan massal belum diatur. Isi di menu Pengaturan.']);
         }
 
-        $pelanggan = Order::where('nama_odp', $namaOdp)
+        $pelanggan = Order::query()
+            ->whereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::key($odp->nama)])
             ->where('status', 'Active')
             ->whereNotNull('nomor')
             ->where('nomor', '!=', '')

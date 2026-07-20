@@ -14,6 +14,7 @@ use App\Models\SmtpSetting;
 use App\Models\TemplateMessage;
 use App\Models\User;
 use App\Models\Website;
+use App\Support\OdpAssignment;
 use App\Support\WhatsAppNotifier;
 use Brevo\Client\Api\TransactionalEmailsApi;
 use Brevo\Client\Configuration;
@@ -80,9 +81,7 @@ class CustomerController extends Controller
             'orders.id_router', // 4: Server
             'orders.mode',      // 5: Mode
         ];
-        if ($isDeveloper) {
-            $orderable[] = 'orders.pppoe_user'; // 6: User PPPOE (khusus developer)
-        }
+        $orderable[] = 'orders.pppoe_user'; // 6: User PPPOE
         $orderable[] = 'orders.expdate'; // Masa Aktif
         $orderable[] = 'orders.status';  // Status
         $orderable[] = 'orders.alamat';  // Alamat
@@ -136,6 +135,7 @@ class CustomerController extends Controller
         }
 
         $rows = $query->get();
+        $odpByAssignment = OdpAssignment::uniqueByStoredName(Odp::query()->get(['id', 'nama']));
 
         $out = [];
         foreach ($rows as $i => $row) {
@@ -157,8 +157,9 @@ class CustomerController extends Controller
                 ? '<span class="text-danger fw-semibold">'.$masaAktif.' <i class="uil uil-exclamation-triangle"></i></span>'
                 : $masaAktif;
 
-            $namaOdp = $row->nama_odp != null
-                ? '<span class="badge bg-info">'.e($row->nama_odp).'</span>'
+            $resolvedOdp = $odpByAssignment->get(OdpAssignment::key($row->nama_odp));
+            $namaOdp = trim((string) $row->nama_odp) !== ''
+                ? '<span class="badge bg-info">'.e($resolvedOdp?->nama ?? $row->nama_odp).'</span>'
                 : '<span class="badge bg-secondary">Belum diatur</span>';
             $portOdp = $row->port_odp != null
                 ? '<span class="badge bg-info">Port '.e($row->port_odp).'</span>'
@@ -166,6 +167,10 @@ class CustomerController extends Controller
 
             $namaEsc = e($row->nama);
             $namaAttr = htmlspecialchars($row->nama, ENT_QUOTES);
+            $connectionUrl = url('admin/customer/connection/'.$row->id);
+            $pppoeCell = trim((string) $row->pppoe_user) !== ''
+                ? e($row->pppoe_user).' <button type="button" class="btn btn-xs btn-outline-info ms-1 btn-check-connection" data-url="'.$connectionUrl.'"><i class="mdi mdi-lan-connect"></i> Cek Koneksi</button>'
+                : '<span class="text-muted">Belum sinkron</span> <button type="button" class="btn btn-xs btn-outline-secondary ms-1" disabled>Cek Koneksi</button>';
 
             $gantipassUrl = $row->customer_id ? url('admin/customer/gantipass/'.$row->customer_id) : null;
             $detailUrl = url('admin/customer/detail/'.$row->idpel);
@@ -202,9 +207,7 @@ class CustomerController extends Controller
                 e($namarouter),
                 e($row->mode),
             ];
-            if ($isDeveloper) {
-                $rowData[] = e($row->pppoe_user);
-            }
+            $rowData[] = $pppoeCell;
             $rowData[] = $masaAktifCell;
             $rowData[] = '<span class="badge bg-'.$label.'">'.e($row->status).'</span>';
             $rowData[] = e($row->alamat);
@@ -508,6 +511,52 @@ class CustomerController extends Controller
         ] + $this->websiteData());
     }
 
+    public function connectionStatus($id)
+    {
+        $order = Order::query()->find($id);
+        if (! $order) {
+            return response()->json(['online' => false, 'message' => 'Pelanggan tidak ditemukan'], 404);
+        }
+        if (empty($order->id_router) || empty($order->pppoe_user)) {
+            return response()->json(['online' => false, 'message' => 'Pelanggan offline']);
+        }
+
+        $router = Router::query()->find($order->id_router);
+        if (! $router) {
+            return response()->json(['online' => false, 'message' => 'Pelanggan offline']);
+        }
+
+        $ros = new RouterosAPI;
+        $ros->timeout = 3;
+        $ros->attempts = 1;
+
+        try {
+            if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
+                return response()->json(['online' => false, 'message' => 'Router tidak merespons']);
+            }
+
+            $active = match ($order->mode) {
+                'pppoe' => $ros->comm('/ppp/active/getall', ['.proplist' => '.id', '?name' => $order->pppoe_user]),
+                'hotspot' => $ros->comm('/ip/hotspot/active/print', ['?user' => $order->pppoe_user]),
+                default => [],
+            };
+            $ros->disconnect();
+            $online = ! empty($active[0]['.id']) || ! empty($active[0]);
+
+            return response()->json([
+                'online' => $online,
+                'message' => $online ? 'Pelanggan online' : 'Pelanggan offline',
+            ]);
+        } catch (\Throwable $e) {
+            try {
+                $ros->disconnect();
+            } catch (\Throwable) {
+            }
+
+            return response()->json(['online' => false, 'message' => 'Gagal menghubungi router']);
+        }
+    }
+
     // GET admin/customer/edit/{id} (CI4: AdminController::customer_edit)
     public function customer_edit($id = null)
     {
@@ -549,6 +598,9 @@ class CustomerController extends Controller
             return redirect('admin/customers');
         }
 
+        $getodp = Odp::query()->orderBy('nama')->get();
+        $selectedOdp = OdpAssignment::resolve($getodp, $dataCustomers->nama_odp);
+
         return view('admin.customer.edit', [
             'title' => 'Detail Pelanggan',
             'customer' => Order::where('idpel', $id)->first(),
@@ -556,7 +608,8 @@ class CustomerController extends Controller
             'getservice' => Service::where('status', 'Tersedia')->orderBy('id', 'ASC')->get(),
             'pppoeuser' => $pppsecret,
             'getpool' => Pool::all(),
-            'getodp' => Odp::all(),
+            'getodp' => $getodp,
+            'selectedOdpId' => $selectedOdp?->id,
         ] + $this->websiteData());
     }
 
@@ -819,7 +872,6 @@ class CustomerController extends Controller
     public function customerUpdateODP(Request $request)
     {
         $idpel = trim((string) $request->input('idpel'));
-        $namaOdp = trim((string) $request->input('nama_odp'));
         $portOdp = (int) $request->input('port_odp');
 
         $customer = Order::where('idpel', $idpel)->first();
@@ -827,11 +879,18 @@ class CustomerController extends Controller
             return redirect('admin/customers')->with('auth_errors', ['Pelanggan tidak ditemukan']);
         }
 
-        $odp = Odp::where('nama', $namaOdp)->first();
+        $odps = Odp::query()->get();
+        $odp = $request->filled('odp_id')
+            ? $odps->firstWhere('id', (int) $request->input('odp_id'))
+            : OdpAssignment::resolve($odps, $request->input('nama_odp'));
         if (! $odp) {
-            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Data ODP tidak ditemukan']);
+            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Data ODP tidak ditemukan atau nama ODP ambigu']);
+        }
+        if (! OdpAssignment::isStoredNameUnique($odps, $odp)) {
+            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Nama ODP memiliki 15 karakter awal yang sama dengan ODP lain. Ubah nama ODP agar alokasi pelanggan tidak ambigu.']);
         }
 
+        $namaOdp = OdpAssignment::storedName($odp->nama);
         if ($portOdp < 1 || $portOdp > (int) $odp->port) {
             return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Port ODP di luar kapasitas']);
         }
@@ -842,7 +901,8 @@ class CustomerController extends Controller
                 return false;
             }
 
-            $portDipakai = Order::where('nama_odp', $namaOdp)
+            $portDipakai = Order::query()
+                ->whereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::key($namaOdp)])
                 ->where('idpel', '!=', $idpel)
                 ->lockForUpdate()
                 ->get(['port_odp'])
@@ -870,9 +930,12 @@ class CustomerController extends Controller
     // POST /get-ports (CI4: AdminController::getPorts)
     public function getPorts(Request $request)
     {
-        $odp = Odp::where('nama', $request->input('namaODP'))->first();
+        $odps = Odp::query()->get();
+        $odp = $request->filled('odp_id')
+            ? $odps->firstWhere('id', (int) $request->input('odp_id'))
+            : OdpAssignment::resolve($odps, $request->input('namaODP'));
 
-        if ($odp) {
+        if ($odp && OdpAssignment::isStoredNameUnique($odps, $odp)) {
             return response()->json([
                 'status' => 'success',
                 'jumlah_port' => $odp->port,
@@ -889,26 +952,27 @@ class CustomerController extends Controller
     public function getUsedPorts()
     {
         $usedPorts = [];
+        $odpByAssignment = OdpAssignment::uniqueByStoredName(Odp::query()->get(['id', 'nama']));
 
         foreach (Order::whereNotNull('nama_odp')
             ->where('nama_odp', '!=', '')
             ->whereNotNull('port_odp')
             ->where('port_odp', '!=', '')
             ->get(['nama_odp', 'port_odp', 'idpel']) as $order) {
-            $namaODP = $order->nama_odp;
+            $odp = $odpByAssignment->get(OdpAssignment::key($order->nama_odp));
             $portODP = (string) $order->port_odp;
 
-            if (! ctype_digit(trim($portODP)) || (int) $portODP < 1) {
+            if (! $odp || ! ctype_digit(trim($portODP)) || (int) $portODP < 1) {
                 continue;
             }
 
             $normalizedPort = (string) (int) $portODP;
 
-            if (! isset($usedPorts[$namaODP])) {
-                $usedPorts[$namaODP] = [];
+            if (! isset($usedPorts[$odp->id])) {
+                $usedPorts[$odp->id] = [];
             }
 
-            $usedPorts[$namaODP][$normalizedPort] = [
+            $usedPorts[$odp->id][$normalizedPort] = [
                 'idpel' => $order->idpel,
             ];
         }
@@ -925,6 +989,10 @@ class CustomerController extends Controller
     public function export()
     {
         $customers = Order::all();
+        $odpByAssignment = OdpAssignment::uniqueByStoredName(Odp::query()->get(['id', 'nama']));
+        $customers->each(function (Order $customer) use ($odpByAssignment) {
+            $customer->nama_odp = $odpByAssignment->get(OdpAssignment::key($customer->nama_odp))?->nama ?? $customer->nama_odp;
+        });
 
         $spreadsheet = new Spreadsheet;
         $worksheet = $spreadsheet->getActiveSheet();

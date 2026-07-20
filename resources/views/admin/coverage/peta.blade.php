@@ -7,6 +7,12 @@
         .fiber-flow { animation: fiberdash 1.1s linear infinite; }
         @keyframes fiberdash { to { stroke-dashoffset: -24; } }
         .hub-pin { font-size: 24px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); text-align: center; }
+        .network-card-icon, .pole-icon { background: transparent; border: 0; }
+        .network-card { position: relative; min-width: 90px; padding: 7px 8px 7px 34px; border: 2px solid #fff; border-radius: 9px; color: #fff; font-size: 9px; font-weight: 700; line-height: 1.15; white-space: nowrap; box-shadow: 0 4px 12px rgba(15,23,42,.3); }
+        .network-card.odc { background: #0f766e; }
+        .network-card.odp { background: #4f46e5; }
+        .network-card svg { position: absolute; left: 7px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); fill: none; stroke: currentColor; stroke-width: 1.8; }
+        .pole-svg { width: 16px; height: 28px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
         #map { height: 620px; border-radius: 6px; }
         .map-hint { position: absolute; z-index: 500; top: 10px; left: 50px; background: rgba(255,255,255,.92); padding: 4px 10px; border-radius: 4px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
     </style>
@@ -20,16 +26,20 @@
                     <div class="page-title-box d-flex align-items-center justify-content-between flex-wrap">
                         <div>
                             <h4 class="mb-0">Peta Jaringan</h4>
-                            <p class="text-muted mb-0">Titik pusat/OLT, sebaran ODP, dan jalur kabel fiber mengikuti jalan (beranimasi).</p>
+                            <p class="text-muted mb-0">Titik pusat/OLT, ODC, ODP, tiang visual, dan jalur kabel fiber beranimasi.</p>
                         </div>
-                        <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="btn btn-light"><i class="mdi mdi-cog me-1"></i> Pengaturan Peta</a>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a href="{{ url('admin/coverage/odc') }}" class="btn btn-light"><i class="mdi mdi-access-point-network me-1"></i> Data ODC</a>
+                            <a href="{{ url('admin/coverage/area') }}" class="btn btn-light"><i class="mdi mdi-map-marker-radius me-1"></i> Data Area</a>
+                            <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="btn btn-light"><i class="mdi mdi-cog me-1"></i> Pengaturan Peta</a>
+                        </div>
                     </div>
                 </div>
             </div>
 
             @if (! is_numeric($setting->hub_lat) || ! is_numeric($setting->hub_lng))
                 <div class="alert alert-warning">
-                    <i class="mdi mdi-information-outline me-1"></i> Titik pusat/OLT belum diatur, jadi jalur kabel belum bisa digambar.
+                    <i class="mdi mdi-information-outline me-1"></i> Titik pusat/OLT belum diatur. Jalur ODC ke ODP tetap dapat ditampilkan.
                     <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="alert-link">Atur titik pusat di sini</a>.
                 </div>
             @endif
@@ -37,8 +47,10 @@
                 <div class="card-body">
                     <div class="d-flex flex-wrap gap-3 mb-2 small text-muted">
                         <span><i class="mdi mdi-access-point-network text-danger"></i> Titik Pusat / OLT</span>
-                        <span><i class="mdi mdi-circle text-primary"></i> ODP</span>
-                        <span><i class="mdi mdi-minus" style="color:#f1b44c"></i> Jalur kabel fiber (mengikuti jalan)</span>
+                        <span class="text-success">ODC</span>
+                        <span class="text-primary">ODP</span>
+                        <span class="text-warning">Tiang</span>
+                        <span><i class="mdi mdi-minus" style="color:#f1b44c"></i> Jalur ODC ke ODP</span>
                         <span id="routeStatus" class="text-info"></span>
                     </div>
                     <div class="position-relative">
@@ -56,6 +68,8 @@
 (function () {
     var setting = @json($setting);
     var odps = @json($odps);
+    var odcs = @json($odcs);
+    var odcAssignments = @json($odcAssignments);
     var cables = @json($cables);
     var storeUrl = "{{ url('admin/coverage/peta/cable') }}";
     var csrf = "{{ csrf_token() }}";
@@ -94,18 +108,34 @@
         L.marker([hub.lat, hub.lng], { icon: hubIcon, zIndexOffset: 1000 }).bindPopup(hubBox).addTo(map);
     }
 
-    // ---------- ODP + jalur kabel ----------
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]; });
+    }
+    function networkIcon(type, label) {
+        var path = type === 'odc' ? 'M4 5h16v12H4zM8 21h8M12 17v4M8 9h8M8 13h5' : 'M5 7h14v10H5zM8 11h2M12 11h2M16 11h1M8 15h9';
+        return L.divIcon({className:'network-card-icon', html:'<div class="network-card '+type+'"><svg viewBox="0 0 24 24"><path d="'+path+'"/></svg><span>'+type.toUpperCase()+'<br>'+escapeHtml(label)+'</span></div>', iconSize:[105,40], iconAnchor:[52,20]});
+    }
+    var poleIcon = L.divIcon({className:'pole-icon', html:'<svg class="pole-svg" viewBox="0 0 18 32"><path d="M8 3h2v27H8zM3 7h12v2H3zM5 12h8v2H5z" fill="#7c4a24"/><circle cx="4" cy="8" r="1.5" fill="#d1d5db"/><circle cx="14" cy="8" r="1.5" fill="#d1d5db"/></svg>', iconSize:[18,32], iconAnchor:[9,30]});
+    var odcById = {};
+    odcs.forEach(function (odc) { odcById[String(odc.id)] = odc; });
+
+    // ---------- ODC, ODP + jalur kabel ----------
     function hashOf(o) {
-        if (!hub) return null;
-        var lat = parseFloat(o.latitude), lng = parseFloat(o.longitude);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return [hub.lat.toFixed(6), hub.lng.toFixed(6), lat.toFixed(6), lng.toFixed(6)].join('|');
+        var odc = odcById[String(odcAssignments[String(o.id)] || '')];
+        if (!odc) return null;
+        var lat = parseFloat(o.latitude), lng = parseFloat(o.longitude), odcLat = parseFloat(odc.latitude), odcLng = parseFloat(odc.longitude);
+        if (![lat,lng,odcLat,odcLng].every(Number.isFinite)) return null;
+        return [Number(odc.id).toFixed(6), odcLat.toFixed(6), odcLng.toFixed(6), lat.toFixed(6), lng.toFixed(6)].join('|');
     }
 
     function drawCable(path) {
         // Garis dasar tebal transparan + garis tipis terang beranimasi (efek aliran).
         L.polyline(path, { color: '#f1b44c', weight: 5, opacity: 0.25 }).addTo(map);
         L.polyline(path, { color: '#f1b44c', weight: 3, opacity: 0.95, dashArray: '6 12', className: 'fiber-flow' }).addTo(map);
+        var step = Math.max(12, Math.floor(path.length / 5));
+        for (var i = step; i < path.length - 1; i += step) {
+            L.marker(path[i], {icon:poleIcon, interactive:false, zIndexOffset:300}).addTo(map);
+        }
     }
 
     var status = document.getElementById('routeStatus');
@@ -140,10 +170,13 @@
     }
 
     function routeOne(o) {
-        var fallback = [[hub.lat, hub.lng], [parseFloat(o.latitude), parseFloat(o.longitude)]];
+        var odc = odcById[String(odcAssignments[String(o.id)] || '')];
+        if (!odc) return Promise.resolve(false);
+        var odcLat = parseFloat(odc.latitude), odcLng = parseFloat(odc.longitude);
+        var fallback = [[odcLat, odcLng], [parseFloat(o.latitude), parseFloat(o.longitude)]];
         var hash = hashOf(o);
         var url = 'https://router.project-osrm.org/route/v1/driving/'
-            + hub.lng + ',' + hub.lat + ';' + parseFloat(o.longitude) + ',' + parseFloat(o.latitude)
+            + odcLng + ',' + odcLat + ';' + parseFloat(o.longitude) + ',' + parseFloat(o.latitude)
             + '?overview=simplified&geometries=geojson';
 
         return fetch(url, { headers: { 'Accept': 'application/json' } })
@@ -179,6 +212,14 @@
 
     var bounds = [];
     if (hub) bounds.push([hub.lat, hub.lng]);
+    odcs.forEach(function (odc) {
+        var lat = parseFloat(odc.latitude), lng = parseFloat(odc.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        var box = document.createElement('div'); var title = document.createElement('b'); title.textContent = odc.name || 'ODC'; box.appendChild(title); if (odc.code) { box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode('Kode: '+odc.code)); }
+        L.marker([lat,lng], {icon:networkIcon('odc', odc.name), zIndexOffset:700}).bindPopup(box).addTo(map);
+        bounds.push([lat,lng]);
+        if (hub) L.polyline([[hub.lat,hub.lng],[lat,lng]], {color:'#14b8a6',weight:2,opacity:.55,dashArray:'4 8'}).addTo(map);
+    });
 
     odps.forEach(function (o) {
         var lat = parseFloat(o.latitude), lng = parseFloat(o.longitude);
@@ -189,9 +230,9 @@
         var t = document.createElement('b'); t.textContent = o.nama || '(ODP)'; box.appendChild(t);
         if (o.kode) { box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode('Kode: ' + o.kode)); }
         box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode('Port: ' + (o.port || '-')));
-        L.circleMarker([lat, lng], { radius: 7, color: '#556ee6', fillColor: '#556ee6', fillOpacity: 0.85, weight: 2 }).bindPopup(box).addTo(map);
+        L.marker([lat, lng], {icon:networkIcon('odp', o.nama), zIndexOffset:600}).bindPopup(box).addTo(map);
 
-        if (! hub) return;
+        if (!odcAssignments[String(o.id)]) return;
         var cached = cables[o.id];
         if (cached && cached.src_hash === hashOf(o) && Array.isArray(cached.path)) {
             drawCable(cached.path); // pakai cache -> instan, tanpa OSRM

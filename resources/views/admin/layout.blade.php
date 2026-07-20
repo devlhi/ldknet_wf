@@ -171,12 +171,8 @@
                             </a>
                             <ul class="sub-menu" aria-expanded="false">
                                 <li><a href="{{ url('admin/coverage/peta') }}">Peta Jaringan</a></li>
-                                <li><a href="{{ url('admin/coverage/odc') }}">ODC</a></li>
                                 <li><a href="{{ url('admin/coverage/odp') }}">ODP</a></li>
-                                <li><a href="{{ url('admin/coverage/area') }}">Area</a></li>
-                                <li><a href="{{ url('admin/coverage/customer') }}">Customer Map</a></li>
-                                <li><a href="{{ url('admin/coverage/rxpower') }}">RX Power</a></li>
-                                <li><a href="{{ url('admin/coverage/get/coordinat') }}">Get Coordinat Location</a></li>
+                                <li><a href="{{ url('admin/coverage/customer') }}">Pelanggan</a></li>
                             </ul>
                         </li>
 

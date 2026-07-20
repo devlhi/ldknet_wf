@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\OdpAssignment;
 use App\Support\WhatsAppNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -205,36 +206,42 @@ class GangguanReport extends Model
         $threshold = max(2, $threshold);
         $windowHours = max(1, $windowHours);
 
-        $rows = self::query()
+        $odps = Odp::query()->get(['id', 'nama', 'latitude', 'longitude']);
+        $odpByAssignment = OdpAssignment::uniqueByStoredName($odps);
+        $reports = self::query()
             ->whereIn('status', ['baru', 'diproses'])
             ->whereNotNull('nama_odp')
             ->where('nama_odp', '!=', '')
             ->where('created_at', '>=', now()->subHours($windowHours))
-            ->selectRaw('nama_odp, COUNT(*) as total, MAX(created_at) as last_at')
-            ->groupBy('nama_odp')
-            ->havingRaw('COUNT(*) >= ?', [$threshold])
-            ->orderByDesc('total')
-            ->get();
+            ->get(['nama_odp', 'created_at']);
+        $reportsByOdpId = $reports
+            ->groupBy(fn (self $report) => OdpAssignment::resolve($odps, $report->nama_odp)?->id)
+            ->filter(fn (Collection $group, $odpId) => $odpId !== null && $odpId !== '' && $group->count() >= $threshold);
 
-        if ($rows->isEmpty()) {
-            return $rows;
+        if ($reportsByOdpId->isEmpty()) {
+            return collect();
         }
 
-        $names = $rows->pluck('nama_odp')->all();
-        $odps = Odp::whereIn('nama', $names)->get()->keyBy('nama');
-        $pelanggan = Order::whereIn('nama_odp', $names)
+        $customersByOdpId = Order::query()
             ->where('status', 'Active')
-            ->selectRaw('nama_odp, COUNT(*) as jml')
-            ->groupBy('nama_odp')
-            ->pluck('jml', 'nama_odp');
+            ->whereNotNull('nama_odp')
+            ->where('nama_odp', '!=', '')
+            ->get(['nama_odp'])
+            ->groupBy(fn (Order $order) => $odpByAssignment->get(OdpAssignment::key($order->nama_odp))?->id)
+            ->map->count();
 
-        return $rows->map(function ($r) use ($odps, $pelanggan) {
-            $odp = $odps->get($r->nama_odp);
-            $r->latitude = $odp->latitude ?? null;
-            $r->longitude = $odp->longitude ?? null;
-            $r->pelanggan_aktif = (int) ($pelanggan[$r->nama_odp] ?? 0);
+        return $reportsByOdpId->map(function (Collection $group, $odpId) use ($odps, $customersByOdpId) {
+            $odp = $odps->firstWhere('id', (int) $odpId);
 
-            return $r;
-        });
+            return (object) [
+                'odp_id' => $odp->id,
+                'nama_odp' => $odp->nama,
+                'total' => $group->count(),
+                'last_at' => $group->max('created_at'),
+                'latitude' => $odp->latitude,
+                'longitude' => $odp->longitude,
+                'pelanggan_aktif' => (int) ($customersByOdpId[$odp->id] ?? 0),
+            ];
+        })->sortByDesc('total')->values();
     }
 }

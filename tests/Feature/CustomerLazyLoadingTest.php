@@ -150,6 +150,54 @@ class CustomerLazyLoadingTest extends TestCase
             ->assertDontSee('Tampilkan Data');
     }
 
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_admin_can_check_pppoe_connection_on_demand(): void
+    {
+        $orderId = DB::table('orders')->insertGetId([
+            'idpel' => 'CUST-CONNECTION',
+            'nama' => 'Connection Test',
+            'paket' => '10 Mbps',
+            'id_router' => 99,
+            'mode' => 'pppoe',
+            'pppoe_user' => 'connection-user',
+            'status' => 'Active',
+        ]);
+        DB::table('router')->insert([
+            'id' => 99,
+            'nama' => 'Router Test',
+            'ip' => '192.0.2.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('secret'),
+        ]);
+
+        $routerApi = Mockery::mock('overload:'.RouterosAPI::class);
+        $routerApi->shouldReceive('connect')->once()->with('192.0.2.1', 'admin', 'secret')->andReturnTrue();
+        $routerApi->shouldReceive('comm')->once()->with('/ppp/active/getall', [
+            '.proplist' => '.id',
+            '?name' => 'connection-user',
+        ])->andReturn([['.id' => '*1']]);
+        $routerApi->shouldReceive('disconnect')->once();
+
+        $this->actingAs($this->user)->getJson('/admin/customer/connection/'.$orderId)
+            ->assertOk()
+            ->assertJson(['online' => true, 'message' => 'Pelanggan online']);
+    }
+
+    public function test_connection_check_rejects_incomplete_router_data(): void
+    {
+        $orderId = DB::table('orders')->insertGetId([
+            'idpel' => 'CUST-OFFLINE',
+            'nama' => 'Offline Test',
+            'paket' => '10 Mbps',
+            'status' => 'Active',
+        ]);
+
+        $this->actingAs($this->user)->getJson('/admin/customer/connection/'.$orderId)
+            ->assertOk()
+            ->assertJson(['online' => false, 'message' => 'Pelanggan offline']);
+    }
+
     public function test_customer_filter_endpoint_is_guarded_without_activation(): void
     {
         $response = $this->actingAs($this->user)->getJson('/admin/customer/filter');
@@ -215,6 +263,66 @@ class CustomerLazyLoadingTest extends TestCase
         ])->assertSessionHas('success_odp');
 
         $this->assertSame('4', DB::table('orders')->where('idpel', 'CUST-001')->value('port_odp'));
+    }
+
+    public function test_customer_odp_assignment_uses_id_and_blocks_legacy_equivalent_port(): void
+    {
+        $odpId = DB::table('odp')->insertGetId(['nama' => 'Aping001(P.Hengin)', 'port' => 8]);
+        DB::table('orders')->insert([
+            [
+                'idpel' => 'CUST-001',
+                'nama' => 'Customer One',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => null,
+                'port_odp' => null,
+            ],
+            [
+                'idpel' => 'CUST-002',
+                'nama' => 'Customer Two',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => ' APING001(P.HENG ',
+                'port_odp' => '03',
+            ],
+        ]);
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'odp_id' => $odpId,
+            'port_odp' => 3,
+        ])->assertSessionHas('errors_odp');
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'odp_id' => $odpId,
+            'port_odp' => 4,
+        ])->assertSessionHas('success_odp');
+
+        $this->assertSame('Aping001(P.Heng', DB::table('orders')->where('idpel', 'CUST-001')->value('nama_odp'));
+        $usedPorts = $this->actingAs($this->user)->getJson('/get-used-ports');
+        $usedPorts->assertJsonPath("data.{$odpId}.3.idpel", 'CUST-002')
+            ->assertJsonPath("data.{$odpId}.4.idpel", 'CUST-001');
+    }
+
+    public function test_customer_odp_assignment_rejects_ambiguous_legacy_prefix(): void
+    {
+        $firstId = DB::table('odp')->insertGetId(['nama' => 'Gontang001(Mayam Heri)', 'port' => 4]);
+        DB::table('odp')->insert(['nama' => 'Gontang001(Mayam Anton)', 'port' => 4]);
+        DB::table('orders')->insert([
+            'idpel' => 'CUST-001',
+            'nama' => 'Customer One',
+            'paket' => '10 Mbps',
+            'status' => 'Active',
+        ]);
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'odp_id' => $firstId,
+            'port_odp' => 1,
+        ])->assertSessionHas('errors_odp');
+
+        $this->assertNull(DB::table('orders')->where('idpel', 'CUST-001')->value('nama_odp'));
     }
 
     public function test_customer_endpoint_loads_rows_after_activation(): void

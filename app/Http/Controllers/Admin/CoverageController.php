@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CoverageCable;
 use App\Models\CoverageMapSetting;
+use App\Models\CoverageOdc;
+use App\Models\CoverageOdpAssignment;
 use App\Models\GangguanReport;
 use App\Models\Odp;
 use App\Models\Order;
 use App\Models\Website;
 use App\Services\AcsDeviceService;
+use App\Support\OdpAssignment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -44,14 +47,62 @@ class CoverageController extends Controller
 
     public function odc()
     {
-        $odcs = Schema::hasTable('odc')
-            ? DB::table('odc')->orderBy('name')->get(['id', 'name', 'latitude', 'longitude', 'olt_id', 'description'])
+        $odcs = Schema::hasTable('coverage_odcs')
+            ? CoverageOdc::query()->orderBy('name')->get()
             : collect();
+        $odpCounts = Schema::hasTable('coverage_odp_assignments')
+            ? CoverageOdpAssignment::query()->selectRaw('coverage_odc_id, COUNT(*) as total')->groupBy('coverage_odc_id')->pluck('total', 'coverage_odc_id')
+            : collect();
+
+        $odcs->each(function (CoverageOdc $odc) use ($odpCounts) {
+            $odc->odp_count = (int) ($odpCounts[$odc->id] ?? 0);
+        });
 
         return view('admin.coverage.odc', [
             'title' => 'Data ODC',
             'odcs' => $odcs,
         ] + $this->websiteData());
+    }
+
+    public function addOdc(Request $request)
+    {
+        try {
+            $data = $this->validateOdc($request);
+        } catch (ValidationException $e) {
+            return $this->coverageValidationRedirect('admin/coverage/odc', $e);
+        }
+
+        CoverageOdc::create($data);
+
+        return redirect('admin/coverage/odc')->with('success', ['Berhasil menambahkan data ODC']);
+    }
+
+    public function updateOdc(Request $request, $id)
+    {
+        $odc = CoverageOdc::query()->findOrFail($id);
+
+        try {
+            $data = $this->validateOdc($request, $odc->id);
+        } catch (ValidationException $e) {
+            return $this->coverageValidationRedirect('admin/coverage/odc', $e);
+        }
+
+        $odc->update($data);
+
+        return redirect('admin/coverage/odc')->with('success', ['Berhasil mengupdate data ODC']);
+    }
+
+    public function deleteOdc($id)
+    {
+        $odc = CoverageOdc::query()->findOrFail($id);
+        $assigned = CoverageOdpAssignment::query()->where('coverage_odc_id', $odc->id)->count();
+        if ($assigned > 0) {
+            return redirect('admin/coverage/odc')->with('auth_errors', ["ODC {$odc->name} masih digunakan oleh {$assigned} ODP."]);
+        }
+
+        $odc->delete();
+
+        return redirect('admin/coverage/odc')->with('success', ['Berhasil menghapus data ODC']);
     }
 
     public function odp(Request $request)
@@ -60,20 +111,30 @@ class CoverageController extends Controller
         $orders = Order::query()
             ->whereNotNull('nama_odp')
             ->where('nama_odp', '!=', '')
-            ->get(['nama_odp', 'port_odp'])
-            ->groupBy('nama_odp');
-        $gangguanPerOdp = Schema::hasTable('gangguan_reports') && Schema::hasColumn('gangguan_reports', 'nama_odp')
+            ->get(['nama_odp', 'port_odp']);
+        $odpByAssignment = OdpAssignment::uniqueByStoredName($getallodp);
+        $odcs = Schema::hasTable('coverage_odcs') ? CoverageOdc::query()->orderBy('name')->get() : collect();
+        $odcById = $odcs->keyBy('id');
+        $odcAssignments = Schema::hasTable('coverage_odp_assignments')
+            ? CoverageOdpAssignment::query()->whereIn('odp_id', $getallodp->pluck('id'))->pluck('coverage_odc_id', 'odp_id')
+            : collect();
+        $ordersByOdpId = $orders->groupBy(function (Order $order) use ($odpByAssignment) {
+            return $odpByAssignment->get(OdpAssignment::key($order->nama_odp))?->id;
+        });
+        $gangguanByOdpId = Schema::hasTable('gangguan_reports') && Schema::hasColumn('gangguan_reports', 'nama_odp')
             ? GangguanReport::query()
                 ->whereIn('status', ['baru', 'diproses'])
                 ->whereNotNull('nama_odp')
                 ->where('nama_odp', '!=', '')
-                ->selectRaw('nama_odp, COUNT(*) as jml')
-                ->groupBy('nama_odp')
-                ->pluck('jml', 'nama_odp')
+                ->get(['nama_odp'])
+                ->groupBy(fn (GangguanReport $report) => OdpAssignment::resolve($getallodp, $report->nama_odp)?->id)
+                ->map->count()
             : collect();
 
-        $odpWithDetails = $getallodp->map(function (Odp $odp) use ($orders, $gangguanPerOdp) {
-            $assignedOrders = $orders->get($odp->nama, collect());
+        $odpWithDetails = $getallodp->map(function (Odp $odp) use ($ordersByOdpId, $gangguanByOdpId, $odcAssignments, $odcById) {
+            $assignedOrders = $ordersByOdpId->get($odp->id, collect());
+            $odcId = $odcAssignments->get($odp->id);
+            $odc = $odcId ? $odcById->get($odcId) : null;
             $totalPorts = max(0, (int) $odp->port);
             $usedPorts = $assignedOrders->pluck('port_odp')
                 ->map(function ($port) {
@@ -95,17 +156,20 @@ class CoverageController extends Controller
                 'nama' => $odp->nama,
                 'latitude' => $odp->latitude,
                 'longitude' => $odp->longitude,
+                'odc_id' => $odc?->id,
+                'odc_name' => $odc?->name,
                 'total_port' => $totalPorts,
                 'used_ports' => $usedPorts->count(),
                 'available_ports' => $availablePorts,
                 'pelanggan' => $assignedOrders->count(),
-                'gangguan_open' => (int) ($gangguanPerOdp[$odp->nama] ?? 0),
+                'gangguan_open' => (int) ($gangguanByOdpId[$odp->id] ?? 0),
             ];
         })->all();
 
         return view('admin.coverage.odp', [
             'title' => 'Data ODP',
             'odp' => $getallodp,
+            'odcs' => $odcs,
             'data' => $odpWithDetails,
         ] + $this->websiteData());
     }
@@ -118,7 +182,21 @@ class CoverageController extends Controller
             return $this->coverageValidationRedirect('admin/coverage/odp', $e);
         }
 
-        Odp::create($data);
+        if ($this->storedOdpNameExists($data['nama'])) {
+            return redirect(url('admin/coverage/odp'))->withInput()->with('auth_errors', [
+                '15 karakter awal Nama ODP harus unik agar relasi pelanggan tidak ambigu.',
+            ]);
+        }
+
+        DB::transaction(function () use ($data) {
+            $odcId = $data['odc_id'];
+            unset($data['odc_id']);
+            $odp = Odp::create($data);
+            CoverageOdpAssignment::create([
+                'odp_id' => $odp->id,
+                'coverage_odc_id' => $odcId,
+            ]);
+        });
 
         return redirect(url('admin/coverage/odp'))->with('success', ['Berhasil menambahkan data ODP']);
     }
@@ -133,15 +211,41 @@ class CoverageController extends Controller
             return $this->coverageValidationRedirect('admin/coverage/odp', $e);
         }
 
+        $allOdps = Odp::query()->get();
+        if ($odp->nama !== $data['nama'] && ! OdpAssignment::isStoredNameUnique($allOdps, $odp)) {
+            return redirect(url('admin/coverage/odp'))->withInput()->with('auth_errors', [
+                'ODP tidak dapat diubah karena 15 karakter awal namanya sama dengan ODP lain. Bedakan data pelanggan terlebih dahulu.',
+            ]);
+        }
+        if ($this->storedOdpNameExists($data['nama'], $odp->id)) {
+            return redirect(url('admin/coverage/odp'))->withInput()->with('auth_errors', [
+                '15 karakter awal Nama ODP harus unik agar relasi pelanggan tidak ambigu.',
+            ]);
+        }
+
         DB::transaction(function () use ($odp, $data) {
             $oldName = $odp->nama;
+            $oldStoredName = OdpAssignment::storedName($oldName);
+            $odcId = $data['odc_id'];
+            unset($data['odc_id']);
             $odp->update($data);
+            CoverageOdpAssignment::updateOrCreate(
+                ['odp_id' => $odp->id],
+                ['coverage_odc_id' => $odcId]
+            );
 
             if ($oldName !== $data['nama']) {
-                Order::query()->where('nama_odp', $oldName)->update(['nama_odp' => $data['nama']]);
+                Order::query()
+                    ->whereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::key($oldStoredName)])
+                    ->update(['nama_odp' => OdpAssignment::storedName($data['nama'])]);
 
                 if (Schema::hasTable('gangguan_reports') && Schema::hasColumn('gangguan_reports', 'nama_odp')) {
-                    DB::table('gangguan_reports')->where('nama_odp', $oldName)->update(['nama_odp' => $data['nama']]);
+                    DB::table('gangguan_reports')
+                        ->where(function ($query) use ($oldName, $oldStoredName) {
+                            $query->whereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::normalizedName($oldName)])
+                                ->orWhereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::key($oldStoredName)]);
+                        })
+                        ->update(['nama_odp' => $data['nama']]);
                 }
             }
         });
@@ -152,7 +256,16 @@ class CoverageController extends Controller
     public function deleteODP($id)
     {
         $odp = Odp::query()->findOrFail($id);
-        $assignedCustomers = Order::query()->where('nama_odp', $odp->nama)->count();
+        $allOdps = Odp::query()->get();
+        $assignedCustomers = Order::query()
+            ->whereRaw('LOWER(TRIM(nama_odp)) = ?', [OdpAssignment::key($odp->nama)])
+            ->count();
+
+        if (! OdpAssignment::isStoredNameUnique($allOdps, $odp) && $assignedCustomers > 0) {
+            return redirect(url('admin/coverage/odp'))->with('auth_errors', [
+                "ODP {$odp->nama} tidak dapat dihapus karena relasi pelanggan ambigu dengan ODP lain.",
+            ]);
+        }
 
         if ($assignedCustomers > 0) {
             return redirect(url('admin/coverage/odp'))->with('auth_errors', [
@@ -164,11 +277,41 @@ class CoverageController extends Controller
             if (Schema::hasTable('coverage_cables') && Schema::hasColumn('coverage_cables', 'odp_id')) {
                 DB::table('coverage_cables')->where('odp_id', $odp->id)->delete();
             }
+            if (Schema::hasTable('coverage_odp_assignments')) {
+                CoverageOdpAssignment::query()->where('odp_id', $odp->id)->delete();
+            }
 
             $odp->delete();
         });
 
         return redirect(url('admin/coverage/odp'))->with('success', ['Berhasil menghapus data ODP']);
+    }
+
+    private function storedOdpNameExists(string $name, ?int $ignoreId = null): bool
+    {
+        return Odp::query()
+            ->when($ignoreId !== null, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->get(['nama'])
+            ->contains(fn (Odp $odp) => OdpAssignment::key($odp->nama) === OdpAssignment::key($name));
+    }
+
+    private function validateOdc(Request $request, ?int $ignoreId = null): array
+    {
+        $request->merge([
+            'name' => trim((string) $request->input('name')),
+            'code' => $request->filled('code') ? strtoupper(trim((string) $request->input('code'))) : null,
+            'latitude' => trim((string) $request->input('latitude')),
+            'longitude' => trim((string) $request->input('longitude')),
+            'description' => $request->filled('description') ? trim((string) $request->input('description')) : null,
+        ]);
+
+        return $request->validate([
+            'name' => ['required', 'string', 'max:191', Rule::unique('coverage_odcs', 'name')->ignore($ignoreId)],
+            'code' => ['nullable', 'string', 'max:100', Rule::unique('coverage_odcs', 'code')->ignore($ignoreId)],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ]);
     }
 
     private function validateOdp(Request $request, ?int $ignoreId = null): array
@@ -185,6 +328,7 @@ class CoverageController extends Controller
             'nama' => ['required', 'string', 'max:191', Rule::unique('odp', 'nama')->ignore($ignoreId)],
             'kode' => ['nullable', 'string', 'max:100', Rule::unique('odp', 'kode')->ignore($ignoreId)],
             'port' => ['required', 'integer', 'min:1', 'max:1024'],
+            'odc_id' => ['required', 'integer', Rule::exists('coverage_odcs', 'id')],
             'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
         ]);
@@ -193,6 +337,7 @@ class CoverageController extends Controller
             'nama' => $validated['nama'],
             'kode' => $validated['kode'] ?? null,
             'port' => $validated['port'],
+            'odc_id' => (int) $validated['odc_id'],
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
         ];
@@ -206,8 +351,7 @@ class CoverageController extends Controller
     }
 
     /**
-     * Peta jaringan: tampilkan titik pusat/OLT, semua ODP, dan jalur kabel fiber
-     * hub->ODP (mengikuti jalan via OSRM, hasil di-cache). Basemap bisa dipilih.
+     * Peta jaringan: tampilkan titik pusat/OLT, ODC, ODP, serta jalur ODC ke ODP.
      */
     public function peta(Request $request)
     {
@@ -218,6 +362,12 @@ class CoverageController extends Controller
             ->whereNotNull('longitude')
             ->where('longitude', '!=', '')
             ->get(['id', 'nama', 'kode', 'port', 'latitude', 'longitude']);
+        $odcs = Schema::hasTable('coverage_odcs')
+            ? CoverageOdc::query()->whereNotNull('latitude')->whereNotNull('longitude')->get(['id', 'name', 'code', 'latitude', 'longitude'])
+            : collect();
+        $odcAssignments = Schema::hasTable('coverage_odp_assignments')
+            ? CoverageOdpAssignment::query()->whereIn('odp_id', $odps->pluck('id'))->pluck('coverage_odc_id', 'odp_id')
+            : collect();
 
         // Cache jalur kabel per ODP (path + src_hash) untuk dibandingkan di sisi klien.
         $cables = Schema::hasTable('coverage_cables')
@@ -234,6 +384,8 @@ class CoverageController extends Controller
             'title' => 'Peta Jaringan',
             'setting' => $setting,
             'odps' => $odps,
+            'odcs' => $odcs,
+            'odcAssignments' => $odcAssignments,
             'cables' => $cables,
         ] + $this->websiteData());
     }
@@ -267,16 +419,7 @@ class CoverageController extends Controller
         }
 
         $setting = CoverageMapSetting::current();
-        // Bandingkan numerik (bukan string) supaya perbedaan format angka
-        // (mis. 0.68 vs 0.6800000) tidak dianggap "pindah" & menghapus cache sia-sia.
-        $sama = fn ($a, $b) => round((float) $a, 7) === round((float) $b, 7);
-        $pindahHub = ! $sama($setting->hub_lat, $data['hub_lat']) || ! $sama($setting->hub_lng, $data['hub_lng']);
         $setting->fill($data)->save();
-
-        // Titik pusat berpindah -> jalur kabel lama tidak valid, hapus cache biar di-route ulang.
-        if ($pindahHub && Schema::hasTable('coverage_cables')) {
-            CoverageCable::query()->delete();
-        }
 
         return redirect('admin/coverage/peta/pengaturan')->with('success', ['Pengaturan peta jaringan disimpan']);
     }
@@ -305,9 +448,14 @@ class CoverageController extends Controller
         }
 
         $odp = Odp::query()->find($data['odp_id']);
-        $setting = CoverageMapSetting::current();
-        $expectedHash = collect([$setting->hub_lat, $setting->hub_lng, $odp->latitude, $odp->longitude])
-            ->map(fn ($coordinate) => number_format((float) $coordinate, 6, '.', ''))
+        $assignment = CoverageOdpAssignment::query()->where('odp_id', $odp->id)->first();
+        $odc = $assignment ? CoverageOdc::query()->find($assignment->coverage_odc_id) : null;
+        if (! $odc) {
+            return response()->json(['ok' => false, 'error' => 'ODP belum memiliki ODC'], 409);
+        }
+
+        $expectedHash = collect([$odc->id, $odc->latitude, $odc->longitude, $odp->latitude, $odp->longitude])
+            ->map(fn ($coordinate) => is_numeric($coordinate) ? number_format((float) $coordinate, 6, '.', '') : (string) $coordinate)
             ->implode('|');
 
         if ($data['src_hash'] !== $expectedHash) {
@@ -444,6 +592,10 @@ class CoverageController extends Controller
         $odpReady = Schema::hasTable('odp') && collect($odpColumns)->every(fn ($column) => Schema::hasColumn('odp', $column));
         $customers = $ordersReady ? Order::query()->where('status', 'Active')->get($customerColumns) : collect();
         $odps = $odpReady ? Odp::query()->get($odpColumns) : collect();
+        $odpByAssignment = OdpAssignment::uniqueByStoredName($odps);
+        $customers->each(function (Order $customer) use ($odpByAssignment) {
+            $customer->nama_odp = $odpByAssignment->get(OdpAssignment::key($customer->nama_odp))?->nama ?? $customer->nama_odp;
+        });
         $mappedCount = $customers->filter(fn ($customer) => $this->hasValidCoordinates($customer->latitude ?? null, $customer->longitude ?? null))->count();
 
         return view('admin.coverage.customers', [
@@ -467,6 +619,10 @@ class CoverageController extends Controller
         $customers = Order::query()
             ->where('status', 'Active')
             ->get(['idpel', 'nama', 'pppoe_user', 'nama_odp', 'port_odp']);
+        $odpByAssignment = OdpAssignment::uniqueByStoredName(Odp::query()->get(['id', 'nama']));
+        $customers->each(function (Order $customer) use ($odpByAssignment) {
+            $customer->nama_odp = $odpByAssignment->get(OdpAssignment::key($customer->nama_odp))?->nama ?? $customer->nama_odp;
+        });
         $acs = Schema::hasTable('acs') ? DB::table('acs')->orderBy('id')->first() : null;
         $rxPowerData = [];
         $acsError = null;

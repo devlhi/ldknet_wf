@@ -133,9 +133,7 @@
                                             <th>Layanan</th>
                                             <th>Server</th>
                                             <th>Mode</th>
-                                            @if (auth()->user()->level === 'developer')
-                                                <th>User PPPOE</th>
-                                            @endif
+                                            <th>User PPPOE</th>
                                             <th>Masa Aktif</th>
                                             <th>Status</th>
                                             <th>Alamat</th>
@@ -231,7 +229,7 @@
             @php $isDeveloper = auth()->user()->level === 'developer'; @endphp
 
             // Kolom aksi tidak bisa di-sort. Index menyesuaikan level developer.
-            var nonOrderable = @json($isDeveloper ? [12, 13] : [11]);
+            var nonOrderable = @json($isDeveloper ? [12, 13] : [12]);
 
             var table = null;
 
@@ -279,6 +277,27 @@
                 if (table) {
                     table.ajax.reload();
                 }
+            });
+
+            $('#datatable-customers').on('click', '.btn-check-connection', function () {
+                var button = $(this);
+                var original = button.html();
+                button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Mengecek');
+                $.ajax({ url: button.data('url'), dataType: 'json' })
+                    .done(function (response) {
+                        button.removeClass('btn-outline-info btn-outline-secondary btn-outline-danger btn-outline-success')
+                            .addClass(response.online ? 'btn-success' : 'btn-danger')
+                            .html('<i class="mdi ' + (response.online ? 'mdi-lan-connect' : 'mdi-lan-disconnect') + '"></i> ' + (response.online ? 'Online' : 'Offline'));
+                    })
+                    .fail(function (xhr) {
+                        var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Gagal mengecek koneksi';
+                        button.removeClass('btn-outline-info btn-outline-secondary btn-outline-success').addClass('btn-outline-danger').html('<i class="mdi mdi-alert-circle"></i> Gagal');
+                        Swal.fire({ icon: 'warning', title: 'Cek Koneksi', text: message });
+                    })
+                    .always(function () {
+                        button.prop('disabled', false);
+                        if (!button.hasClass('btn-success') && !button.hasClass('btn-danger') && !button.hasClass('btn-outline-danger')) button.html(original);
+                    });
             });
 
             // Isi modal share dari data-* tombol yang diklik
