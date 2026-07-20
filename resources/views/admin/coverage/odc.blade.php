@@ -1,54 +1,40 @@
 @extends('admin.layout')
 
 @section('css')
-    <link rel="stylesheet" href="{{ asset('leaflet/leaflet.css') }}">
-    <script src="{{ asset('leaflet/leaflet.js') }}"></script>
+<link rel="stylesheet" href="{{ asset('leaflet/leaflet.css') }}">
 @endsection
 
 @section('content')
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
+<div class="page-content"><div class="container-fluid">
+    <div class="card"><div class="card-body">
+        <h4 class="card-title">{{ $title }}</h4>
+        <p class="text-muted">Data ODC dibaca langsung dari database.</p>
+        <div id="map" style="height: 450px" class="mb-4"></div>
+        <div class="table-responsive"><table class="table table-bordered align-middle">
+            <thead><tr><th>No</th><th>Nama</th><th>OLT ID</th><th>Koordinat</th><th>Deskripsi</th></tr></thead>
+            <tbody>@forelse($odcs as $i => $odc)<tr><td>{{ $i + 1 }}</td><td>{{ $odc->name }}</td><td>{{ $odc->olt_id ?: '-' }}</td><td>{{ $odc->latitude && $odc->longitude ? $odc->latitude.', '.$odc->longitude : 'Belum tersedia' }}</td><td>{{ $odc->description ?: '-' }}</td></tr>@empty<tr><td colspan="5" class="text-center text-muted">Belum ada data ODC</td></tr>@endforelse</tbody>
+        </table></div>
+    </div></div>
+</div></div>
+@endsection
 
-    <div class="page-content">
-        <div class="container-fluid">
-
-            <!-- start page title -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="page-title-box d-flex align-items-center justify-content-between">
-                        <h4 class="mb-0">Coverage ODC</h4>
-
-                    </div>
-                </div>
-            </div>
-            <!-- end page title -->
-            <div class="row">
-                <div class="col-12">
-
-                    <div class="row">
-                    </div> <!-- end row-->
-                    <div class="card">
-
-                        <div class="card-body">
-                            <div id="map" style="height: 500px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        var map = L.map('map').setView([-6.205850380571469, 106.92191621173872], 15);
-
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        var odc1 = L.marker([-6.197478592210463, 106.92223551910205]).bindPopup("<b>ODC 1</b>").addTo(map);
-        var odc2 = L.marker([-6.199259322567293, 106.92072053629074]).bindPopup("<b>ODC 2</b>").addTo(map);
-        var odc3 = L.marker([-6.200011939096899, 106.92243479279152]).bindPopup("<b>ODC 3</b>").addTo(map);
-        var odc4 = L.marker([-6.198610335224289, 106.92226254888386]).bindPopup("<b>ODC 4</b>").addTo(map);
-    </script>
+@section('scripts')
+<script src="{{ asset('leaflet/leaflet.js') }}"></script>
+<script>
+(function () {
+    var data = @json($odcs);
+    var map = L.map('map').setView([0.3, 109.5], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'}).addTo(map);
+    var bounds = [];
+    data.forEach(function (odc) {
+        var lat = parseFloat(odc.latitude), lng = parseFloat(odc.longitude);
+        if (odc.latitude == null || odc.longitude == null || String(odc.latitude).trim() === '' || String(odc.longitude).trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+        var box = document.createElement('div');
+        var name = document.createElement('strong'); name.textContent = odc.name || 'ODC'; box.appendChild(name);
+        if (odc.description) { box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode(odc.description)); }
+        L.marker([lat, lng]).addTo(map).bindPopup(box); bounds.push([lat, lng]);
+    });
+    if (bounds.length === 1) map.setView(bounds[0], 15); else if (bounds.length > 1) map.fitBounds(bounds, {padding: [30, 30]});
+})();
+</script>
 @endsection

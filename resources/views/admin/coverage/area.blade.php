@@ -49,14 +49,23 @@
                                             <td>{{ $i + 1 }}</td>
                                             <td>{{ $row['kode'] }}</td>
                                             <td>{{ $row['nama'] }}</td>
-                                            <td>{{ $row['jumlah_odp'] }}</td>
-                                            <td>{{ $row['jumlah_pelanggan'] }}</td>
+                                            <td>
+                                                @if ($row['jumlah_odp'] === null)
+                                                    <span class="text-muted" title="Tabel ODP tidak memiliki kolom kode_area">Tidak tersedia</span>
+                                                @else
+                                                    {{ $row['jumlah_odp'] }}
+                                                @endif
+                                            </td>
+                                            <td>{{ $row['jumlah_pelanggan'] ?? 'Tidak tersedia' }}</td>
                                             <td>
                                                 <a href="#" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editAreaModal"
                                                    data-id="{{ $row['id'] }}"
                                                    data-kode="{{ $row['kode'] }}"
                                                    data-nama="{{ $row['nama'] }}">Edit</a>
-                                                <a href="{{ url('admin/coverage/area/delete/'.$row['id']) }}" class="btn btn-sm btn-danger swal-delete" data-text="Hapus area {{ $row['nama'] }}?">Hapus</a>
+                                                <form action="{{ url('admin/coverage/area/delete/'.$row['id']) }}" method="post" class="d-inline delete-form">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-danger swal-delete" data-text="Hapus area {{ $row['nama'] }}?">Hapus</button>
+                                                </form>
                                             </td>
                                         </tr>
                                     @empty
@@ -140,9 +149,10 @@ document.getElementById('editAreaModal').addEventListener('show.bs.modal', funct
     document.getElementById('edit_nama').value = nama;
 });
 
-document.querySelectorAll('.swal-delete').forEach(function(link) {
-    link.addEventListener('click', function(e) {
+document.querySelectorAll('.swal-delete').forEach(function(button) {
+    button.addEventListener('click', function(e) {
         e.preventDefault();
+        var form = this.closest('form');
         Swal.fire({
             title: 'Konfirmasi Hapus',
             text: this.dataset.text || 'Data akan dihapus.',
@@ -153,9 +163,7 @@ document.querySelectorAll('.swal-delete').forEach(function(link) {
             confirmButtonColor: '#f46a6a',
             cancelButtonColor: '#74788d'
         }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = this.href;
-            }
+            if (result.isConfirmed) form.submit();
         });
     });
 });

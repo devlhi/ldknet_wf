@@ -119,9 +119,12 @@
     var labelInput = document.querySelector('input[name="hub_label"]');
     var basemapSel = document.getElementById('basemapSel');
 
-    var startLat = parseFloat(centerLat.value) || 0.3;
-    var startLng = parseFloat(centerLng.value) || 109.5;
-    var startZoom = parseInt(zoomVal.value, 10) || 11;
+    var parsedStartLat = parseFloat(centerLat.value);
+    var parsedStartLng = parseFloat(centerLng.value);
+    var parsedStartZoom = parseInt(zoomVal.value, 10);
+    var startLat = Number.isFinite(parsedStartLat) ? parsedStartLat : 0.3;
+    var startLng = Number.isFinite(parsedStartLng) ? parsedStartLng : 109.5;
+    var startZoom = Number.isFinite(parsedStartZoom) ? parsedStartZoom : 11;
 
     var current = basemaps[basemapSel.value] || basemaps.streets;
     var map = L.map('pickMap', { center: [startLat, startLng], zoom: startZoom, layers: [current] });
@@ -140,9 +143,9 @@
         hubLat.value = Number(lat).toFixed(7);
         hubLng.value = Number(lng).toFixed(7);
     }
-    if (hubLat.value && hubLng.value) {
+    if (hubLat.value !== '' && hubLng.value !== '') {
         var hl = parseFloat(hubLat.value), hg = parseFloat(hubLng.value);
-        if (!isNaN(hl) && !isNaN(hg)) setHub(hl, hg);
+        if (Number.isFinite(hl) && Number.isFinite(hg)) setHub(hl, hg);
     }
 
     map.on('click', function (e) { setHub(e.latlng.lat, e.latlng.lng); });
@@ -192,7 +195,10 @@
         if (ab) ab.abort();
         ab = new AbortController();
         fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=id&accept-language=id&q=' + encodeURIComponent(q), { signal: ab.signal, headers: { 'Accept': 'application/json' } })
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function (d) { renderResults(Array.isArray(d) ? d : []); })
             .catch(function (e) { if (e.name !== 'AbortError') hideResults(); });
     }

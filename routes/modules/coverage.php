@@ -9,11 +9,11 @@ Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(fun
     Route::get('coverage/area', [CoverageController::class, 'area']);
     Route::post('coverage/area/add', [CoverageController::class, 'areaAdd']);
     Route::post('coverage/area/update/{any}', [CoverageController::class, 'updateArea']);
-    Route::get('coverage/area/delete/{any}', [CoverageController::class, 'deleteArea']);
+    Route::post('coverage/area/delete/{any}', [CoverageController::class, 'deleteArea']);
     Route::get('coverage/odp', [CoverageController::class, 'odp']);
     Route::post('coverage/odp/add', [CoverageController::class, 'addodp']);
     Route::post('coverage/odp/update/{any}', [CoverageController::class, 'updateODP']);
-    Route::get('coverage/odp/delete/{any}', [CoverageController::class, 'deleteODP']);
+    Route::post('coverage/odp/delete/{any}', [CoverageController::class, 'deleteODP']);
     Route::get('coverage/customer', [CoverageController::class, 'getCustomerMap']);
     Route::get('coverage/rxpower', [CoverageController::class, 'rxpower']);
     Route::get('coverage/peta', [CoverageController::class, 'peta']);

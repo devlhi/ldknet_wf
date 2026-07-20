@@ -27,7 +27,7 @@
                 </div>
             </div>
 
-            @if (! $setting->hub_lat || ! $setting->hub_lng)
+            @if (! is_numeric($setting->hub_lat) || ! is_numeric($setting->hub_lng))
                 <div class="alert alert-warning">
                     <i class="mdi mdi-information-outline me-1"></i> Titik pusat/OLT belum diatur, jadi jalur kabel belum bisa digambar.
                     <a href="{{ url('admin/coverage/peta/pengaturan') }}" class="alert-link">Atur titik pusat di sini</a>.
@@ -60,7 +60,11 @@
     var storeUrl = "{{ url('admin/coverage/peta/cable') }}";
     var csrf = "{{ csrf_token() }}";
 
-    var hub = (setting.hub_lat && setting.hub_lng) ? { lat: parseFloat(setting.hub_lat), lng: parseFloat(setting.hub_lng) } : null;
+    var hubLat = parseFloat(setting.hub_lat);
+    var hubLng = parseFloat(setting.hub_lng);
+    var hub = Number.isFinite(hubLat) && Number.isFinite(hubLng)
+        ? { lat: hubLat, lng: hubLng }
+        : null;
 
     // ---------- Basemap (semua gratis tanpa API key) ----------
     function tl(url, opts) { return L.tileLayer(url, Object.assign({ maxZoom: 19 }, opts || {})); }
@@ -72,8 +76,10 @@
     };
     var defaultName = { streets: 'Jalan', satelit: 'Satelit', topografi: 'Topografi', gelap: 'Gelap' }[setting.basemap] || 'Jalan';
 
+    var centerLat = parseFloat(setting.center_lat);
+    var centerLng = parseFloat(setting.center_lng);
     var map = L.map('map', {
-        center: [parseFloat(setting.center_lat), parseFloat(setting.center_lng)],
+        center: [Number.isFinite(centerLat) ? centerLat : 0.3, Number.isFinite(centerLng) ? centerLng : 109.5],
         zoom: parseInt(setting.zoom, 10) || 11,
         layers: [basemaps[defaultName]]
     });
@@ -90,7 +96,10 @@
 
     // ---------- ODP + jalur kabel ----------
     function hashOf(o) {
-        return [hub.lat.toFixed(6), hub.lng.toFixed(6), parseFloat(o.latitude).toFixed(6), parseFloat(o.longitude).toFixed(6)].join('|');
+        if (!hub) return null;
+        var lat = parseFloat(o.latitude), lng = parseFloat(o.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return [hub.lat.toFixed(6), hub.lng.toFixed(6), lat.toFixed(6), lng.toFixed(6)].join('|');
     }
 
     function drawCable(path) {
@@ -99,48 +108,72 @@
         L.polyline(path, { color: '#f1b44c', weight: 3, opacity: 0.95, dashArray: '6 12', className: 'fiber-flow' }).addTo(map);
     }
 
+    var status = document.getElementById('routeStatus');
+    var routeQueue = [];
+    var routingFailures = 0;
+    var cacheFailures = 0;
+
+    function updateStatus(active) {
+        if (!status) return;
+        var parts = [];
+        if (active) parts.push('⏳ Menarik jalur kabel mengikuti jalan... (' + routeQueue.length + ' tersisa)');
+        if (routingFailures) parts.push('Routing gagal: ' + routingFailures + ' (garis lurus digunakan)');
+        if (cacheFailures) parts.push('Cache gagal: ' + cacheFailures);
+        status.textContent = parts.join(' · ');
+        status.className = (routingFailures || cacheFailures) ? 'text-warning' : 'text-info';
+    }
+
     function saveCable(odpId, path, hash) {
-        fetch(storeUrl, {
+        if (!hash) return Promise.resolve(false);
+        return fetch(storeUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
             body: JSON.stringify({ odp_id: odpId, path: path, src_hash: hash })
-        }).catch(function () {});
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return true;
+        }).catch(function () {
+            cacheFailures++;
+            updateStatus(routeQueue.length > 0);
+            return false;
+        });
     }
 
-    var status = document.getElementById('routeStatus');
-    var routeQueue = [];
-
     function routeOne(o) {
-        return new Promise(function (resolve) {
-            var url = 'https://router.project-osrm.org/route/v1/driving/'
-                + hub.lng + ',' + hub.lat + ';' + parseFloat(o.longitude) + ',' + parseFloat(o.latitude)
-                + '?overview=simplified&geometries=geojson';
-            fetch(url, { headers: { 'Accept': 'application/json' } })
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    var path;
-                    if (d && d.routes && d.routes.length) {
-                        path = d.routes[0].geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
-                    } else {
-                        path = [[hub.lat, hub.lng], [parseFloat(o.latitude), parseFloat(o.longitude)]];
-                    }
-                    drawCable(path);
-                    saveCable(o.id, path, hashOf(o));
-                    resolve();
-                })
-                .catch(function () {
-                    // Gagal routing -> tarik garis lurus sebagai cadangan (tetap beranimasi).
-                    drawCable([[hub.lat, hub.lng], [parseFloat(o.latitude), parseFloat(o.longitude)]]);
-                    resolve();
-                });
-        });
+        var fallback = [[hub.lat, hub.lng], [parseFloat(o.latitude), parseFloat(o.longitude)]];
+        var hash = hashOf(o);
+        var url = 'https://router.project-osrm.org/route/v1/driving/'
+            + hub.lng + ',' + hub.lat + ';' + parseFloat(o.longitude) + ',' + parseFloat(o.latitude)
+            + '?overview=simplified&geometries=geojson';
+
+        return fetch(url, { headers: { 'Accept': 'application/json' } })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (d) {
+                if (!d || !d.routes || !d.routes.length || !d.routes[0].geometry || !Array.isArray(d.routes[0].geometry.coordinates)) {
+                    throw new Error('Rute tidak tersedia');
+                }
+                return d.routes[0].geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
+            })
+            .catch(function () {
+                // Cache fallback juga disimpan agar reload tidak terus memanggil OSRM yang sedang gagal.
+                routingFailures++;
+                updateStatus(routeQueue.length > 0);
+                return fallback;
+            })
+            .then(function (path) {
+                drawCable(path);
+                return saveCable(o.id, path, hash);
+            });
     }
 
     // Proses antrean routing berurutan dengan jeda (hormati batas wajar OSRM publik).
     function processQueue() {
-        if (! routeQueue.length) { if (status) status.textContent = ''; return; }
+        if (!routeQueue.length) { updateStatus(false); return; }
         var o = routeQueue.shift();
-        if (status) status.textContent = '⏳ Menarik jalur kabel mengikuti jalan... (' + routeQueue.length + ' tersisa)';
+        updateStatus(true);
         routeOne(o).then(function () { setTimeout(processQueue, 650); });
     }
 
@@ -149,7 +182,7 @@
 
     odps.forEach(function (o) {
         var lat = parseFloat(o.latitude), lng = parseFloat(o.longitude);
-        if (isNaN(lat) || isNaN(lng)) return;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
         bounds.push([lat, lng]);
 
         var box = document.createElement('div');

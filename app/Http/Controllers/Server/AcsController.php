@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Server;
 use App\Http\Controllers\Controller;
 use App\Libraries\ACSRequest;
 use App\Models\Website;
+use App\Services\AcsDeviceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
@@ -87,85 +88,18 @@ class AcsController extends Controller
             return redirect(url('server/acs'))->with('auth_errors', ['URL tidak ditemukan']);
         }
 
-        $acsRequest = new ACSRequest($host);
-
-        $parameterPaths = [
-            'pppUsername' => [
-                'VirtualParameters.pppoeUsername',
-                'VirtualParameters.pppUsername',
-                'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username',
-            ],
-            'rxPower' => [
-                'VirtualParameters.RXPower',
-                'VirtualParameters.redaman',
-                'InternetGatewayDevice.WANDevice.1.WANPONInterfaceConfig.RXPower',
-            ],
-            'pppoeIP' => [
-                'VirtualParameters.pppoeIP',
-                'VirtualParameters.pppIP',
-            ],
-            'ssid' => [
-                'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
-            ],
-            'userConnected' => [
-                'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations',
-            ],
-            'productClass' => [
-                'DeviceID.ProductClass',
-                'InternetGatewayDevice.DeviceInfo.ProductClass',
-                'Device.DeviceInfo.ProductClass',
-                'InternetGatewayDevice.DeviceInfo.ModelName',
-            ],
-            'serialNumber' => [
-                'DeviceID.SerialNumber',
-                'InternetGatewayDevice.DeviceInfo.SerialNumber',
-                'Device.DeviceInfo.SerialNumber',
-            ],
-        ];
-
-        $response = $acsRequest->getAllDevices();
-
-        if ($response === false || ! is_array($response)) {
+        try {
+            $deviceData = app(AcsDeviceService::class)->getDashboardDevices($host);
+        } catch (\RuntimeException) {
             return redirect(url('server/acs'))->with('auth_errors', ['Gagal mengambil data dari API atau respons tidak valid']);
         }
 
-        $deviceData = [];
-        $onlineCount = 0;
-        $offlineCount = 0;
-        $criticalRxPowerCount = 0;
-
-        foreach ($response as $device) {
-            $lastInform = $device['_lastInform'];
-            $isOnline = $this->getDeviceStatus($lastInform);
-
-            $rxPower = $this->getParameterWithPaths($device, $parameterPaths['rxPower'])['_value'] ?? 'N/A';
-            $rxPowerClass = $this->getRxPowerClass($rxPower);
-
-            if ($isOnline) {
-                $onlineCount++;
-            } else {
-                $offlineCount++;
-            }
-
-            if ($rxPowerClass === 'rx-power-critical') {
-                $criticalRxPowerCount++;
-            }
-
-            $deviceData[] = [
-                'id' => $device['_id'] ?? 'N/A',
-                'tags' => $device['_tags'] ?? [],
-                'online' => $isOnline,
-                'lastinform' => $this->formatLastInform($lastInform),
-                'pppUsername' => $this->getParameterWithPaths($device, $parameterPaths['pppUsername'])['_value'] ?? 'Unknown',
-                'pppoeIP' => $this->getParameterWithPaths($device, $parameterPaths['pppoeIP'])['_value'] ?? 'N/A',
-                'rxPower' => $rxPower,
-                'rxPowerClass' => $rxPowerClass,
-                'ssid' => $this->getParameterWithPaths($device, $parameterPaths['ssid'])['_value'] ?? '',
-                'userConnected' => $this->getParameterWithPaths($device, $parameterPaths['userConnected'])['_value'] ?? '0',
-                'productClass' => $this->getParameterWithPaths($device, $parameterPaths['productClass'])['_value'] ?? 'N/A',
-                'serialNumber' => $this->getParameterWithPaths($device, $parameterPaths['serialNumber'])['_value'] ?? 'N/A',
-            ];
-        }
+        $onlineCount = count(array_filter($deviceData, fn (array $device): bool => $device['online']));
+        $offlineCount = count($deviceData) - $onlineCount;
+        $criticalRxPowerCount = count(array_filter(
+            $deviceData,
+            fn (array $device): bool => $device['rxPowerClass'] === 'rx-power-critical'
+        ));
 
         return view('admin.acs.dashboard', [
             'title' => 'GenieACS',
@@ -334,61 +268,6 @@ class AcsController extends Controller
         }
 
         return redirect(url('server/acs/connect/'.$idrouter))->with('auth_errors', ['Data tidak ditemukan']);
-    }
-
-    private function formatLastInform($lastInform)
-    {
-        return (new \DateTime($lastInform))->format('d F Y, H:i');
-    }
-
-    private function getDeviceStatus($lastInform)
-    {
-        $now = time();
-        $fiveMinutes = 5 * 60;
-
-        return ($now - strtotime($lastInform)) <= $fiveMinutes;
-    }
-
-    public function getParameterWithPaths($device, $paths)
-    {
-        foreach ($paths as $path) {
-            $keys = explode('.', $path);
-            $value = $device;
-
-            foreach ($keys as $key) {
-                if (isset($value[$key])) {
-                    $value = $value[$key];
-                } else {
-                    $value = null;
-                    break;
-                }
-            }
-
-            if ($value !== null) {
-                return $value;
-            }
-        }
-
-        return null;
-    }
-
-    private function getRxPowerClass($rxPower)
-    {
-        if (! $rxPower) {
-            return '';
-        }
-
-        $power = floatval($rxPower);
-
-        if ($power > -8) {
-            return 'rx-power-critical';
-        } elseif ($power < -8 && $power > -27) {
-            return 'rx-power-good';
-        } elseif ($power <= -27) {
-            return 'rx-power-critical';
-        }
-
-        return '';
     }
 
     private function getSSID($device)

@@ -74,7 +74,7 @@
                                                 <td>{{ count($row['available_ports']) ? implode(', ', $row['available_ports']) : '—' }}</td>
                                                 <td>{{ $row['pelanggan'] }}</td>
                                                 <td>
-                                                    @if ($row['latitude'] && $row['longitude'])
+                                                    @if (is_numeric($row['latitude']) && is_numeric($row['longitude']))
                                                         <span class="text-success"><i class="mdi mdi-map-marker-check"></i> Ada</span>
                                                     @else
                                                         <span class="text-muted"><i class="mdi mdi-map-marker-off"></i> Belum</span>
@@ -95,8 +95,10 @@
                                                         data-port="{{ $row['total_port'] }}"
                                                         data-lat="{{ $row['latitude'] }}"
                                                         data-lng="{{ $row['longitude'] }}"><i class="mdi mdi-pencil"></i></button>
-                                                    <a href="{{ url('admin/coverage/odp/delete/'.$row['id']) }}" class="btn btn-sm btn-danger swal-delete"
-                                                        data-text="Hapus ODP {{ $row['nama'] }}? Tindakan ini tidak bisa dibatalkan."><i class="mdi mdi-delete"></i></a>
+                                                    <form action="{{ url('admin/coverage/odp/delete/'.$row['id']) }}" method="POST" class="d-inline delete-form">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn-sm btn-danger swal-delete" data-text="Hapus ODP {{ $row['nama'] }}? Tindakan ini tidak bisa dibatalkan."><i class="mdi mdi-delete"></i></button>
+                                                    </form>
                                                 </td>
                                             </tr>
                                         @endforeach
@@ -183,7 +185,7 @@
     odpData.forEach(function (o) {
         var lat = parseFloat(o.latitude);
         var lng = parseFloat(o.longitude);
-        if (isNaN(lat) || isNaN(lng)) return;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
         var warna = o.gangguan_open > 0 ? '#f46a6a' : '#556ee6';
         var marker = L.circleMarker([lat, lng], {
@@ -350,14 +352,14 @@
 })();
 </script>
 <script>
-// Konfirmasi hapus ODP via SweetAlert2 (bukan window.confirm bawaan browser).
+// Konfirmasi hapus ODP, lalu kirim form POST yang dilindungi CSRF.
 document.addEventListener('click', function (e) {
-    var link = e.target.closest('a.swal-delete');
-    if (!link) return;
+    var button = e.target.closest('button.swal-delete');
+    if (!button) return;
     e.preventDefault();
     Swal.fire({
         title: 'Konfirmasi Hapus',
-        text: link.dataset.text || 'Data akan dihapus.',
+        text: button.dataset.text || 'Data akan dihapus.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Hapus',
@@ -365,7 +367,7 @@ document.addEventListener('click', function (e) {
         confirmButtonColor: '#f46a6a',
         cancelButtonColor: '#74788d'
     }).then(function (result) {
-        if (result.isConfirmed) window.location.href = link.href;
+        if (result.isConfirmed) button.closest('form').submit();
     });
 });
 </script>
