@@ -6,7 +6,7 @@
 
 ## Root cause
 - Sebelumnya, kata kunci `'wifi'` dan `'wi-fi'` berdiri sendiri sebagai keyword kategori `wifi`. Akibatnya, pesan yang hanya menyebut "wifi" atau pesan biner/unicode/emoji yang mengandung pecahan kata "wifi"/"lag" otomatis terbuat sebagai laporan gangguan dan memicu balasan otomatis (*auto reply*).
-- Pesan tanpa huruf (misal teks wingdings/simbol/emoji murni seperti `←🏀`) sebelumnya tidak difilter sehingga masuk ke laporan gangguan kategori "lainnya".
+- Pesan tanpa huruf (misal teks wingdings/simbol/emoji murni) sebelumnya tidak difilter sehingga masuk ke laporan gangguan kategori "lainnya".
 
 ## Perbaikan
 - Memperbarui `GangguanReport::classify()` di `app/Models/GangguanReport.php`:

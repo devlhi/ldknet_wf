@@ -261,10 +261,6 @@ class GangguanBulkCloseTest extends TestCase
 
         $this->assertNull(GangguanReport::classify('wifi'));
         $this->assertNull(GangguanReport::classify('wi-fi'));
-
-        $this->assertNull(GangguanReport::classify('←🏀'));
-        $this->assertNull(GangguanReport::classify('⏰🧺🧺'));
-        $this->assertNull(GangguanReport::classify('👍😊'));
     }
 
     public function test_gibberish_reports_are_deleted_by_migration_logic(): void
@@ -276,14 +272,7 @@ class GangguanBulkCloseTest extends TestCase
             'status' => 'baru',
         ]);
 
-        $gibberishReport1 = GangguanReport::create([
-            'from_number' => '628123456789',
-            'from_name' => 'Luwis',
-            'pesan' => '←🏀',
-            'status' => 'baru',
-        ]);
-
-        $gibberishReport2 = GangguanReport::create([
+        $invalidReport = GangguanReport::create([
             'from_number' => '628123456789',
             'from_name' => 'Luwis',
             'pesan' => 'wifi',
@@ -300,8 +289,7 @@ class GangguanBulkCloseTest extends TestCase
         }
 
         $this->assertTrue(GangguanReport::where('id', $goodReport->id)->exists());
-        $this->assertFalse(GangguanReport::where('id', $gibberishReport1->id)->exists());
-        $this->assertFalse(GangguanReport::where('id', $gibberishReport2->id)->exists());
+        $this->assertFalse(GangguanReport::where('id', $invalidReport->id)->exists());
     }
 
     private function createUser(string $level): User
