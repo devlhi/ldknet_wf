@@ -56,4 +56,4 @@ Sedang berjalan / belum selesai:
 - `admin-dashboard` — layout admin + halaman dashboard — update: 2026-07-10 WIB (fix Pelanggan Baru: baca dari orders bukan psb) -> .multibrain/indexes/admin-dashboard.md
 - `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-12 17:40 WIB (retry isolir Mikrotik) -> .multibrain/indexes/modules-parallel.md
 - `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-16 00:38 WIB (audit lintas modul: webhook/gateway/broadcast/security) -> .multibrain/indexes/wa-gateway.md
-- `features` — fitur tambahan lintas modul — update: 2026-07-20 11:29 WIB (identitas customer, menu aktif, validasi port ODP) -> .multibrain/indexes/features.md
+- `features` — fitur tambahan lintas modul — update: 2026-07-20 12:22 WIB (eager loading kecuali Customers/Invoice Data, data ODP pulih) -> .multibrain/indexes/features.md
