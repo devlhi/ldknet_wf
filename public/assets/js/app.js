@@ -30,19 +30,32 @@ File: Main Js File
     }
 
     function initActiveMenu() {
-        // === following js will activate the menu in left side bar based on url ====
-        $("#sidebar-menu a").each(function () {
-            var pageUrl = window.location.href.split(/[?#]/)[0];
-            if (this.href == pageUrl) {
-                $(this).addClass("active");
-                $(this).parent().addClass("mm-active"); // add active to li of the current link
-                $(this).parent().parent().addClass("mm-show");
-                $(this).parent().parent().prev().addClass("mm-active"); // add active class to an anchor
-                $(this).parent().parent().parent().addClass("mm-active");
-                $(this).parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
-                $(this).parent().parent().parent().parent().parent().addClass("mm-active");
-            }
+        var currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+        var activeLink = null;
+        var longestMatch = -1;
+
+        $("#sidebar-menu a[href]").each(function () {
+            var linkPath = new URL(this.href, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+            var prefixes = ($(this).data("active-prefix") || "").split(",");
+            prefixes.unshift(linkPath);
+
+            prefixes.forEach(function (prefix) {
+                prefix = prefix.trim().replace(/\/+$/, "");
+                if (prefix && (currentPath === prefix || currentPath.indexOf(prefix + "/") === 0) && prefix.length > longestMatch) {
+                    activeLink = this;
+                    longestMatch = prefix.length;
+                }
+            }, this);
         });
+
+        if (!activeLink) {
+            return;
+        }
+
+        $(activeLink).addClass("active");
+        $(activeLink).parents("li").addClass("mm-active");
+        $(activeLink).parents("ul.sub-menu").addClass("mm-show");
+        $(activeLink).parents("ul.sub-menu").prev("a").addClass("mm-active").attr("aria-expanded", "true");
     }
 
     function initMenuItemScroll() {

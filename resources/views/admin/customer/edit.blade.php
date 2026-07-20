@@ -212,19 +212,12 @@
                                             <div class="mb-3">
                                                 <label class="form-label">Nama ODP</label>
                                                 <select class="form-control select2" id="nama-odp-select" name="nama_odp">
-                                                    @if ($row->nama_odp != null)
-                                                        <option value="{{ $row->nama_odp }}" selected>{{ $row->nama_odp }}</option>
-
-
-                                                        @foreach ($getodp as $dataodp)
-                                                            <option value="{{ $dataodp->nama }}">{{ $dataodp->nama }}</option>
-                                                        @endforeach
-                                                    @else
+                                                    @if ($row->nama_odp == null)
                                                         <option value="" disabled selected>Pilih Data ODP</option>
-                                                        @foreach ($getodp as $dataodp)
-                                                            <option>{{ $dataodp->nama }}</option>
-                                                        @endforeach
                                                     @endif
+                                                    @foreach ($getodp as $dataodp)
+                                                        <option value="{{ $dataodp->nama }}" @selected($row->nama_odp === $dataodp->nama)>{{ $dataodp->nama }}</option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                             <button type="submit" class="btn btn-primary"><i class="uil uil-sync"></i> Update Data ODP</button>
@@ -262,6 +255,9 @@
 @section('scripts')
     <script>
         $(document).ready(function() {
+            var currentIdpel = @json($row->idpel);
+            var currentPort = String(parseInt(@json((string) $row->port_odp), 10) || '');
+
             function updatePortOptions(namaODP) {
                 if (namaODP === "" || namaODP === null) {
                     // Nonaktifkan dropdown port jika nama ODP belum dipilih
@@ -298,16 +294,24 @@
                                     for (var i = 1; i <= response.jumlah_port; i++) {
                                         var optionText = i;
                                         var portInfo = usedPortsData[i.toString()];
+                                        var disabled = false;
 
-                                        if (portInfo) {
-                                            var idpelInfo = portInfo.idpel;
-                                            optionText += ' ( Port Sudah digunakan Oleh : ' + idpelInfo + ' )';
+                                        if (portInfo && portInfo.idpel !== currentIdpel) {
+                                            optionText += ' ( Port Sudah digunakan Oleh : ' + portInfo.idpel + ' )';
+                                            disabled = true;
                                         }
 
-                                        $("#port-odp-select").append($('<option>', {
+                                        var option = $('<option>', {
                                             value: i,
-                                            text: optionText
-                                        }));
+                                            text: optionText,
+                                            disabled: disabled
+                                        });
+
+                                        if (String(i) === currentPort) {
+                                            option.prop('selected', true);
+                                        }
+
+                                        $("#port-odp-select").append(option);
                                     }
                                 },
                                 error: function() {

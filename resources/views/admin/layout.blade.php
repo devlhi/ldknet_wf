@@ -142,7 +142,7 @@
                         <li class="menu-title">CMS</li>
 
                         <li>
-                            <a href="{{ url('admin/customers') }}" class="waves-effect">
+                            <a href="{{ url('admin/customers') }}" class="waves-effect" data-active-prefix="/admin/customer">
                                 <i class="uil-users-alt"></i>
                                 <span>Customers</span>
                             </a>
@@ -194,14 +194,14 @@
                         </li>
 
                         <li>
-                            <a href="{{ url('admin/finance/report') }}" class="waves-effect">
+                            <a href="{{ url('admin/finance/report') }}" class="waves-effect" data-active-prefix="/admin/finance/report">
                                 <i class="uil-invoice"></i>
                                 <span>Report</span>
                             </a>
                         </li>
 
                         <li>
-                            <a href="{{ url('admin/finance/invoice') }}" class="waves-effect">
+                            <a href="{{ url('admin/finance/invoice') }}" class="waves-effect" data-active-prefix="/admin/finance/invoice">
                                 <i class="uil-invoice"></i>
                                 <span>Invoice Data</span>
                             </a>

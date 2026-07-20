@@ -82,6 +82,42 @@ class AuthController extends Controller
         };
     }
 
+    private function findLoginUser(string $identifier): ?User
+    {
+        $column = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'nomor';
+        $users = User::where($column, $identifier)->limit(2)->get();
+
+        return $users->count() === 1 ? $users->first() : null;
+    }
+
+    private function findCustomerOrder(User $user): ?Order
+    {
+        $email = trim((string) ($user->email ?? ''));
+        $nomor = trim((string) ($user->nomor ?? ''));
+
+        if ($email === '' && $nomor === '') {
+            return null;
+        }
+
+        if ($email !== '' && $nomor !== '') {
+            $exact = Order::where('email', $email)->where('nomor', $nomor)->orderByDesc('id')->get();
+            if ($exact->pluck('idpel')->unique()->count() === 1) {
+                return $exact->first();
+            }
+        }
+
+        $candidates = Order::where(function ($query) use ($email, $nomor) {
+            if ($email !== '') {
+                $query->where('email', $email);
+            }
+            if ($nomor !== '') {
+                $query->orWhere('nomor', $nomor);
+            }
+        })->orderByDesc('id')->get();
+
+        return $candidates->pluck('idpel')->unique()->count() === 1 ? $candidates->first() : null;
+    }
+
     public function index()
     {
         if (Auth::check()) {
@@ -101,10 +137,11 @@ class AuthController extends Controller
             'password.required' => 'Email atau password tidak boleh kosong',
         ]);
 
-        // Login bisa pakai email atau nomor HP, sama seperti aplikasi lama
-        $user = User::where('email', $credentials['email'])
-            ->orWhere('nomor', $credentials['email'])
-            ->first();
+        // Login diputuskan hanya dari satu identitas yang jelas: email memakai
+        // kolom email, selain itu dianggap nomor HP. Kandidat ambigu tidak boleh
+        // mengambil baris pertama secara acak.
+        $identifier = trim((string) $credentials['email']);
+        $user = $identifier !== '' ? $this->findLoginUser($identifier) : null;
 
         $validLevel = $user && in_array($user->level, ['developer', 'admin', 'finance', 'user', 'technician'], true);
 
@@ -132,16 +169,18 @@ class AuthController extends Controller
             return redirect('auth/login')->with('auth_errors', ['Akun anda nonaktif, hubungi Admin']);
         }
 
+        // Akun pelanggan harus terhubung ke tepat satu identitas pelanggan sebelum
+        // sesi dibuat. Data kontak ambigu tidak boleh membuka invoice pelanggan lain.
+        $order = $user->level === 'user' ? $this->findCustomerOrder($user) : null;
+        if ($user->level === 'user' && ! $order) {
+            return redirect('auth/login')->with('auth_errors', ['Akun pelanggan belum terhubung dengan benar, hubungi Admin']);
+        }
+
         Auth::login($user);
         $request->session()->regenerate();
 
-        // idpel dipakai dashboard user (diambil dari orders, perilaku app lama)
         if ($user->level === 'user') {
-            $order = Order::where('email', $user->email)
-                ->orWhere('nomor', $user->nomor)
-                ->orderByDesc('id')
-                ->first();
-            $request->session()->put('idpel', $order->idpel ?? null);
+            $request->session()->put('idpel', $order->idpel);
         }
 
         return $this->redirectByLevel($user->level);

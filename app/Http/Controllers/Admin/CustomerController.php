@@ -90,7 +90,11 @@ class CustomerController extends Controller
         $orderable[] = 'orders.port_odp'; // Port ODP
 
         $base = fn () => Order::select('orders.*', 'users.id as customer_id')
-            ->leftJoin('users', 'orders.nama', '=', 'users.nama');
+            ->leftJoin('users', function ($join) {
+                $join->on('orders.email', '=', 'users.email')
+                    ->on('orders.nomor', '=', 'users.nomor')
+                    ->where('users.level', 'user');
+            });
 
         $recordsTotal = Order::count();
 
@@ -163,7 +167,7 @@ class CustomerController extends Controller
             $namaEsc = e($row->nama);
             $namaAttr = htmlspecialchars($row->nama, ENT_QUOTES);
 
-            $gantipassUrl = url('admin/customer/gantipass/'.$row->customer_id);
+            $gantipassUrl = $row->customer_id ? url('admin/customer/gantipass/'.$row->customer_id) : null;
             $detailUrl = url('admin/customer/detail/'.$row->idpel);
 
             $editUrl = url('admin/customer/edit/'.$row->idpel);
@@ -175,8 +179,12 @@ class CustomerController extends Controller
                 ? '<a href="https://wa.me/'.$waNumber.'" target="_blank" class="btn btn-sm btn-success" title="Chat WhatsApp"><i class="uil uil-whatsapp"></i></a> '
                 : '';
 
+            $passwordBtn = $gantipassUrl
+                ? '<button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalGantiPass" data-action="'.$gantipassUrl.'" data-nama="'.$namaAttr.'"><i class="uil uil-lock"></i> Ganti Password</button> '
+                : '<button type="button" class="btn btn-sm btn-secondary" disabled title="Akun login pelanggan belum cocok"><i class="uil uil-lock"></i> Ganti Password</button> ';
+
             $aksi = $waBtn
-                .'<button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalGantiPass" data-action="'.$gantipassUrl.'" data-nama="'.$namaAttr.'"><i class="uil uil-lock"></i> Ganti Password</button> '
+                .$passwordBtn
                 .'<a href="'.$detailUrl.'" class="btn btn-sm btn-success"><i class="uil-check-circle"></i> Cek Disini</a> '
                 .'<a href="'.$editUrl.'" class="btn btn-sm btn-primary"><i class="uil-edit"></i> Edit Data</a>';
 
@@ -705,13 +713,13 @@ class CustomerController extends Controller
     // POST admin/customer/gantipass/{id} (CI4: AdminController::customerUpdatePassword)
     public function customerUpdatePassword(Request $request, $id)
     {
-        $getaccount = User::where('id', $id)->get();
+        $account = User::where('id', $id)->where('level', 'user')->first();
 
-        if ($getaccount->isEmpty()) {
-            return redirect('admin/manage/user');
+        if (! $account) {
+            return redirect('admin/customers')->with('auth_errors', ['Akun pelanggan tidak ditemukan']);
         }
 
-        User::where('id', $id)->update([
+        $account->update([
             'password' => Hash::make((string) $request->input('password')),
         ]);
 
@@ -828,11 +836,50 @@ class CustomerController extends Controller
     public function customerUpdateODP(Request $request)
     {
         $idpel = trim((string) $request->input('idpel'));
+        $namaOdp = trim((string) $request->input('nama_odp'));
+        $portOdp = (int) $request->input('port_odp');
 
-        Order::where('idpel', $idpel)->update([
-            'nama_odp' => $request->input('nama_odp'),
-            'port_odp' => $request->input('port_odp'),
-        ]);
+        $customer = Order::where('idpel', $idpel)->first();
+        if (! $customer) {
+            return redirect('admin/customers')->with('auth_errors', ['Pelanggan tidak ditemukan']);
+        }
+
+        $odp = Odp::where('nama', $namaOdp)->first();
+        if (! $odp) {
+            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Data ODP tidak ditemukan']);
+        }
+
+        if ($portOdp < 1 || $portOdp > (int) $odp->port) {
+            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Port ODP di luar kapasitas']);
+        }
+
+        $updated = DB::transaction(function () use ($idpel, $namaOdp, $portOdp) {
+            $customer = Order::where('idpel', $idpel)->lockForUpdate()->first();
+            if (! $customer) {
+                return false;
+            }
+
+            $portDipakai = Order::where('nama_odp', $namaOdp)
+                ->where('idpel', '!=', $idpel)
+                ->lockForUpdate()
+                ->get(['port_odp'])
+                ->contains(fn ($order) => ctype_digit(trim((string) $order->port_odp)) && (int) $order->port_odp === $portOdp);
+
+            if ($portDipakai) {
+                return false;
+            }
+
+            $customer->update([
+                'nama_odp' => $namaOdp,
+                'port_odp' => $portOdp,
+            ]);
+
+            return true;
+        });
+
+        if (! $updated) {
+            return redirect('admin/customer/edit/'.$idpel)->with('errors_odp', ['Port ODP sudah digunakan pelanggan lain']);
+        }
 
         return redirect('admin/customer/edit/'.$idpel)->with('success_odp', ['Berhasil mengupdate data odp']);
     }
@@ -860,15 +907,25 @@ class CustomerController extends Controller
     {
         $usedPorts = [];
 
-        foreach (Order::all() as $order) {
+        foreach (Order::whereNotNull('nama_odp')
+            ->where('nama_odp', '!=', '')
+            ->whereNotNull('port_odp')
+            ->where('port_odp', '!=', '')
+            ->get(['nama_odp', 'port_odp', 'idpel']) as $order) {
             $namaODP = $order->nama_odp;
-            $portODP = $order->port_odp;
+            $portODP = (string) $order->port_odp;
+
+            if (! ctype_digit(trim($portODP)) || (int) $portODP < 1) {
+                continue;
+            }
+
+            $normalizedPort = (string) (int) $portODP;
 
             if (! isset($usedPorts[$namaODP])) {
                 $usedPorts[$namaODP] = [];
             }
 
-            $usedPorts[$namaODP][$portODP] = [
+            $usedPorts[$namaODP][$normalizedPort] = [
                 'idpel' => $order->idpel,
             ];
         }

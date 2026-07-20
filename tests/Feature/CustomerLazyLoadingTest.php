@@ -20,6 +20,7 @@ class CustomerLazyLoadingTest extends TestCase
             $table->id();
             $table->string('nama');
             $table->string('email');
+            $table->string('nomor')->nullable();
             $table->string('password');
             $table->string('level');
             $table->string('status_account')->default('Active');
@@ -40,10 +41,16 @@ class CustomerLazyLoadingTest extends TestCase
             $table->id();
             $table->string('nama');
         });
+        Schema::create('odp', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama');
+            $table->integer('port');
+        });
         Schema::create('orders', function (Blueprint $table): void {
             $table->id();
             $table->string('idpel');
             $table->string('nama');
+            $table->string('email')->nullable();
             $table->string('paket');
             $table->string('id_router')->nullable();
             $table->string('mode')->nullable();
@@ -121,6 +128,63 @@ class CustomerLazyLoadingTest extends TestCase
                 'status' => 'success',
                 'data' => [],
             ]);
+    }
+
+    public function test_customer_odp_assignment_rejects_occupied_port(): void
+    {
+        DB::table('odp')->insert(['nama' => 'ODP-01', 'port' => 8]);
+        DB::table('orders')->insert([
+            [
+                'idpel' => 'CUST-001',
+                'nama' => 'Customer One',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => null,
+                'port_odp' => null,
+            ],
+            [
+                'idpel' => 'CUST-002',
+                'nama' => 'Customer Two',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => 'ODP-01',
+                'port_odp' => '03',
+            ],
+        ]);
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'nama_odp' => 'ODP-01',
+            'port_odp' => 3,
+        ])->assertRedirect('/admin/customer/edit/CUST-001')
+            ->assertSessionHas('errors_odp');
+
+        $this->assertNull(DB::table('orders')->where('idpel', 'CUST-001')->value('port_odp'));
+    }
+
+    public function test_customer_odp_assignment_validates_capacity_and_updates_free_port(): void
+    {
+        DB::table('odp')->insert(['nama' => 'ODP-01', 'port' => 8]);
+        DB::table('orders')->insert([
+            'idpel' => 'CUST-001',
+            'nama' => 'Customer One',
+            'paket' => '10 Mbps',
+            'status' => 'Active',
+        ]);
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'nama_odp' => 'ODP-01',
+            'port_odp' => 9,
+        ])->assertSessionHas('errors_odp');
+
+        $this->actingAs($this->user)->post('/admin/customer/update/odp', [
+            'idpel' => 'CUST-001',
+            'nama_odp' => 'ODP-01',
+            'port_odp' => 4,
+        ])->assertSessionHas('success_odp');
+
+        $this->assertSame('4', DB::table('orders')->where('idpel', 'CUST-001')->value('port_odp'));
     }
 
     public function test_customer_endpoint_loads_rows_after_activation(): void

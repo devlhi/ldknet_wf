@@ -31,7 +31,9 @@ class UserController extends Controller
 
     private function idpel(): ?string
     {
-        return auth()->user()->idpel ?? session('idpel');
+        $idpel = session('idpel');
+
+        return is_string($idpel) && trim($idpel) !== '' ? $idpel : null;
     }
 
     public function index(Request $request)
