@@ -952,14 +952,22 @@ class CustomerController extends Controller
     public function getUsedPorts()
     {
         $usedPorts = [];
-        $odpByAssignment = OdpAssignment::uniqueByStoredName(Odp::query()->get(['id', 'nama']));
+        $odps = Odp::query()->get(['id', 'nama']);
+
+        $exactMap = [];
+        foreach ($odps as $odp) {
+            $exactMap[OdpAssignment::normalizedName($odp->nama)] = $odp;
+        }
+
+        $prefixMap = OdpAssignment::uniqueByStoredName($odps);
 
         foreach (Order::whereNotNull('nama_odp')
             ->where('nama_odp', '!=', '')
             ->whereNotNull('port_odp')
             ->where('port_odp', '!=', '')
             ->get(['nama_odp', 'port_odp', 'idpel']) as $order) {
-            $odp = $odpByAssignment->get(OdpAssignment::key($order->nama_odp));
+            $normalized = OdpAssignment::normalizedName($order->nama_odp);
+            $odp = $exactMap[$normalized] ?? $prefixMap->get(OdpAssignment::key($order->nama_odp));
             $portODP = (string) $order->port_odp;
 
             if (! $odp || ! ctype_digit(trim($portODP)) || (int) $portODP < 1) {

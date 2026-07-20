@@ -305,6 +305,37 @@ class CustomerLazyLoadingTest extends TestCase
             ->assertJsonPath("data.{$odpId}.4.idpel", 'CUST-001');
     }
 
+    public function test_get_used_ports_resolves_exact_names_first_when_prefix_collides(): void
+    {
+        $odp1 = DB::table('odp')->insertGetId(['nama' => 'Aping001(P.Herpin)', 'port' => 8]);
+        $odp2 = DB::table('odp')->insertGetId(['nama' => 'Aping001(P.Herpin_Dua)', 'port' => 8]);
+
+        DB::table('orders')->insert([
+            [
+                'idpel' => 'CUST-A1',
+                'nama' => 'Customer A1',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => 'Aping001(P.Herpin)',
+                'port_odp' => '2',
+            ],
+            [
+                'idpel' => 'CUST-A2',
+                'nama' => 'Customer A2',
+                'paket' => '10 Mbps',
+                'status' => 'Active',
+                'nama_odp' => 'Aping001(P.Herp',
+                'port_odp' => '3',
+            ],
+        ]);
+
+        $usedPorts = $this->actingAs($this->user)->getJson('/get-used-ports');
+
+        $usedPorts->assertJsonPath("data.{$odp1}.2.idpel", 'CUST-A1');
+        $this->assertFalse(isset($usedPorts->json()['data'][$odp1]['3']));
+        $this->assertFalse(isset($usedPorts->json()['data'][$odp2]['3']));
+    }
+
     public function test_customer_odp_assignment_rejects_ambiguous_legacy_prefix(): void
     {
         $firstId = DB::table('odp')->insertGetId(['nama' => 'Gontang001(Mayam Heri)', 'port' => 4]);

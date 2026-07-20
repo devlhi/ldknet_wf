@@ -261,11 +261,10 @@
             function updatePortOptions(odpId) {
                 if (odpId === "" || odpId === null) {
                     // Nonaktifkan dropdown port jika nama ODP belum dipilih
-                    $("#port-odp-select").prop("disabled", true);
-                    $("#port-odp-select").empty().append($('<option>', {
+                    $("#port-odp-select").prop("disabled", true).empty().append($('<option>', {
                         value: "",
                         text: "Pilih nama ODP terlebih dahulu"
-                    }));
+                    })).select2();
                 } else {
                     // Aktifkan dropdown port jika nama ODP dipilih
                     $("#port-odp-select").prop("disabled", false);
@@ -313,6 +312,9 @@
 
                                         $("#port-odp-select").append(option);
                                     }
+
+                                    // Refresh Select2 to reflect new options, selection, and disabled states
+                                    $("#port-odp-select").select2();
                                 },
                                 error: function() {
                                     console.log("Error: Failed to get used ports with idpel");
