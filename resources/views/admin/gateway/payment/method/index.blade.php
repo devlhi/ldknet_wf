@@ -40,9 +40,6 @@
                     <div class="card">
 
                         <div class="card-body">
-                            <form method="GET" class="mb-3">
-                                <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
-                            </form>
                             <div id="myModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
                                 <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
                                     <div class="modal-content">
@@ -177,9 +174,7 @@
                                             </td>
                                         </tr>
                                     @endforeach
-                                    @if (! $showData)
-                                        <tr><td colspan="7" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                                    @elseif ($method->isEmpty())
+                                    @if ($method->isEmpty())
                                         <tr><td colspan="7" class="text-center text-muted">Belum ada metode pembayaran.</td></tr>
                                     @endif
                                 </tbody>

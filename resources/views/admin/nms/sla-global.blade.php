@@ -179,7 +179,7 @@ function loadDeviceInterfaces(deviceId, btnElement, selectElement) {
     selectElement.disabled = true;
     selectElement.innerHTML = '<option value="">Memuat...</option>';
 
-    fetch('{{ url("admin/nms/device/poll") }}/' + deviceId + '?show_data=1')
+    fetch('{{ url("admin/nms/device/poll") }}/' + deviceId)
         .then(r => r.json())
         .then(data => {
             var ports = [];

@@ -44,10 +44,9 @@ class VoucherController extends Controller
     public function home(Request $request)
     {
         $daysInMonth = (int) date('t');
-        $showData = $request->boolean('show_data');
-        $tablesReady = $showData && $this->voucherTablesReady();
+        $tablesReady = $this->voucherTablesReady();
 
-        if ($showData && ! $tablesReady) {
+        if (! $tablesReady) {
             $this->missingTablesWarning();
         }
 
@@ -102,31 +101,25 @@ class VoucherController extends Controller
             'vcrystrdy' => $summary['vcrystrdy'],
             'reportByDay' => $summary['reportByDay'],
             'daysInMonth' => $daysInMonth,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function report(Request $request)
     {
-        $showData = (string) $request->query('show_data') === '1';
         if (! $this->voucherTablesReady()) {
             $this->missingTablesWarning();
         }
 
         return view('admin.voucher.report', [
             'title' => 'Laporan',
-            'tahun' => $showData && $this->voucherTablesReady() ? $this->getTahunMasuk() : collect(),
+            'tahun' => $this->voucherTablesReady() ? $this->getTahunMasuk() : collect(),
             'orders' => false,
             'filterUrl' => url('server/voucher/report/filter'),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function reportFilter(Request $request)
     {
-        if ((string) $request->post('show_data') !== '1') {
-            return response()->json(['data' => []]);
-        }
 
         $bulan = (int) $request->post('bulan');
         $tahun = (int) $request->post('tahun');
@@ -154,7 +147,6 @@ class VoucherController extends Controller
 
     public function reportOrders(Request $request)
     {
-        $showData = (string) $request->query('show_data') === '1';
         $hasTable = Schema::hasTable('orders_voucher');
         if (! $hasTable) {
             $this->missingTablesWarning();
@@ -162,18 +154,14 @@ class VoucherController extends Controller
 
         return view('admin.voucher.report', [
             'title' => 'Laporan',
-            'tahun' => $showData && $hasTable ? $this->getTahunMasukVoc() : collect(),
+            'tahun' => $hasTable ? $this->getTahunMasukVoc() : collect(),
             'orders' => true,
             'filterUrl' => url('server/voucher/report/orders/filter'),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function reportOrdersFilter(Request $request)
     {
-        if ((string) $request->post('show_data') !== '1') {
-            return response()->json(['data' => []]);
-        }
 
         $bulan = (int) $request->post('bulan');
         $tahun = (int) $request->post('tahun');
@@ -201,30 +189,24 @@ class VoucherController extends Controller
 
     public function users(Request $request)
     {
-        $showData = (string) $request->query('show_data') === '1';
 
         return view('admin.voucher.users', [
             'title' => 'Users Manager',
-            'account' => $showData
-                ? DB::table('users')->where('level', 'member')->orWhere('level', 'reseller')->get()
-                : collect(),
+            'account' => DB::table('users')->where('level', 'member')->orWhere('level', 'reseller')->get(),
             'password' => Str::random(5),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
     public function templateMessage(Request $request)
     {
-        $showData = $request->boolean('show_data');
-        $hasTable = $showData && Schema::hasTable('template_message_voucher');
-        if ($showData && ! $hasTable) {
+        $hasTable = Schema::hasTable('template_message_voucher');
+        if (! $hasTable) {
             $this->missingTablesWarning();
         }
 
         return view('admin.voucher.template', [
             'title' => 'Template Message',
             'content' => $hasTable ? DB::table('template_message_voucher')->get() : collect(),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 

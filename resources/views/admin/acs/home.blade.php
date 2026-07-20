@@ -138,14 +138,6 @@
 
                 <div class="card">
                     <div class="card-body">
-                        @if (! ($dataLoaded ?? true))
-                            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <span><i class="mdi mdi-information-outline me-2"></i> Data ACS belum dimuat dari database. Klik tombol untuk memuat data.</span>
-                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">
-                                    <i class="mdi mdi-download"></i> Tampilkan Data
-                                </a>
-                            </div>
-                        @endif
                         <table id="datatable" class="table table-bordered dt-responsive nowrap" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                             <thead>
                                 <tr>

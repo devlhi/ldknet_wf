@@ -100,10 +100,7 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="mb-0">Jadwal Cron</h5>
-                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm"><i class="uil uil-eye me-1"></i> Tampilkan Data</a>
-                            </div>
+                            <h5 class="mb-3">Jadwal Cron</h5>
                             <form action="{{ url('admin/setting/cron/update') }}" method="POST">
                                 @csrf
                                 <div class="table-responsive">
@@ -145,9 +142,7 @@
                                                     </td>
                                                 </tr>
                                             @endforeach
-                                            @if (! $showData)
-                                                <tr><td colspan="4" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                                            @elseif ($crons->isEmpty())
+                                            @if ($crons->isEmpty())
                                                 <tr><td colspan="4" class="text-center text-muted">Belum ada pengaturan cron.</td></tr>
                                             @endif
                                         </tbody>
@@ -164,10 +159,7 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="mb-0"><i class="uil uil-history me-1"></i> Riwayat Log Cron (50 terakhir)</h5>
-                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm"><i class="uil uil-eye me-1"></i> Tampilkan Data</a>
-                            </div>
+                            <h5 class="mb-3"><i class="uil uil-history me-1"></i> Riwayat Log Cron (50 terakhir)</h5>
                             <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
                                 <table class="table table-sm table-bordered align-middle mb-0">
                                     <thead>
@@ -199,7 +191,7 @@
                                         @empty
                                             <tr>
                                                 <td colspan="5" class="text-center text-muted py-3">
-                                                    {{ $showData ? 'Belum ada log. Log akan terisi setelah task cron pertama berjalan.' : 'Klik Tampilkan Data untuk memuat log cron.' }}
+                                                    Belum ada log. Log akan terisi setelah task cron pertama berjalan.
                                                 </td>
                                             </tr>
                                         @endforelse

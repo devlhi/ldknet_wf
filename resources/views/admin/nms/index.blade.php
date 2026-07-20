@@ -3,7 +3,6 @@
 @section('content')
 <div class="page-content">
     <div class="container-fluid">
-        <form method="GET" class="mb-3"><button type="submit" name="show_data" value="1" class="btn btn-primary">Tampilkan Data</button></form>
         <div class="row">
             <div class="col-12">
                 @if (session('auth_errors'))
@@ -274,7 +273,6 @@
 @endsection
 
 @section('css')
-@if ($showData)
 <link rel="stylesheet" href="{{ asset('leaflet/leaflet.css') }}">
 <style>
 .nms-device-icon.nms-marker-online {
@@ -397,11 +395,9 @@
     }
 }
 </style>
-@endif
 @endsection
 
 @section('scripts')
-@if ($showData)
 <script src="{{ asset('leaflet/leaflet.js') }}"></script>
 <script>
 function escapeHtml(value) {
@@ -781,8 +777,7 @@ function drawFiberLink(link, pointA, pointB) {
     });
 }
 
-@if ($showData)
-fetch('{{ url("admin/nms/map-data") }}?show_data=1')
+fetch('{{ url("admin/nms/map-data") }}')
     .then(r => r.json())
     .then(res => {
         res.data.forEach(d => {
@@ -806,11 +801,10 @@ fetch('{{ url("admin/nms/map-data") }}?show_data=1')
         return fetchStatusForMarkers(res.data);
     })
     .catch(err => console.error('Map data error:', err));
-@endif
 
 function fetchStatusForMarkers(devices) {
     devices.forEach(function(d) {
-        fetch('{{ url("admin/nms/device/status") }}/' + d.id + '?show_data=1')
+        fetch('{{ url("admin/nms/device/status") }}/' + d.id)
             .then(r => r.json())
             .then(res => {
                 onlineDevices[d.id] = res.status;
@@ -830,7 +824,7 @@ function fetchStatusForMarkers(devices) {
                 if (res.status === 'up' && markers[d.id]) {
                     markers[d.id].openPopup();
                     // Poll device untuk dapat data SFP RX/TX terbaru
-                    fetch('{{ url("admin/nms/device/poll") }}/' + d.id + '?show_data=1')
+                    fetch('{{ url("admin/nms/device/poll") }}/' + d.id)
                         .then(r => r.json())
                         .then(pollRes => {
                             if (pollRes.error || !pollRes.ports) return;
@@ -915,7 +909,7 @@ function loadDevicePorts(side) {
     if (!id) return;
 
     if (loading) loading.classList.remove('d-none');
-    fetch('{{ url("admin/nms/device/poll") }}/' + id + '?show_data=1')
+    fetch('{{ url("admin/nms/device/poll") }}/' + id)
         .then(function(r) { return r.json(); })
         .then(function(res) {
             fillPortDatalist(side, res.ports || []);
@@ -957,5 +951,4 @@ document.querySelectorAll('.swal-delete').forEach(function(link) {
     });
 });
 </script>
-@endif
 @endsection

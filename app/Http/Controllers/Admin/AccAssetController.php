@@ -8,17 +8,11 @@ use App\Models\AccAsset;
 use App\Models\Website;
 use App\Services\Accounting\JournalPoster;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class AccAssetController extends Controller
 {
     public function __construct(private JournalPoster $poster) {}
-
-    private function emptyPaginator(Request $request, int $perPage = 25): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator([], 0, $perPage, 1, ['path' => $request->url(), 'query' => $request->query()]);
-    }
 
     private function websiteData(): array
     {
@@ -38,12 +32,9 @@ class AccAssetController extends Controller
             $query->where('name', 'like', "%{$search}%");
         }
 
-        $showData = $request->boolean('show_data');
-
         return view('admin.accounting.assets', [
             'title' => 'Aset Tetap',
-            'assets' => $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request),
-            'showData' => $showData,
+            'assets' => $query->paginate(25)->withQueryString(),
             'assetAccounts' => AccAccount::where('type', 'asset')->orderBy('code')->get(),
             'expenseAccounts' => AccAccount::where('type', 'expense')->orderBy('code')->get(),
             'search' => $request->input('q'),

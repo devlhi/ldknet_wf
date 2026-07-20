@@ -41,9 +41,6 @@
                                 Hanya satu WhatsApp gateway yang boleh aktif. Jika satu gateway diubah menjadi ON, gateway lain otomatis OFF.
                             </div>
                             <div class="mb-3 d-flex gap-2">
-                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">
-                                    <i class="uil uil-eye"></i> Tampilkan Data
-                                </a>
                                 <a href="{{ url('admin/whatsapp/setup') }}" class="btn btn-primary btn-sm">
                                     <i class="uil uil-plus"></i> Tambah Gateway
                                 </a>
@@ -110,9 +107,7 @@
                                             </td>
                                         </tr>
                                     @endforeach
-                                    @if (! $showData)
-                                        <tr><td colspan="6" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                                    @elseif ($content->isEmpty())
+                                    @if ($content->isEmpty())
                                         <tr><td colspan="6" class="text-center text-muted">Belum ada WhatsApp gateway.</td></tr>
                                     @endif
                                 </tbody>

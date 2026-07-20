@@ -15,7 +15,6 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
-                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-3">
                                 <label class="form-label small">Dari</label>
                                 <input type="date" name="start" value="{{ $start }}" class="form-control form-control-sm">
@@ -25,15 +24,10 @@
                                 <input type="date" name="end" value="{{ $end }}" class="form-control form-control-sm">
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
-                                <button class="btn btn-sm btn-primary"><i class="uil uil-eye"></i> Tampilkan Data</button>
+                                <button class="btn btn-sm btn-primary"><i class="uil uil-filter"></i> Terapkan Filter</button>
                             </div>
                         </form>
-
-                        @unless ($showData)
-                            <div class="alert alert-info">Klik Tampilkan Data untuk memuat laporan.</div>
-                        @endunless
-
-                        <div class="row mb-3">
+<div class="row mb-3">
                             <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fw-bold">Rp {{ number_format($opening, 0, ',', '.') }}</div></div></div>
                             <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Kas Masuk</small><div class="fw-bold text-success">Rp {{ number_format($inflow, 0, ',', '.') }}</div></div></div>
                             <div class="col-md-3"><div class="border rounded p-2"><small class="text-muted">Kas Keluar</small><div class="fw-bold text-danger">Rp {{ number_format($outflow, 0, ',', '.') }}</div></div></div>

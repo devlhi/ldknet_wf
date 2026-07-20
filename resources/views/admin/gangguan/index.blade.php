@@ -7,7 +7,7 @@
     <div class="container-fluid">
         @php
             $exportUrl = url('admin/gangguan/cetak').'?'.http_build_query(array_filter([
-                'periode' => $periode, 'tanggal' => $tanggal, 'status' => $statusFilter, 'kategori' => $kategoriFilter, 'show_data' => $showData ? '1' : null,
+                'periode' => $periode, 'tanggal' => $tanggal, 'status' => $statusFilter, 'kategori' => $kategoriFilter,
             ], fn ($v) => $v !== null && $v !== ''));
         @endphp
         <div class="row">
@@ -70,7 +70,7 @@
                         </select>
                     </div>
                     <div class="col-md-2 d-flex gap-1">
-                        <button name="show_data" value="1" class="btn btn-primary w-100">Tampilkan Data</button>
+                        <button class="btn btn-primary w-100">Terapkan Filter</button>
                         <a href="{{ url('admin/gangguan') }}" class="btn btn-light">Reset</a>
                     </div>
                     <div class="col-12"><small class="text-muted">Untuk periode Bulanan/Tahunan, sistem mengambil bulan/tahun dari <em>Tanggal acuan</em>. Sedang menampilkan: <strong>{{ $periodeLabel }}</strong>.</small></div>

@@ -10,7 +10,6 @@ use App\Models\AccPurchaseBill;
 use App\Models\Website;
 use App\Services\Accounting\JournalPoster;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -18,11 +17,6 @@ use Illuminate\Validation\ValidationException;
 class AccPurchaseBillController extends Controller
 {
     public function __construct(private JournalPoster $poster) {}
-
-    private function emptyPaginator(Request $request, int $perPage = 25): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator([], 0, $perPage, 1, ['path' => $request->url(), 'query' => $request->query()]);
-    }
 
     private function websiteData(): array
     {
@@ -54,12 +48,9 @@ class AccPurchaseBillController extends Controller
             $query->where('number', 'like', "%{$search}%");
         }
 
-        $showData = $request->boolean('show_data');
-
         return view('admin.accounting.purchase-bills', [
             'title' => 'Tagihan Pembelian',
-            'bills' => $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request),
-            'showData' => $showData,
+            'bills' => $query->paginate(25)->withQueryString(),
             'status' => $status,
             'search' => $request->input('q'),
         ] + $this->websiteData());

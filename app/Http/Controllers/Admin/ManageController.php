@@ -22,15 +22,12 @@ class ManageController extends Controller
         ];
     }
 
-    public function users(Request $request)
+    public function users()
     {
-        $showData = $request->boolean('show_data');
-
         return view('admin.user.management', [
             'title' => 'User Management',
-            'account' => $showData ? User::whereIn('level', ['admin', 'technician', 'finance'])->get() : collect(),
+            'account' => User::whereIn('level', ['admin', 'technician', 'finance'])->get(),
             'password' => random(5),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -130,14 +127,11 @@ class ManageController extends Controller
             && in_array($account->level, ['admin', 'technician', 'finance'], true);
     }
 
-    public function coupon(Request $request)
+    public function coupon()
     {
-        $showData = $request->boolean('show_data');
-
         return view('admin.coupon.management', [
             'title' => 'Coupon Management',
-            'content' => $showData ? Coupon::all() : collect(),
-            'showData' => $showData,
+            'content' => Coupon::all(),
         ] + $this->websiteData());
     }
 

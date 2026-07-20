@@ -15,7 +15,6 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
-                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-3">
                                 <label class="form-label small">Dari</label>
                                 <input type="date" name="start" value="{{ $start }}" class="form-control form-control-sm">
@@ -25,15 +24,10 @@
                                 <input type="date" name="end" value="{{ $end }}" class="form-control form-control-sm">
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
-                                <button class="btn btn-sm btn-primary"><i class="uil uil-eye"></i> Tampilkan Data</button>
+                                <button class="btn btn-sm btn-primary"><i class="uil uil-filter"></i> Terapkan Filter</button>
                             </div>
                         </form>
-
-                        @unless ($showData)
-                            <div class="alert alert-info">Klik Tampilkan Data untuk memuat laporan.</div>
-                        @endunless
-
-                        <div class="text-center mb-3">
+<div class="text-center mb-3">
                             <h5 class="mb-0">Laporan Laba Rugi</h5>
                             <small class="text-muted">Periode {{ \Carbon\Carbon::parse($start)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($end)->format('d/m/Y') }}</small>
                         </div>

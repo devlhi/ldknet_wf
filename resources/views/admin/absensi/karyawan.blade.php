@@ -33,11 +33,6 @@
                     @endif
 
                     <div class="mb-3">
-                        @if (! $showData)
-                            <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary waves-effect waves-light me-2">
-                                <i class="mdi mdi-database-search me-1"></i> Tampilkan Data
-                            </a>
-                        @endif
                         <button type="button" class="btn btn-success waves-effect waves-light" data-bs-toggle="modal" data-bs-target="#addKaryawan">
                             <i class="mdi mdi-plus me-1"></i> Tambah Karyawan
                         </button>

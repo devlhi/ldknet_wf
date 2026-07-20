@@ -66,102 +66,37 @@ class RemoteOperationalTablesLazyLoadingTest extends TestCase
         ]);
     }
 
-    public function test_inventory_pages_do_not_load_row_collections_before_activation(): void
+    public function test_inventory_pages_eagerly_load_row_collections_without_activation_flags(): void
     {
         \DB::table('router')->insert([
-            'nama' => 'Hidden Router', 'dns' => 'router.test', 'ip' => '192.0.2.1',
+            'nama' => 'Visible Router', 'dns' => 'router.test', 'ip' => '192.0.2.1',
             'username' => 'admin', 'password' => legacy_encrypt('secret'), 'interface' => 'ether1',
         ]);
         \DB::table('olt')->insert([
-            'nama' => 'Hidden OLT', 'ip' => 'http://olt.test', 'username' => 'admin',
+            'nama' => 'Visible OLT', 'ip' => 'http://olt.test', 'username' => 'admin',
             'password' => legacy_encrypt('secret'),
         ]);
-        \DB::table('acs')->insert(['nama' => 'Hidden ACS', 'url' => 'http://acs.test']);
+        \DB::table('acs')->insert(['nama' => 'Visible ACS', 'url' => 'http://acs.test']);
         Schema::create('bot_olt', function (Blueprint $table): void {
             $table->id();
             $table->string('command');
             $table->string('keterangan');
         });
-        \DB::table('bot_olt')->insert(['command' => 'hidden-command', 'keterangan' => 'Hidden Bot']);
-
-        $queries = [];
-        \DB::listen(function ($query) use (&$queries): void {
-            $queries[] = $query->sql;
-        });
+        \DB::table('bot_olt')->insert(['command' => 'visible-command', 'keterangan' => 'Visible Bot']);
 
         $pages = [
-            '/server/router' => 'Hidden Router',
-            '/server/olt' => 'Hidden OLT',
-            '/server/olt/bot/whatsapp' => 'hidden-command',
-            '/server/acs' => 'Hidden ACS',
+            '/server/router' => 'Visible Router',
+            '/server/olt' => 'Visible OLT',
+            '/server/olt/bot/whatsapp' => 'visible-command',
+            '/server/acs' => 'Visible ACS',
         ];
 
-        foreach ($pages as $page => $hiddenValue) {
-            $response = $this->actingAs($this->user)->get($page);
-            $response->assertOk()->assertSee('Tampilkan Data')->assertDontSee($hiddenValue);
-        }
-
-        foreach ($queries as $query) {
-            $this->assertDoesNotMatchRegularExpression(
-                '/\bfrom\s+[`"]?(router|olt|acs|bot_olt)[`"]?/i',
-                $query,
-                'Initial inventory GET unexpectedly queried a row collection: '.$query,
-            );
-        }
-
-        foreach ($pages as $page => $hiddenValue) {
-            $this->actingAs($this->user)->get($page.'?show_data=1')->assertOk()->assertSee($hiddenValue);
+        foreach ($pages as $page => $visibleValue) {
+            $this->actingAs($this->user)->get($page)->assertOk()->assertSee($visibleValue);
         }
     }
 
-    public function test_remote_table_pages_do_not_call_remote_services_before_activation(): void
-    {
-        $routerId = \DB::table('router')->insertGetId([
-            'nama' => 'Router Test', 'dns' => 'router.test', 'ip' => '192.0.2.1',
-            'username' => 'admin', 'password' => legacy_encrypt('secret'), 'interface' => 'ether1',
-        ]);
-
-        $routerApi = Mockery::mock(RouterosAPI::class);
-        $routerApi->shouldNotReceive('connect');
-        $routerController = new RouterController;
-        $this->replacePrivateProperty($routerController, 'ros', $routerApi);
-        $this->app->instance(RouterController::class, $routerController);
-
-        $oltApi = Mockery::mock(HsgqAPI::class);
-        $oltApi->shouldNotReceive('getBoardInfo');
-        $oltApi->shouldNotReceive('getOnuAllowList');
-        $oltController = new OltController;
-        $this->replacePrivateProperty($oltController, 'hsgqAPI', $oltApi);
-        $this->app->instance(OltController::class, $oltController);
-
-        $routerPages = [
-            '/server/router/dashboard', '/server/router/hotspot/users',
-            '/server/router/hotspot/profile', '/server/router/hotspot/active',
-            '/server/router/hotspot/log', '/server/router/hotspot/host',
-            '/server/router/ppp/profile', '/server/router/ppp/secret', '/server/router/ppp/active',
-        ];
-
-        foreach ($routerPages as $page) {
-            $response = $this->actingAs($this->user)->withSession(['idrouter' => $routerId])->get($page);
-            if ($response->getStatusCode() !== 200) {
-                $this->fail("Page $page returned {$response->getStatusCode()} (redirect to: ".$response->headers->get('Location').')');
-            }
-            $response->assertSee('Tampilkan Data');
-        }
-
-        $this->actingAs($this->user)->withSession([
-            'x-token' => 'token', 'host' => 'http://olt.test', 'namaolt' => 'OLT Test',
-        ])->get('/server/olt/dashboard')->assertOk()->assertSee('Tampilkan Data');
-
-        $this->actingAs($this->user)->withSession(['x-token' => 'token', 'host' => 'http://olt.test'])
-            ->get('/server/olt/pon/1')->assertOk()->assertSee('Tampilkan Data');
-
-        \DB::table('acs')->insert(['nama' => 'ACS Test', 'url' => 'http://acs.test']);
-        $this->actingAs($this->user)->withSession(['idrouter' => 1])
-            ->get('/server/acs/dashboard')->assertOk()->assertSee('Tampilkan Data');
-    }
-
-    public function test_show_data_activates_router_and_olt_row_fetches(): void
+    public function test_normal_requests_eagerly_fetch_remote_router_and_olt_rows_with_mocks(): void
     {
         $routerId = \DB::table('router')->insertGetId([
             'nama' => 'Router Test', 'dns' => 'router.test', 'ip' => '192.0.2.1',
@@ -175,7 +110,7 @@ class RemoteOperationalTablesLazyLoadingTest extends TestCase
         $this->app->instance(RouterController::class, $routerController);
 
         $this->actingAs($this->user)->withSession(['idrouter' => $routerId])
-            ->get('/server/router/hotspot/active?show_data=1')->assertOk()->assertDontSee('Data Hotspot Active belum dimuat');
+            ->get('/server/router/hotspot/active')->assertOk();
 
         $oltApi = Mockery::mock(HsgqAPI::class);
         $oltApi->shouldReceive('getOnuAllowList')->once()->with('http://olt.test', '1', 'token')
@@ -185,7 +120,7 @@ class RemoteOperationalTablesLazyLoadingTest extends TestCase
         $this->app->instance(OltController::class, $oltController);
 
         $this->actingAs($this->user)->withSession(['x-token' => 'token', 'host' => 'http://olt.test'])
-            ->get('/server/olt/pon/1?show_data=1')->assertOk()->assertDontSee('Data ONU belum dimuat');
+            ->get('/server/olt/pon/1')->assertOk();
     }
 
     private function replacePrivateProperty(object $target, string $property, object $value): void

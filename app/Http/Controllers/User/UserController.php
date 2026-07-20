@@ -36,16 +36,15 @@ class UserController extends Controller
         return is_string($idpel) && trim($idpel) !== '' ? $idpel : null;
     }
 
-    public function index(Request $request)
+    public function index()
     {
-        $showData = $request->boolean('show_data');
         $idpel = $this->idpel();
 
-        $order = $showData ? Order::where('idpel', $idpel)->orderByDesc('id')->first() : null;
-        $invoice = $showData ? Invoice::where('idpel', $idpel)
+        $order = Order::where('idpel', $idpel)->orderByDesc('id')->first();
+        $invoice = Invoice::where('idpel', $idpel)
             ->where('status', 'Unpaid')
             ->orderByDesc('id')
-            ->first() : null;
+            ->first();
 
         // Cek status koneksi ke router (online/offline). Kegagalan router
         // ditelan agar dashboard tetap tampil walau router tak terjangkau.
@@ -58,7 +57,6 @@ class UserController extends Controller
             'online' => $online,
             'mode' => $order->mode ?? null,
             'traffics' => $order->pppoe_user ?? null,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -107,29 +105,19 @@ class UserController extends Controller
         }
     }
 
-    public function service(Request $request)
+    public function service()
     {
-        $showData = (string) $request->query('show_data') === '1';
-
         return view('user.service', [
             'title' => 'Layanan',
-            'content' => $showData
-                ? Order::where('idpel', $this->idpel())->orderByDesc('id')->get()
-                : collect(),
-            'showData' => $showData,
+            'content' => Order::where('idpel', $this->idpel())->orderByDesc('id')->get(),
         ] + $this->websiteData());
     }
 
-    public function invoice(Request $request)
+    public function invoice()
     {
-        $showData = (string) $request->query('show_data') === '1';
-
         return view('user.invoice.index', [
             'title' => 'Data Invoice',
-            'invoice' => $showData
-                ? Invoice::where('idpel', $this->idpel())->orderByDesc('id')->get()
-                : collect(),
-            'showData' => $showData,
+            'invoice' => Invoice::where('idpel', $this->idpel())->orderByDesc('id')->get(),
         ] + $this->websiteData());
     }
 
@@ -217,16 +205,11 @@ class UserController extends Controller
         return $this->invoiceDetail($id);
     }
 
-    public function invoiceHistory(Request $request)
+    public function invoiceHistory()
     {
-        $showData = (string) $request->query('show_data') === '1';
-
         return view('user.invoice.index', [
             'title' => 'Riwayat Invoice',
-            'invoice' => $showData
-                ? Invoice::where('idpel', $this->idpel())->where('status', 'Paid')->orderByDesc('id')->get()
-                : collect(),
-            'showData' => $showData,
+            'invoice' => Invoice::where('idpel', $this->idpel())->where('status', 'Paid')->orderByDesc('id')->get(),
         ] + $this->websiteData());
     }
 

@@ -195,18 +195,14 @@ class AttendanceController extends Controller
 
     public function history(Request $request)
     {
-        $showData = (string) $request->query('show_data') === '1';
-        $rows = $showData
-            ? HrAttendance::where('user_id', auth()->id())
-                ->orderByDesc('tanggal')
-                ->limit(60)
-                ->get()
-            : collect();
+        $rows = HrAttendance::where('user_id', auth()->id())
+            ->orderByDesc('tanggal')
+            ->limit(60)
+            ->get();
 
         return view('karyawan.history', [
             'title' => 'Riwayat Absensi',
             'rows' => $rows,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 

@@ -84,32 +84,7 @@ class MenuLevelTablesLazyLoadingTest extends TestCase
         $pdo->sqliteCreateFunction('MONTH', fn ($date) => (int) date('n', strtotime((string) $date)), 1);
     }
 
-    public function test_initial_gets_do_not_query_row_datasets_until_activation(): void
-    {
-        $admin = $this->user('admin', 'ADM-001');
-        $technician = $this->user('technician', 'TECH-001');
-        $customer = $this->user('user', 'CUS-001');
-
-        $pages = [
-            [$admin, '/server/voucher/users', 'users'],
-            [$admin, '/server/voucher/report', 'logs_voucher'],
-            [$admin, '/server/voucher/report/orders', 'orders_voucher'],
-            [$technician, '/karyawan/absensi/history', 'hr_attendances'],
-            [$customer, '/user/service', 'orders'],
-            [$customer, '/user/invoice', 'invoice'],
-            [$customer, '/user/invoice/history', 'invoice'],
-        ];
-
-        foreach ($pages as [$user, $uri, $table]) {
-            $queries = $this->captureQueries(fn () => $this->actingAs($user)->get($uri)
-                ->assertOk()
-                ->assertSee('Tampilkan Data'));
-
-            $this->assertNotContainsTableQuery($table, $queries, $uri);
-        }
-    }
-
-    public function test_show_data_executes_each_row_dataset_query(): void
+    public function test_normal_gets_eagerly_query_row_datasets_without_activation_flags(): void
     {
         $admin = $this->user('admin', 'ADM-001');
         $technician = $this->user('technician', 'TECH-001');
@@ -142,13 +117,13 @@ class MenuLevelTablesLazyLoadingTest extends TestCase
         ]);
 
         $pages = [
-            [$admin, '/server/voucher/users?show_data=1', 'users'],
-            [$admin, '/server/voucher/report?show_data=1', 'logs_voucher'],
-            [$admin, '/server/voucher/report/orders?show_data=1', 'orders_voucher'],
-            [$technician, '/karyawan/absensi/history?show_data=1', 'hr_attendances'],
-            [$customer, '/user/service?show_data=1', 'orders'],
-            [$customer, '/user/invoice?show_data=1', 'invoice'],
-            [$customer, '/user/invoice/history?show_data=1', 'invoice'],
+            [$admin, '/server/voucher/users', 'users'],
+            [$admin, '/server/voucher/report', 'logs_voucher'],
+            [$admin, '/server/voucher/report/orders', 'orders_voucher'],
+            [$technician, '/karyawan/absensi/history', 'hr_attendances'],
+            [$customer, '/user/service', 'orders'],
+            [$customer, '/user/invoice', 'invoice'],
+            [$customer, '/user/invoice/history', 'invoice'],
         ];
 
         foreach ($pages as [$user, $uri, $table]) {
@@ -157,19 +132,19 @@ class MenuLevelTablesLazyLoadingTest extends TestCase
         }
     }
 
-    public function test_voucher_report_ajax_requires_explicit_activation(): void
+    public function test_voucher_report_ajax_eagerly_queries_without_activation_flags(): void
     {
         $admin = $this->user('admin', 'ADM-001');
 
         $usageQueries = $this->captureQueries(fn () => $this->actingAs($admin)
             ->postJson('/server/voucher/report/filter', ['bulan' => 7, 'tahun' => 2026])
-            ->assertExactJson(['data' => []]));
-        $this->assertNotContainsTableQuery('logs_voucher', $usageQueries, '/server/voucher/report/filter');
+            ->assertOk());
+        $this->assertContainsTableQuery('logs_voucher', $usageQueries, '/server/voucher/report/filter');
 
         $orderQueries = $this->captureQueries(fn () => $this->actingAs($admin)
             ->postJson('/server/voucher/report/orders/filter', ['bulan' => 7, 'tahun' => 2026])
-            ->assertExactJson(['data' => []]));
-        $this->assertNotContainsTableQuery('orders_voucher', $orderQueries, '/server/voucher/report/orders/filter');
+            ->assertOk());
+        $this->assertContainsTableQuery('orders_voucher', $orderQueries, '/server/voucher/report/orders/filter');
     }
 
     private function user(string $level, string $idpel): User

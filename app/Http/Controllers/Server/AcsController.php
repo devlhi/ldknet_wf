@@ -23,12 +23,9 @@ class AcsController extends Controller
 
     public function home(Request $request)
     {
-        $dataLoaded = $request->boolean('show_data');
-
         return view('admin.acs.home', [
             'title' => 'Dashboard ACS',
-            'getData' => $dataLoaded ? DB::table('acs')->get() : collect(),
-            'dataLoaded' => $dataLoaded,
+            'getData' => DB::table('acs')->get(),
         ] + $this->websiteData());
     }
 
@@ -81,17 +78,6 @@ class AcsController extends Controller
 
         if ($idrouter == null) {
             return redirect(url('server/acs'))->with('auth_errors', ['Anda belum klik connect']);
-        }
-
-        if (! $request->boolean('show_data')) {
-            return view('admin.acs.dashboard', [
-                'title' => 'GenieACS',
-                'devices' => [],
-                'online' => 0,
-                'offline' => 0,
-                'criticalRxPowerCount' => 0,
-                'dataLoaded' => false,
-            ] + $this->websiteData());
         }
 
         $acs = DB::table('acs')->where('id', $idrouter)->first();
@@ -187,7 +173,6 @@ class AcsController extends Controller
             'online' => $onlineCount,
             'offline' => $offlineCount,
             'criticalRxPowerCount' => $criticalRxPowerCount,
-            'dataLoaded' => true,
         ] + $this->websiteData());
     }
 

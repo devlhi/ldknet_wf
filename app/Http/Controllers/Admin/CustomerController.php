@@ -465,22 +465,6 @@ class CustomerController extends Controller
         $datacustomer = Order::where('idpel', $id)->get();
         $pppoe = optional($datacustomer->last())->pppoe_user;
 
-        $showData = $request->boolean('show_data');
-
-        if (! $showData) {
-            return view('admin.customer.detail', [
-                'title' => 'Detail Pelanggan',
-                'customer' => $customer,
-                'invoice' => $invoice,
-                'datacustomer' => $datacustomer,
-                'statusppp' => [],
-                'interface' => [],
-                'traffics' => $pppoe,
-                'mode' => $mode,
-                'showData' => false,
-            ] + $this->websiteData());
-        }
-
         if (Router::count() === 0) {
             return redirect('admin/customers')->with('auth_errors', ['Tidak ada server pada database, silahkan tambah server terlebih dahulu']);
         }
@@ -521,7 +505,6 @@ class CustomerController extends Controller
             'interface' => $getinterface,
             'traffics' => $pppoe,
             'mode' => $mode,
-            'showData' => true,
         ] + $this->websiteData());
     }
 

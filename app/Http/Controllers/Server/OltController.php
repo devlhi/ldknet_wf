@@ -109,12 +109,9 @@ class OltController extends Controller
 
     public function home(Request $request)
     {
-        $dataLoaded = $request->boolean('show_data');
-
         return view('server.olt.home', [
             'title' => 'Managemen OLT',
-            'getData' => $dataLoaded ? Olt::all() : collect(),
-            'dataLoaded' => $dataLoaded,
+            'getData' => Olt::all(),
         ] + $this->websiteData());
     }
 
@@ -206,14 +203,6 @@ class OltController extends Controller
             return redirect(url('server/olt'))->with('auth_errors', ['Silahkan klik connect terlebih dahulu']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.olt.dashboard', [
-                'title' => 'Dashboard OLT',
-                'onu' => [],
-                'dataLoaded' => false,
-            ] + $this->websiteData());
-        }
-
         $dataolt = Olt::where('nama', $namaolt)->first();
 
         $idnya = $dataolt->id ?? null;
@@ -249,7 +238,6 @@ class OltController extends Controller
             return view('server.olt.dashboard', [
                 'title' => 'Dashboard OLT',
                 'onu' => $response['data'],
-                'dataLoaded' => true,
             ] + $this->websiteData());
         }
     }
@@ -263,15 +251,6 @@ class OltController extends Controller
             return redirect(url('server/olt'))->with('auth_errors', ['Silahkan klik connect terlebih dahulu']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.olt.pon', [
-                'title' => 'OLT PON '.$id,
-                'id' => $id,
-                'onu' => [],
-                'dataLoaded' => false,
-            ] + $this->websiteData());
-        }
-
         $result = $this->hsgqAPI->getOnuAllowList($host, $id, $xtoken);
         $response = json_decode($result, true);
 
@@ -279,7 +258,6 @@ class OltController extends Controller
             'title' => 'OLT PON '.$id,
             'id' => $id,
             'onu' => $response['data'],
-            'dataLoaded' => true,
         ] + $this->websiteData());
     }
 
@@ -354,23 +332,17 @@ class OltController extends Controller
 
     public function botWhatsapp(Request $request)
     {
-        $dataLoaded = $request->boolean('show_data');
-        $hasTable = false;
-
-        if ($dataLoaded) {
-            // Tabel bot_olt tidak ada di semua instalasi DB legacy; skema shared
-            // tidak boleh diubah dari Laravel, tampilkan halaman kosong + warning.
-            $hasTable = Schema::hasTable('bot_olt');
-            if (! $hasTable) {
-                // now() (bukan flash), pesan hanya untuk request ini, tidak bocor ke halaman berikutnya.
-                session()->now('auth_errors', ['Tabel bot_olt belum ada di database ini, impor dari instalasi lama untuk memakai fitur bot.']);
-            }
+        // Tabel bot_olt tidak ada di semua instalasi DB legacy; skema shared
+        // tidak boleh diubah dari Laravel, tampilkan halaman kosong + warning.
+        $hasTable = Schema::hasTable('bot_olt');
+        if (! $hasTable) {
+            // now() (bukan flash), pesan hanya untuk request ini, tidak bocor ke halaman berikutnya.
+            session()->now('auth_errors', ['Tabel bot_olt belum ada di database ini, impor dari instalasi lama untuk memakai fitur bot.']);
         }
 
         return view('server.olt.bot', [
             'title' => 'Bot Whatsapp OLT',
-            'getData' => $dataLoaded && $hasTable ? DB::table('bot_olt')->orderByDesc('command')->get() : collect(),
-            'dataLoaded' => $dataLoaded,
+            'getData' => $hasTable ? DB::table('bot_olt')->orderByDesc('command')->get() : collect(),
         ] + $this->websiteData());
     }
 

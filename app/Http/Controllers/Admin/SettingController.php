@@ -130,18 +130,16 @@ class SettingController extends Controller
     }
 
     // GET admin/setting/cron — atur jadwal cron per task (jam + on/off)
-    public function cron(Request $request)
+    public function cron()
     {
-        $showData = $request->boolean('show_data');
-
         // Scheduler dianggap aktif jika heartbeat tersentuh < 5 menit lalu
         // (heartbeat di-touch tiap menit oleh schedule:run).
-        $lastHeartbeat = $showData ? CronLog::lastHeartbeat() : null;
+        $lastHeartbeat = CronLog::lastHeartbeat();
         $cronAlive = $lastHeartbeat !== null && $lastHeartbeat->gt(now()->subMinutes(5));
 
         $logs = collect();
         $lastRunByTask = [];
-        if ($showData && Schema::hasTable('cron_log')) {
+        if (Schema::hasTable('cron_log')) {
             $logs = CronLog::orderByDesc('started_at')->limit(50)->get();
             $lastRunByTask = CronLog::selectRaw('task, MAX(started_at) AS last_run')
                 ->groupBy('task')->pluck('last_run', 'task')->all();
@@ -149,14 +147,13 @@ class SettingController extends Controller
 
         return view('admin.setting.cron', [
             'title' => 'Pengaturan Cron',
-            'crons' => $showData ? CronSetting::orderBy('id')->get() : collect(),
+            'crons' => CronSetting::orderBy('id')->get(),
             'cronUrl' => url('auto/cron/'.AutoController::cronToken()),
             'cronArtisan' => base_path('artisan'),
             'cronAlive' => $cronAlive,
             'lastHeartbeat' => $lastHeartbeat,
             'cronLogs' => $logs,
             'lastRunByTask' => $lastRunByTask,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 

@@ -8,9 +8,6 @@
                 <div class="card">
                     <div class="card-body">
                         <h4 class="card-title">{{ $title }}</h4>
-                        <form method="GET" class="mb-3">
-                            <button type="submit" name="show_data" value="1" class="btn btn-primary">Tampilkan Data</button>
-                        </form>
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped">
                                 <thead>
@@ -24,9 +21,6 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @if (! $showData)
-                                        <tr><td colspan="6" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                                    @else
                                         @forelse ($invoice as $row)
                                             <tr>
                                                 <td>{{ $row->code }}</td>
@@ -44,7 +38,6 @@
                                         @empty
                                             <tr><td colspan="6" class="text-center">Data tidak ditemukan</td></tr>
                                         @endforelse
-                                    @endif
                                 </tbody>
                             </table>
                         </div>

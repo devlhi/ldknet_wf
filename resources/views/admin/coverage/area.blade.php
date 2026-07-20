@@ -10,10 +10,7 @@
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h4 class="card-title mb-0">{{ $title }}</h4>
                             <div>
-                                @if (! $showData)
-                                    <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-outline-primary me-2"><i class="uil uil-database me-1"></i> Tampilkan Data</a>
-                                @endif
-                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAreaModal">
+<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAreaModal">
                                 <i class="uil uil-plus"></i> Tambah Area
                                 </button>
                             </div>

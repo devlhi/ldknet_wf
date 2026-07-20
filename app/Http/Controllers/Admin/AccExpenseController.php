@@ -9,17 +9,11 @@ use App\Models\AccExpense;
 use App\Models\Website;
 use App\Services\Accounting\JournalPoster;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class AccExpenseController extends Controller
 {
     public function __construct(private JournalPoster $poster) {}
-
-    private function emptyPaginator(Request $request, int $perPage = 25): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator([], 0, $perPage, 1, ['path' => $request->url(), 'query' => $request->query()]);
-    }
 
     private function websiteData(): array
     {
@@ -57,12 +51,9 @@ class AccExpenseController extends Controller
             });
         }
 
-        $showData = $request->boolean('show_data');
-
         return view('admin.accounting.expenses', [
             'title' => 'Biaya / Pengeluaran',
-            'expenses' => $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request),
-            'showData' => $showData,
+            'expenses' => $query->paginate(25)->withQueryString(),
             'expenseAccounts' => AccAccount::where('type', 'expense')->orderBy('code')->get(),
             'cashAccounts' => AccAccount::where('is_cash', true)->orderBy('code')->get(),
             'contacts' => AccContact::where('is_active', true)->orderBy('name')->get(),

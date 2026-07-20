@@ -39,9 +39,6 @@
                         </div>
                     @endif
                     <div>
-                        @if (! $showData)
-                            <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary waves-effect waves-light mb-3 me-2"><i class="mdi mdi-database-search me-1"></i> Tampilkan Data</a>
-                        @endif
                         <button type="button" class="btn btn-success waves-effect waves-light mb-3" data-bs-toggle="modal" data-bs-target="#myModal"><i class="mdi mdi-plus me-1"></i> Kategori Kas</button>
                     </div>
                     <div id="myModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">

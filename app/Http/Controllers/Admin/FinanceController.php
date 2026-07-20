@@ -58,14 +58,11 @@ class FinanceController extends Controller
     // Cash Flows Category
     // =========================================================
 
-    public function cashflowsCategory(Request $request)
+    public function cashflowsCategory()
     {
-        $showData = $request->boolean('show_data');
-
         return view('admin.finance.cashflows.category', [
             'title' => 'Kategori Kas',
-            'getdatacategory' => $showData ? Katkas::all() : collect(),
-            'showData' => $showData,
+            'getdatacategory' => Katkas::all(),
         ] + $this->websiteData());
     }
 
@@ -200,10 +197,6 @@ class FinanceController extends Controller
 
     public function reportFilter(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['data' => []]);
-        }
-
         $paket = $request->post('paket');
         $status = $request->post('status');
         $penerima = $request->post('penerima');
@@ -244,10 +237,6 @@ class FinanceController extends Controller
 
     public function reportFilterCashFlows(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['data' => []]);
-        }
-
         $bulan = $request->post('bulan');
         $tahun = $request->post('tahun');
         $kategori = $request->post('kategori');
@@ -277,10 +266,6 @@ class FinanceController extends Controller
 
     public function reportFilterCustomers(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['data' => []]);
-        }
-
         $paket = $request->post('paket');
         $status = $request->post('status');
 
@@ -320,10 +305,6 @@ class FinanceController extends Controller
 
     public function reportFilterNewCustomers(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['data' => []]);
-        }
-
         $bulan = $request->post('bulan');
         $tahun = $request->post('tahun');
 
@@ -758,21 +739,18 @@ class FinanceController extends Controller
         return redirect('admin/finance/invoice')->with('success', ['Berhasil menghapus '.count($codes).' invoice']);
     }
 
-    public function generateInvoice(Request $request)
+    public function generateInvoice()
     {
-        $showData = $request->boolean('show_data');
-
         $currentYear = (int) date('Y');
         $currentMonth = (int) date('n');
         $years = range($currentYear, 2020);
 
         return view('admin.finance.invoice.generate', [
             'title' => 'Generate Invoice',
-            'customers' => $showData ? Order::get(['idpel', 'nama', 'paket']) : collect(),
+            'customers' => Order::get(['idpel', 'nama', 'paket']),
             'years' => $years,
             'currentYear' => $currentYear,
             'currentMonth' => $currentMonth,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -1117,10 +1095,6 @@ class FinanceController extends Controller
 
     public function getDataFilterCashFlows(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
-
         $bulan = $request->post('bulan');
         $tahun = $request->post('tahun');
 
@@ -1137,13 +1111,6 @@ class FinanceController extends Controller
 
     public function ambilDataCashFlows(Request $request, $bulan = null, $tahun = null)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([
-                'getDataPemasukan' => 0,
-                'getDataPengeluaran' => 0,
-            ]);
-        }
-
         if ($bulan && $tahun) {
             $data = [
                 'getDataPemasukan' => Report::where('jenis_kategori', 'Pemasukan')
@@ -1163,10 +1130,6 @@ class FinanceController extends Controller
 
     public function getDataFilter(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
-
         $bulan = $request->post('bulan');
         $tahun = $request->post('tahun');
 
@@ -1190,10 +1153,6 @@ class FinanceController extends Controller
 
     public function getDataFilterInvoice(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
-
         $bulan = $request->post('bulan');
         $tahun = $request->post('tahun');
 

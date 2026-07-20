@@ -15,7 +15,6 @@
                     </div>
                     <div class="card-body">
                         <form method="GET" class="row g-2 mb-3">
-                            <input type="hidden" name="show_data" value="1">
                             <div class="col-md-4">
                                 <label class="form-label small">Akun</label>
                                 <select name="account_id" class="form-select form-select-sm" required>
@@ -34,7 +33,7 @@
                                 <input type="date" name="end" value="{{ $end }}" class="form-control form-control-sm">
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
-                                <button class="btn btn-sm btn-primary"><i class="uil uil-eye"></i> Tampilkan Data</button>
+                                <button class="btn btn-sm btn-primary"><i class="uil uil-filter"></i> Terapkan Filter</button>
                             </div>
                         </form>
 
@@ -77,7 +76,7 @@
                                 </table>
                             </div>
                         @else
-                            <div class="alert alert-info">{{ $showData ? 'Pilih akun untuk menampilkan buku besar.' : 'Klik Tampilkan Data untuk memuat laporan.' }}</div>
+                            <div class="alert alert-info">Pilih akun untuk menampilkan buku besar.</div>
                         @endif
                     </div>
                 </div>

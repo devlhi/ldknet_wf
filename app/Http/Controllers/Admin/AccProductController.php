@@ -7,15 +7,9 @@ use App\Models\AccAccount;
 use App\Models\AccProduct;
 use App\Models\Website;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class AccProductController extends Controller
 {
-    private function emptyPaginator(Request $request, int $perPage = 25): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator([], 0, $perPage, 1, ['path' => $request->url(), 'query' => $request->query()]);
-    }
-
     private function websiteData(): array
     {
         $website = Website::first();
@@ -40,12 +34,9 @@ class AccProductController extends Controller
             });
         }
 
-        $showData = $request->boolean('show_data');
-
         return view('admin.accounting.products', [
             'title' => 'Produk & Jasa',
-            'products' => $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request),
-            'showData' => $showData,
+            'products' => $query->paginate(25)->withQueryString(),
             'accounts' => AccAccount::where('is_active', true)->orderBy('code')->get(),
             'filterType' => $type,
             'search' => $request->input('q'),

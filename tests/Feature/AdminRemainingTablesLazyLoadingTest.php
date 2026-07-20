@@ -87,7 +87,7 @@ class AdminRemainingTablesLazyLoadingTest extends TestCase
         ]);
     }
 
-    public function test_remaining_admin_tables_wait_for_explicit_activation(): void
+    public function test_remaining_admin_tables_eagerly_query_and_render_without_activation_prompt(): void
     {
         $pages = [
             '/admin/karyawan' => ['Teknisi Lazy', 'users'],
@@ -102,18 +102,13 @@ class AdminRemainingTablesLazyLoadingTest extends TestCase
 
             $this->actingAs($this->user)->get($uri)
                 ->assertOk()
-                ->assertSee('Tampilkan Data')
-                ->assertDontSee($rowText);
+                ->assertSee($rowText)
+                ->assertDontSee('Tampilkan Data');
 
             $queriedPrimaryTable = collect(DB::getQueryLog())->contains(
                 fn (array $query): bool => str_contains(strtolower($query['query']), 'from "'.$primaryTable.'"')
             );
-            $this->assertFalse($queriedPrimaryTable, "Initial GET queried primary table [$primaryTable].");
-
-            $this->actingAs($this->user)->get($uri.'?show_data=1')
-                ->assertOk()
-                ->assertSee($rowText)
-                ->assertDontSee('Tampilkan Data');
+            $this->assertTrue($queriedPrimaryTable, "Initial GET did not query primary table [$primaryTable].");
         }
     }
 }

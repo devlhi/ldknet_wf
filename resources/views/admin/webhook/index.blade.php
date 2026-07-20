@@ -8,11 +8,6 @@
                 <div class="card">
                     <div class="card-body">
                         <h4 class="card-title">{{ $title }}</h4>
-                        @if (! $showData)
-                            <form method="GET" class="mb-3">
-                                <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
-                            </form>
-                        @endif
                         @if (session('auth_errors'))
                             <div class="alert alert-danger">
                                 @foreach (session('auth_errors') as $msg)
@@ -56,7 +51,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="4" class="text-center text-muted">{{ $showData ? 'Belum ada data webhook' : 'Klik Tampilkan Data untuk memuat data.' }}</td></tr>
+                                        <tr><td colspan="4" class="text-center text-muted">Belum ada data webhook</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>

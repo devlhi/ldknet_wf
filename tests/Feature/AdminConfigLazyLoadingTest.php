@@ -83,9 +83,17 @@ class AdminConfigLazyLoadingTest extends TestCase
             'status_account' => 'Active',
             'verify_account' => 1,
         ]);
+        DB::table('whatsapp_setting')->insert([
+            'nama' => 'Gateway Test',
+            'type' => 'blast',
+            'api_url' => 'https://example.test',
+            'api_key' => 'token',
+            'sender' => '0800000000',
+            'mode' => 'on',
+        ]);
     }
 
-    public function test_admin_config_tables_are_not_queried_before_activation(): void
+    public function test_admin_config_tables_are_eagerly_queried_without_activation_prompt(): void
     {
         $pages = [
             '/admin/manage/user' => 'from "users" where "level" in',
@@ -101,43 +109,35 @@ class AdminConfigLazyLoadingTest extends TestCase
         foreach ($pages as $uri => $queryNeedle) {
             $queries = $this->captureQueries(fn () => $this->actingAs($this->user)->get($uri)
                 ->assertOk()
-                ->assertSee('Tampilkan Data'));
+                ->assertDontSee('Tampilkan Data'));
 
-            $this->assertFalse(
+            $this->assertTrue(
                 collect($queries)->contains(fn (string $query): bool => str_contains($query, $queryNeedle)),
-                "Unexpected row query for {$uri}:\n".implode("\n", $queries)
+                "Expected row query for {$uri}:\n".implode("\n", $queries)
             );
         }
     }
 
-    public function test_payment_switches_and_meta_remote_templates_wait_for_activation(): void
+    public function test_payment_switches_and_meta_templates_eagerly_load(): void
     {
         DB::table('payment_gateway')->insert([
             'name' => 'tripay', 'status' => 'enable', 'payment_default' => '1',
         ]);
         DB::table('whatsapp_setting')->insert([
             'nama' => 'Meta Official', 'type' => 'blast',
-            'api_url' => 'meta###https://graph.facebook.com/v20.0###verify###123456###id###notif_tagihan###notif_pengingat###notif_tagihan_terbayar###notif_daftar_berhasil###phone',
+            'api_url' => 'meta###https%3A%2F%2Fgraph.facebook.com%2Fv20.0|verify|123456|id|notif_tagihan|notif_pengingat|notif_tagihan_terbayar|notif_daftar_berhasil|phone',
             'api_key' => 'token', 'sender' => 'meta', 'mode' => 'on',
         ]);
 
         $queries = $this->captureQueries(fn () => $this->actingAs($this->user)
-            ->get('/admin/gateway/payment')->assertOk()->assertSee('Tampilkan Data'));
-        $this->assertFalse(collect($queries)->contains(fn (string $query): bool => str_contains($query, 'payment_method')));
+            ->get('/admin/gateway/payment')->assertOk()->assertDontSee('Tampilkan Data'));
+        $this->assertTrue(collect($queries)->contains(fn (string $query): bool => str_contains($query, 'payment_method')));
 
-        Http::fake();
+        Http::fake(['*' => Http::response(['data' => []])]);
         $queries = $this->captureQueries(fn () => $this->actingAs($this->user)
-            ->get('/admin/whatsapp/meta/templates')->assertOk());
-        $this->assertFalse(collect($queries)->contains(fn (string $query): bool => str_contains($query, 'whatsapp_setting')));
-        Http::assertNothingSent();
-    }
-
-    public function test_show_data_loads_a_config_collection(): void
-    {
-        $queries = $this->captureQueries(fn () => $this->actingAs($this->user)
-            ->get('/admin/manage/coupon?show_data=1')->assertOk());
-
-        $this->assertTrue(collect($queries)->contains(fn (string $query): bool => str_contains($query, 'from "coupon"')));
+            ->get('/admin/whatsapp/meta/templates')->assertOk()->assertSee('Meta Official'));
+        $this->assertTrue(collect($queries)->contains(fn (string $query): bool => str_contains($query, 'whatsapp_setting')));
+        Http::assertSentCount(1);
     }
 
     private function captureQueries(callable $request): array

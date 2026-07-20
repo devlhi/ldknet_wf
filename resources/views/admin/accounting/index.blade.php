@@ -13,15 +13,6 @@
                 </div>
             </div>
         </div>
-
-        @unless ($showData)
-            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <span>Data ikhtisar keuangan dan jurnal belum dimuat.</span>
-                <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
-            </div>
-        @endunless
-
-        @if ($showData)
         <div class="row">
             <div class="col-md-3">
                 <div class="card">
@@ -109,7 +100,6 @@
                 </div>
             </div>
         </div>
-        @endif
     </div>
 </div>
 @endsection

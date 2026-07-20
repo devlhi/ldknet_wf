@@ -64,7 +64,7 @@ class AccountingLazyLoadingTest extends TestCase
         }
     }
 
-    public function test_accounting_lists_require_explicit_show_data_before_primary_queries(): void
+    public function test_accounting_lists_eagerly_query_and_render_without_activation_prompt(): void
     {
         $user = $this->accountingUser();
         $pages = [
@@ -78,21 +78,20 @@ class AccountingLazyLoadingTest extends TestCase
             '/admin/accounting/assets' => 'acc_assets',
         ];
 
-        foreach ($pages as $uri => $primaryQuery) {
+        foreach ($pages as $uri => $primaryTable) {
             $queries = $this->captureQueries(fn () => $this->actingAs($user)->get($uri)
                 ->assertOk()
-                ->assertSee('Tampilkan Data')
-                ->assertSee('Klik Tampilkan Data untuk memuat data.'));
+                ->assertDontSee('Tampilkan Data'));
 
-            $this->assertNotContainsQuery($primaryQuery, $queries, $uri);
+            $this->assertContainsQuery($primaryTable, $queries, $uri);
         }
     }
 
-    public function test_accounting_reports_skip_calculations_until_show_data_is_requested(): void
+    public function test_accounting_reports_eagerly_calculate_without_activation_prompt(): void
     {
         $user = $this->accountingUser();
         $pages = [
-            '/admin/accounting/reports/ledger' => 'acc_journal_lines',
+            '/admin/accounting/reports/ledger' => 'acc_accounts',
             '/admin/accounting/reports/trial-balance' => 'acc_journal_lines',
             '/admin/accounting/reports/profit-loss' => 'acc_journal_lines',
             '/admin/accounting/reports/balance-sheet' => 'acc_journal_lines',
@@ -102,26 +101,10 @@ class AccountingLazyLoadingTest extends TestCase
         foreach ($pages as $uri => $primaryTable) {
             $queries = $this->captureQueries(fn () => $this->actingAs($user)->get($uri)
                 ->assertOk()
-                ->assertSee('Tampilkan Data')
-                ->assertSee('Klik Tampilkan Data untuk memuat laporan.'));
+                ->assertDontSee('Tampilkan Data'));
 
-            $this->assertNotContainsQuery($primaryTable, $queries, $uri);
+            $this->assertContainsQuery($primaryTable, $queries, $uri);
         }
-    }
-
-    public function test_show_data_executes_list_and_report_queries(): void
-    {
-        $user = $this->accountingUser();
-
-        $listQueries = $this->captureQueries(fn () => $this->actingAs($user)
-            ->get('/admin/accounting/journals?show_data=1')
-            ->assertOk());
-        $this->assertContainsQuery('acc_journals', $listQueries);
-
-        $reportQueries = $this->captureQueries(fn () => $this->actingAs($user)
-            ->get('/admin/accounting/reports/trial-balance?show_data=1')
-            ->assertOk());
-        $this->assertContainsQuery('acc_journal_lines', $reportQueries);
     }
 
     private function accountingUser(): User
@@ -150,17 +133,11 @@ class AccountingLazyLoadingTest extends TestCase
         return $queries;
     }
 
-    private function assertNotContainsQuery(string $needle, array $queries, string $uri): void
-    {
-        $matching = array_values(array_filter($queries, fn (string $query): bool => str_contains($query, $needle)));
-        $this->assertSame([], $matching, "Unexpected primary query for {$uri}:\n".implode("\n", $matching));
-    }
-
-    private function assertContainsQuery(string $needle, array $queries): void
+    private function assertContainsQuery(string $needle, array $queries, string $uri): void
     {
         $this->assertTrue(
             collect($queries)->contains(fn (string $query): bool => str_contains($query, $needle)),
-            "Expected query containing [{$needle}].\n".implode("\n", $queries)
+            "Expected query containing [{$needle}] for {$uri}.\n".implode("\n", $queries)
         );
     }
 }

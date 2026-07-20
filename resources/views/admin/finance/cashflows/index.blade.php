@@ -60,8 +60,8 @@
 
 
                                 </form>
-                                <button type="button" class="btn btn-primary mt-3" id="showDataButton">
-                                    <i class="uil uil-eye me-1"></i> Tampilkan Data
+                                <button type="button" class="btn btn-primary mt-3" id="filterButton">
+                                    <i class="uil uil-eye me-1"></i> Terapkan Filter
                                 </button>
                             </div>
                         </div>
@@ -253,7 +253,6 @@
             $('#bulan').val(String(new Date().getMonth() + 1));
 
             var table = null;
-            var activated = false;
 
             function initializeTable() {
                 if (table) {
@@ -307,7 +306,7 @@
 
             function loadData() {
                 var dataTable = initializeTable();
-                var button = $('#showDataButton');
+                var button = $('#filterButton');
                 var bulan = $('#bulan').val();
                 var tahun = $('#tahun').val();
 
@@ -318,13 +317,13 @@
                         url: '{{ url('finance/cash-flows/filter/getdata') }}',
                         type: 'POST',
                         dataType: 'json',
-                        data: { show_data: 1, bulan: bulan, tahun: tahun }
+                        data: { bulan: bulan, tahun: tahun }
                     }),
                     $.ajax({
                         url: '{{ url('finance/cash-flows/filter/ambil-data') }}/' + bulan + '/' + tahun,
                         type: 'GET',
                         dataType: 'json',
-                        data: { show_data: 1 }
+                        data: {  }
                     })
                 ).done(function(rowsResponse, statsResponse) {
                     var stats = statsResponse[0];
@@ -332,20 +331,15 @@
                     $('#total-revenue').text(formatRupiah(stats.getDataPemasukan));
                     $('#invoice-paid').text(formatRupiah(stats.getDataPengeluaran));
                     $('#data-bersih').text(formatRupiah((parseFloat(stats.getDataPemasukan) || 0) - (parseFloat(stats.getDataPengeluaran) || 0)));
-                    activated = true;
                 }).fail(function(xhr, status, error) {
                     console.error(error);
                 }).always(function() {
-                    button.prop('disabled', false).html('<i class="uil uil-eye me-1"></i> Tampilkan Data');
+                    button.prop('disabled', false).html('<i class="uil uil-eye me-1"></i> Terapkan Filter');
                 });
             }
 
-            $('#showDataButton').on('click', loadData);
-            $('#bulan, #tahun').on('change', function() {
-                if (activated) {
-                    loadData();
-                }
-            });
+            $('#filterButton').on('click', loadData);
+            loadData();
         });
     </script>
 @endsection

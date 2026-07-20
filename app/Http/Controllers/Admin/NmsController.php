@@ -28,9 +28,8 @@ class NmsController extends Controller
 
     public function index(Request $request)
     {
-        $showData = $request->boolean('show_data');
-        $devices = $showData ? NmsDevice::orderByDesc('id')->get() : collect();
-        $links = $showData ? NmsLink::with(['deviceA:id,nama,tipe,latitude,longitude', 'deviceB:id,nama,tipe,latitude,longitude'])->get() : collect();
+        $devices = NmsDevice::orderByDesc('id')->get();
+        $links = NmsLink::with(['deviceA:id,nama,tipe,latitude,longitude', 'deviceB:id,nama,tipe,latitude,longitude'])->get();
         $monitorUrl = URL::signedRoute('nms.public.monitor');
 
         return view('admin.nms.index', [
@@ -38,7 +37,6 @@ class NmsController extends Controller
             'devices' => $devices,
             'links' => $links,
             'monitorUrl' => $monitorUrl,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -58,11 +56,8 @@ class NmsController extends Controller
             $periodLabel = 'Bulan Ini ('.$now->format('M Y').')';
         }
 
-        $showData = $request->boolean('show_data');
-        $devices = $showData ? NmsDevice::where('status', 'active')->orderBy('nama')->get() : collect();
-        $slaSettings = $showData
-            ? NmsSlaSetting::whereIn('device_id', $devices->pluck('id'))->get()->keyBy('device_id')
-            : collect();
+        $devices = NmsDevice::where('status', 'active')->orderBy('nama')->get();
+        $slaSettings = NmsSlaSetting::whereIn('device_id', $devices->pluck('id'))->get()->keyBy('device_id');
 
         // Build query: for each device, determine if we count ping_status or link_status (specific interface)
         $slaData = [];
@@ -118,7 +113,6 @@ class NmsController extends Controller
             'period' => $period,
             'periodLabel' => $periodLabel,
             'slaData' => collect($slaData)->sortBy('sla')->values(),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -224,13 +218,6 @@ class NmsController extends Controller
 
         if ($isPublic && ! $request->hasValidSignature()) {
             abort(403);
-        }
-
-        if (! $isPublic && ! $request->boolean('show_data')) {
-            return response()->json([
-                'data' => [],
-                'links' => [],
-            ]);
         }
 
         $devices = NmsDevice::select('id', 'nama', 'tipe', 'ip', 'port', 'latitude', 'longitude', 'lokasi', 'status')
@@ -358,22 +345,18 @@ class NmsController extends Controller
         return redirect(url('admin/nms'))->with('success', ['Device berhasil dihapus']);
     }
 
-    public function deviceDetail(Request $request, $id)
+    public function deviceDetail($id)
     {
         $device = NmsDevice::findOrFail($id);
 
         return view('admin.nms.detail', [
             'title' => 'Detail Device: '.$device->nama,
             'device' => $device,
-            'showData' => $request->boolean('show_data'),
         ] + $this->websiteData());
     }
 
-    public function poll(Request $request, $id)
+    public function poll($id)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['error' => 'Data tidak diaktifkan'], 400);
-        }
 
         $device = NmsDevice::findOrFail($id);
 
@@ -837,11 +820,8 @@ class NmsController extends Controller
         return $hours.'h '.$mins.'m '.$secs.'s';
     }
 
-    public function metricsHistory(Request $request, $id, $port)
+    public function metricsHistory($id, $port)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['data' => []]);
-        }
 
         $metrics = NmsMetric::where('device_id', $id)
             ->where('port_name', $port)
@@ -854,11 +834,8 @@ class NmsController extends Controller
         return response()->json(['data' => $metrics]);
     }
 
-    public function checkStatus(Request $request, $id)
+    public function checkStatus($id)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json(['status' => 'unknown']);
-        }
 
         $device = NmsDevice::findOrFail($id);
         $port = (int) $device->port;

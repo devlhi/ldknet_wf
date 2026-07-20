@@ -31,12 +31,9 @@ class RouterController extends Controller
 
     public function home(Request $request)
     {
-        $dataLoaded = $request->boolean('show_data');
-
         return view('server.router.home', [
             'title' => 'Management Router',
-            'getData' => $dataLoaded ? Router::all() : collect(),
-            'dataLoaded' => $dataLoaded,
+            'getData' => Router::all(),
         ] + $this->websiteData());
     }
 
@@ -183,31 +180,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.dashboard', [
-                'title' => 'Dashboard Router',
-                'nameserver' => $router->nama,
-                'dnsserver' => $router->dns,
-                'hotspotuser' => 0,
-                'hotspotactive' => 0,
-                'hotspotprofile' => 0,
-                'hotspotlog' => [],
-                'totalhotspotlog' => 0,
-                'pppuser' => 0,
-                'pppactive' => 0,
-                'pppprofile' => 0,
-                'clock' => '-',
-                'uptime' => '0s',
-                'timezone' => '-',
-                'model' => '',
-                'architecture' => '-',
-                'version' => '-',
-                'interface' => [],
-                'traffics' => $router->interface,
-                'dataLoaded' => false,
-            ] + $this->websiteData());
-        }
-
         $nameserver = $router->nama;
         $dnsserver = $router->dns;
         $host = $router->ip;
@@ -272,7 +244,6 @@ class RouterController extends Controller
                 'version' => $resource['version'] ?? '-',
                 'interface' => $getinterface,
                 'traffics' => $monitor,
-                'dataLoaded' => true,
             ] + $this->websiteData());
         }
 
@@ -285,10 +256,6 @@ class RouterController extends Controller
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
-        }
-
-        if (! $request->boolean('show_data')) {
-            return view('server.router.hotspot.user.list', ['title' => 'Hotspot Users', 'totalhotspotuser' => 0, 'hotspotuser' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -394,10 +361,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.hotspot.profile.list', ['title' => 'Hotspot Profile', 'totalprofile' => 0, 'getprofile' => [], 'dataLoaded' => false] + $this->websiteData());
-        }
-
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
 
             // get profile
@@ -473,10 +436,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.hotspot.active', ['title' => 'Hotspot Active', 'totalhotspotactive' => 0, 'hotspotactive' => [], 'dataLoaded' => false] + $this->websiteData());
-        }
-
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
 
             // get hotspot info
@@ -498,10 +457,6 @@ class RouterController extends Controller
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
-        }
-
-        if (! $request->boolean('show_data')) {
-            return view('server.router.hotspot.log', ['title' => 'Hotspot Log', 'log' => [], 'totalhotspotlog' => 0, 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -530,10 +485,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.hotspot.host', ['title' => 'Hotspot Host', 'hosts' => [], 'totalhost' => 0, 'dataLoaded' => false] + $this->websiteData());
-        }
-
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
 
             $gethosts = $this->ros->comm('/ip/hotspot/host/print');
@@ -556,10 +507,6 @@ class RouterController extends Controller
 
         if ($router === null) {
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
-        }
-
-        if (! $request->boolean('show_data')) {
-            return view('server.router.ppp.profile', ['title' => 'PPP Profile', 'totalprofile' => 0, 'getprofile' => [], 'pool' => [], 'queue' => [], 'dataLoaded' => false] + $this->websiteData());
         }
 
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
@@ -594,10 +541,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.ppp.secret', ['title' => 'PPP Secret', 'totalsecret' => 0, 'getsecret' => [], 'profile' => [], 'dataLoaded' => false] + $this->websiteData());
-        }
-
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
 
             // get ppp secret info
@@ -624,10 +567,6 @@ class RouterController extends Controller
             return redirect(url('server/router'))->with('auth_errors', ['Anda belum klik connect']);
         }
 
-        if (! $request->boolean('show_data')) {
-            return view('server.router.ppp.active', ['title' => 'PPP Active', 'totalsecret' => 0, 'getsecret' => [], 'dataLoaded' => false] + $this->websiteData());
-        }
-
         if ($this->ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
 
             // get ppp active info
@@ -646,9 +585,6 @@ class RouterController extends Controller
 
     public function getTraffic(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
 
         $router = $this->currentRouter() ?? Router::first();
 
@@ -668,9 +604,6 @@ class RouterController extends Controller
 
     public function getTrafficPPPOE(Request $request, $pppoe)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
 
         $order = DB::table('orders')->where('pppoe_user', $pppoe)->first();
         $router = $order?->id_router ? Router::find($order->id_router) : $this->currentRouter();
@@ -696,9 +629,6 @@ class RouterController extends Controller
 
     public function getTrafficFixes(Request $request)
     {
-        if (! $request->boolean('show_data')) {
-            return response()->json([]);
-        }
 
         $interface = $request->post('interface');
         $router = $this->currentRouter() ?? Router::first();

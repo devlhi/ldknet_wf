@@ -168,33 +168,7 @@ class TableAuditLazyLoadingTest extends TestCase
         ]);
     }
 
-    public function test_audit_pages_do_not_query_row_datasets_on_initial_get(): void
-    {
-        $pages = [
-            '/admin/coverage/peta' => 'odp',
-            '/server/voucher/dashboard' => 'logs_voucher',
-            '/admin/accounting' => 'acc_journals',
-            '/admin/template/message' => 'template_message',
-            '/server/voucher/template/message' => 'template_message_voucher',
-            '/admin/finance/invoice/generate' => 'orders',
-        ];
-
-        DB::enableQueryLog();
-
-        foreach ($pages as $uri => $primaryTable) {
-            DB::flushQueryLog();
-
-            $response = $this->actingAs($this->user)->get($uri);
-            $response->assertOk()->assertSee('Tampilkan Data');
-
-            $queriedPrimary = collect(DB::getQueryLog())->contains(
-                fn (array $query): bool => str_contains(strtolower($query['query']), 'from "'.$primaryTable.'"')
-            );
-            $this->assertFalse($queriedPrimary, "Initial GET for {$uri} queried table [{$primaryTable}] eagerly.");
-        }
-    }
-
-    public function test_audit_pages_load_data_upon_explicit_activation(): void
+    public function test_audit_pages_eagerly_load_data_without_activation_flags(): void
     {
         DB::table('odp')->insert(['nama' => 'ODP-LAZY', 'latitude' => '-0.68', 'longitude' => '109.12']);
         DB::table('logs_voucher')->insert(['date' => now()->toDateString(), 'harga' => 10000]);
@@ -204,23 +178,30 @@ class TableAuditLazyLoadingTest extends TestCase
         DB::table('orders')->insert(['idpel' => 'CUST-LAZY', 'nama' => 'Lazy Cust']);
 
         $pages = [
-            '/admin/coverage/peta' => 'ODP-LAZY',
-            '/server/voucher/dashboard' => '10,000',
-            '/admin/accounting' => 'JV-001',
-            '/admin/template/message' => 'Tagihan baru',
-            '/server/voucher/template/message' => 'Voucher baru',
-            '/admin/finance/invoice/generate' => 'CUST-LAZY',
+            ['/admin/coverage/peta', 'odp'],
+            ['/server/voucher/dashboard', 'logs_voucher'],
+            ['/admin/accounting', 'acc_journals'],
+            ['/admin/template/message', 'template_message'],
+            ['/server/voucher/template/message', 'template_message_voucher'],
+            ['/admin/finance/invoice/generate', 'orders'],
         ];
 
-        foreach ($pages as $uri => $needleText) {
-            $response = $this->actingAs($this->user)->get($uri.'?show_data=1');
-            $response->assertOk()
-                ->assertSee($needleText)
-                ->assertDontSee('Tampilkan Data');
+        foreach ($pages as [$uri, $primaryTable]) {
+            $queries = [];
+            DB::listen(function ($query) use (&$queries): void {
+                $queries[] = strtolower($query->sql);
+            });
+
+            $this->actingAs($this->user)->get($uri);
+
+            $this->assertTrue(
+                collect($queries)->contains(fn (string $query): bool => $this->queriesTable($query, $primaryTable)),
+                "Expected normal GET for {$uri} to query table [{$primaryTable}] eagerly.",
+            );
         }
     }
 
-    public function test_nms_map_data_requires_activation_for_admin_and_signature_for_public(): void
+    public function test_nms_map_data_is_eager_for_authenticated_admin_and_signed_for_public(): void
     {
         DB::table('nms_devices')->insert([
             'nama' => 'NMS-LAZY',
@@ -233,16 +214,14 @@ class TableAuditLazyLoadingTest extends TestCase
         ]);
 
         $this->actingAs($this->user)->getJson('/admin/nms/map-data')
-            ->assertExactJson(['data' => [], 'links' => []]);
+            ->assertOk()
+            ->assertJsonPath('data.0.nama', 'NMS-LAZY');
         $this->actingAs($this->user)->get('/admin/nms/device/detail/1')
             ->assertOk()
-            ->assertSee('Tampilkan Data')
-            ->assertDontSee('pollDevice();', false);
+            ->assertDontSee('Tampilkan Data');
         $this->actingAs($this->user)->getJson('/admin/nms/device/poll/1')
             ->assertBadRequest()
-            ->assertJson(['error' => 'Data tidak diaktifkan']);
-        $this->actingAs($this->user)->getJson('/admin/nms/device/status/1')
-            ->assertExactJson(['status' => 'unknown']);
+            ->assertJson(['error' => 'Tipe device tidak didukung']);
         $this->actingAs($this->user)->getJson('/admin/nms/device/metrics/1/ether1')
             ->assertExactJson(['data' => []]);
 
@@ -253,5 +232,10 @@ class TableAuditLazyLoadingTest extends TestCase
         $this->getJson(URL::signedRoute('nms.public.map-data'))
             ->assertOk()
             ->assertJsonPath('data.0.nama', 'NMS-LAZY');
+    }
+
+    private function queriesTable(string $query, string $table): bool
+    {
+        return str_contains($query, 'from "'.$table.'"') || str_contains($query, 'from `'.$table.'`');
     }
 }

@@ -18,15 +18,6 @@
         </div>
         <!-- end page title -->
 
-        @if (! ($dataLoaded ?? true))
-            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <span><i class="mdi mdi-information-outline me-2"></i> Data dashboard router belum dimuat. Klik tombol untuk mengambil data dari Mikrotik.</span>
-                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">
-                    <i class="mdi mdi-download"></i> Tampilkan Data
-                </a>
-            </div>
-        @else
-
         <div class="row">
             <div class="col-xl-4 col-sm-6">
                 <div class="card">
@@ -127,7 +118,6 @@
                 </div>
             </div>
         </div>
-        @endif
     </div>
 </div>
 @endsection
@@ -251,7 +241,6 @@
 @endsection
 
 @section('scripts')
-@if ($dataLoaded ?? true)
     <script src="{{ asset('assets/js/highcharts.js') }}"></script>
     <script src="{{ asset('assets/js/highcharts-theme.js') }}"></script>
     <script type="text/javascript">
@@ -329,7 +318,6 @@
                     dataType: 'json',
                     data: {
                         interface: selectedInterface,
-                        show_data: 1,
                         _token: csrfToken
                     },
                     success: function(data) {
@@ -475,5 +463,4 @@
             });
         })();
     </script>
-@endif
 @endsection

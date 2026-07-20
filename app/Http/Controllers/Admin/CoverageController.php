@@ -42,16 +42,15 @@ class CoverageController extends Controller
 
     public function odp(Request $request)
     {
-        $showData = $request->boolean('show_data');
-        $getallodp = $showData ? Odp::all() : collect();
+        $getallodp = Odp::all();
 
         // Jumlah pelanggan & laporan gangguan terbuka per ODP dihitung sekali
         // (hindari query di dalam loop).
-        $pelangganPerOdp = $showData ? Order::selectRaw('nama_odp, COUNT(*) as jml')
+        $pelangganPerOdp = Order::selectRaw('nama_odp, COUNT(*) as jml')
             ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
-            ->groupBy('nama_odp')->pluck('jml', 'nama_odp') : collect();
+            ->groupBy('nama_odp')->pluck('jml', 'nama_odp');
 
-        $gangguanPerOdp = $showData && Schema::hasTable('gangguan_reports')
+        $gangguanPerOdp = Schema::hasTable('gangguan_reports')
             ? GangguanReport::whereIn('status', ['baru', 'diproses'])
                 ->whereNotNull('nama_odp')->where('nama_odp', '!=', '')
                 ->selectRaw('nama_odp, COUNT(*) as jml')
@@ -61,7 +60,7 @@ class CoverageController extends Controller
         // Data ODP lengkap untuk tabel + peta (satu sumber data).
         $odpWithDetails = [];
 
-        $portsPerOdp = $showData ? Order::whereNotNull('nama_odp')->get(['nama_odp', 'port_odp'])->groupBy('nama_odp') : collect();
+        $portsPerOdp = Order::whereNotNull('nama_odp')->get(['nama_odp', 'port_odp'])->groupBy('nama_odp');
         foreach ($getallodp as $odp) {
             $orders = $portsPerOdp->get($odp->nama, collect());
 
@@ -88,7 +87,6 @@ class CoverageController extends Controller
             'title' => 'Data ODP',
             'odp' => $getallodp,
             'data' => $odpWithDetails,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -134,29 +132,27 @@ class CoverageController extends Controller
     public function peta(Request $request)
     {
         $setting = CoverageMapSetting::current();
-        $showData = $request->boolean('show_data');
 
-        $odps = $showData ? Odp::whereNotNull('latitude')
+        $odps = Odp::whereNotNull('latitude')
             ->where('latitude', '!=', '')
             ->whereNotNull('longitude')
             ->where('longitude', '!=', '')
-            ->get(['id', 'nama', 'kode', 'port', 'latitude', 'longitude']) : collect();
+            ->get(['id', 'nama', 'kode', 'port', 'latitude', 'longitude']);
 
         // Cache jalur kabel per ODP (path + src_hash) untuk dibandingkan di sisi klien.
-        $cables = $showData ? CoverageCable::whereIn('odp_id', $odps->pluck('id'))
+        $cables = CoverageCable::whereIn('odp_id', $odps->pluck('id'))
             ->get(['odp_id', 'path', 'src_hash'])
             ->keyBy('odp_id')
             ->map(fn ($c) => [
                 'path' => $c->path,
                 'src_hash' => $c->src_hash,
-            ]) : collect();
+            ]);
 
         return view('admin.coverage.peta', [
             'title' => 'Peta Jaringan',
             'setting' => $setting,
             'odps' => $odps,
             'cables' => $cables,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -225,8 +221,7 @@ class CoverageController extends Controller
 
     public function area(Request $request)
     {
-        $showData = $request->boolean('show_data');
-        $areas = $showData && Schema::hasTable('area') ? DB::table('area')->get() : collect();
+        $areas = Schema::hasTable('area') ? DB::table('area')->get() : collect();
         $areaData = [];
 
         foreach ($areas as $area) {
@@ -243,7 +238,6 @@ class CoverageController extends Controller
         return view('admin.coverage.area', [
             'title' => 'Data Area',
             'area' => $areaData,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -286,25 +280,21 @@ class CoverageController extends Controller
 
     public function getCustomerMap(Request $request)
     {
-        $showData = $request->boolean('show_data');
 
         return view('admin.coverage.customers', [
             'title' => 'Data Map Pelanggan',
-            'customers' => $showData ? Order::where('status', 'Active')->get() : collect(),
-            'odps' => $showData ? Odp::all() : collect(),
-            'showData' => $showData,
+            'customers' => Order::where('status', 'Active')->get(),
+            'odps' => Odp::all(),
         ] + $this->websiteData());
     }
 
     public function rxpower(Request $request)
     {
-        $showData = $request->boolean('show_data');
 
         return view('admin.coverage.rxpower', [
             'title' => 'Data Redaman Pelanggan',
-            'customers' => $showData ? Order::where('status', 'Active')->get() : collect(),
-            'odps' => $showData ? Odp::all() : collect(),
-            'showData' => $showData,
+            'customers' => Order::where('status', 'Active')->get(),
+            'odps' => Odp::all(),
             'rxPowerData' => [],
         ] + $this->websiteData());
     }

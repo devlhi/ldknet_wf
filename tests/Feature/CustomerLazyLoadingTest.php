@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Libraries\RouterosAPI;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Mockery;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Tests\TestCase;
 
 class CustomerLazyLoadingTest extends TestCase
@@ -40,6 +44,9 @@ class CustomerLazyLoadingTest extends TestCase
         Schema::create('router', function (Blueprint $table): void {
             $table->id();
             $table->string('nama');
+            $table->string('ip');
+            $table->string('username');
+            $table->string('password');
         });
         Schema::create('odp', function (Blueprint $table): void {
             $table->id();
@@ -96,7 +103,9 @@ class CustomerLazyLoadingTest extends TestCase
         $this->assertFalse(collect($queries)->contains(fn (string $sql): bool => str_contains(strtolower($sql), 'orders')));
     }
 
-    public function test_customer_detail_requires_show_data_to_connect_router(): void
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_customer_detail_eagerly_connects_router_without_show_data(): void
     {
         DB::table('orders')->insert([
             'idpel' => 'CUST-001',
@@ -104,6 +113,7 @@ class CustomerLazyLoadingTest extends TestCase
             'paket' => '10 Mbps',
             'id_router' => 99,
             'mode' => 'pppoe',
+            'pppoe_user' => 'customer-test',
             'date' => '2026-01-01',
             'expdate' => '2026-12-31',
             'status' => 'Active',
@@ -111,13 +121,33 @@ class CustomerLazyLoadingTest extends TestCase
         DB::table('router')->insert([
             'id' => 99,
             'nama' => 'Router Test',
+            'ip' => '192.0.2.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('secret'),
         ]);
 
-        // Detail page without show_data should load with placeholder notice
-        $response = $this->actingAs($this->user)->get('/admin/customer/detail/CUST-001');
-        $response->assertOk()
-            ->assertSee('Data router pelanggan belum dimuat.')
-            ->assertSee('Tampilkan Data');
+        $routerApi = Mockery::mock('overload:'.RouterosAPI::class);
+        $routerApi->shouldReceive('connect')
+            ->once()
+            ->with('192.0.2.1', 'admin', 'secret')
+            ->andReturnTrue();
+        $routerApi->shouldReceive('comm')
+            ->once()
+            ->with('/interface/print')
+            ->andReturn([]);
+        $routerApi->shouldReceive('comm')
+            ->once()
+            ->with('/ppp/active/getall', [
+                '.proplist' => '.id',
+                '?name' => 'customer-test',
+            ])
+            ->andReturn([]);
+
+        $this->actingAs($this->user)->get('/admin/customer/detail/CUST-001')
+            ->assertOk()
+            ->assertSee('Customer Test')
+            ->assertDontSee('Data router pelanggan belum dimuat.')
+            ->assertDontSee('Tampilkan Data');
     }
 
     public function test_customer_filter_endpoint_is_guarded_without_activation(): void

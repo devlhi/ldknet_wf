@@ -47,7 +47,6 @@
                         @endif
 
                         <form method="get" class="row g-3 mb-4">
-                            <input type="hidden" name="show_data" value="1">
                             @if ($metaGateways->isNotEmpty())
                                 <div class="col-md-6">
                                     <label class="form-label">Pilih Gateway Meta Tersimpan</label>
@@ -200,9 +199,6 @@
                         </div>
 
                         <div class="table-responsive">
-                            @if (! $showData)
-                                <div class="alert alert-info">Klik tombol "Cek Template" di bawah untuk memuat daftar template dari Meta.</div>
-                            @endif
                             <table class="table table-bordered table-striped">
                                 <thead>
                                     <tr>

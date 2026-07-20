@@ -19,14 +19,11 @@ class TemplateMessageController extends Controller
         ];
     }
 
-    public function templateMessage(Request $request)
+    public function templateMessage()
     {
-        $showData = $request->boolean('show_data');
-
         return view('admin.gateway.template', [
             'title' => 'Template Message',
-            'content' => $showData ? TemplateMessage::all() : collect(),
-            'showData' => $showData,
+            'content' => TemplateMessage::all(),
         ] + $this->websiteData());
     }
 

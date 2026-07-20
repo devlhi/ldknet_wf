@@ -33,28 +33,79 @@ class FinanceLazyLoadingTest extends TestCase
         Schema::create('invoice', function (Blueprint $table): void {
             $table->id();
             $table->string('code')->nullable();
+            $table->string('idpel')->nullable();
+            $table->string('package')->nullable();
+            $table->integer('received')->default(0);
             $table->date('date')->nullable();
+            $table->date('expdate')->nullable();
+            $table->dateTime('last_update')->nullable();
             $table->string('status')->nullable();
             $table->string('account')->nullable();
+            $table->string('update_by')->nullable();
+        });
+        Schema::create('report', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code')->nullable();
+            $table->string('category')->nullable();
+            $table->string('jenis_kategori')->nullable();
+            $table->integer('balance')->default(0);
+            $table->date('date')->nullable();
+        });
+        Schema::create('orders', function (Blueprint $table): void {
+            $table->id();
+            $table->string('idpel');
+            $table->string('nama');
+            $table->string('paket');
+            $table->date('date')->nullable();
+            $table->string('status');
         });
     }
 
-    public function test_finance_ajax_endpoints_return_empty_payload_without_activation(): void
+    public function test_finance_cashflow_and_report_ajax_endpoints_eagerly_return_unflagged_payloads(): void
     {
         $user = $this->financeUser();
 
-        $this->actingAs($user)->postJson('/finance/invoice/filter/getdata')->assertExactJson([]);
+        DB::table('invoice')->insert([
+            'code' => 'INV-EAGER',
+            'idpel' => 'CUST-001',
+            'package' => '10 Mbps',
+            'received' => 150000,
+            'date' => '2026-01-10',
+            'expdate' => '2026-01-20',
+            'last_update' => '2026-01-11 08:00:00',
+            'status' => 'Paid',
+            'account' => 'user',
+            'update_by' => 'Finance Test',
+        ]);
+        DB::table('report')->insert([
+            'code' => 'CASH-EAGER',
+            'category' => 'Internet',
+            'jenis_kategori' => 'Pemasukan',
+            'balance' => 150000,
+            'date' => '2026-01-10',
+        ]);
+
+        // Invoice data keeps show_data lazy loading while cashflow/report are eager.
         $this->actingAs($user)->getJson('/finance/invoice/filter/ambil-data/1/2026')->assertExactJson([
             'getAllCredit' => 0,
             'getInvoicePaid' => 0,
             'getInvoiceUnpaid' => 0,
         ]);
-        $this->actingAs($user)->postJson('/finance/cash-flows/filter/getdata')->assertExactJson([]);
+
+        $this->actingAs($user)->postJson('/finance/cash-flows/filter/getdata', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ])->assertJsonCount(1)
+            ->assertJsonPath('0.code', 'CASH-EAGER');
         $this->actingAs($user)->getJson('/finance/cash-flows/filter/ambil-data/1/2026')->assertExactJson([
-            'getDataPemasukan' => 0,
+            'getDataPemasukan' => 150000,
             'getDataPengeluaran' => 0,
         ]);
-        $this->actingAs($user)->postJson('/finance/report/filter/getdata')->assertExactJson([]);
+        $this->actingAs($user)->postJson('/finance/report/filter/getdata', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ])->assertJsonCount(1)
+            ->assertJsonPath('0.code', 'INV-EAGER');
         $this->actingAs($user)->getJson('/finance/report/filter/ambil-data-statistik/1/2026')->assertExactJson([
             'getAllCredit' => 0,
             'getInvoicePaid' => 0,
@@ -80,17 +131,56 @@ class FinanceLazyLoadingTest extends TestCase
             ->assertDontSee('INV-LAZY');
     }
 
-    public function test_finance_report_filters_return_empty_payload_without_activation(): void
+    public function test_finance_report_filters_eagerly_return_unflagged_payloads(): void
     {
         $user = $this->financeUser();
 
-        foreach ([
-            '/admin/finance/report/filter',
-            '/admin/finance/report/cash-flows/filter',
-            '/admin/finance/report/customers/filter',
-            '/admin/finance/report/new/customers/filter',
-        ] as $uri) {
-            $this->actingAs($user)->postJson($uri)->assertExactJson(['data' => []]);
+        DB::table('invoice')->insert([
+            'code' => 'INV-REPORT',
+            'idpel' => 'CUST-001',
+            'package' => '10 Mbps',
+            'date' => '2026-01-10',
+            'status' => 'Paid',
+            'account' => 'user',
+        ]);
+        DB::table('report')->insert([
+            'code' => 'CASH-REPORT',
+            'category' => 'Internet',
+            'jenis_kategori' => 'Pemasukan',
+            'balance' => 150000,
+            'date' => '2026-01-10',
+        ]);
+        DB::table('orders')->insert([
+            'idpel' => 'CUST-001',
+            'nama' => 'Customer Report',
+            'paket' => '10 Mbps',
+            'date' => '2026-01-10',
+            'status' => 'Active',
+        ]);
+
+        $requests = [
+            ['/admin/finance/report/filter', [
+                'paket' => 'Pilih Paket', 'status' => 'Tampilkan Semua',
+                'penerima' => 'Tampilkan Semua', 'bulan' => 1, 'tahun' => 2026,
+            ], 'INV-REPORT'],
+            ['/admin/finance/report/cash-flows/filter', [
+                'bulan' => 1, 'tahun' => 2026,
+                'kategori' => 'Tampilkan Semua', 'jenis' => 'Tampilkan Semua',
+            ], 'CASH-REPORT'],
+            ['/admin/finance/report/customers/filter', [
+                'paket' => 'Tampilkan Semua', 'status' => 'Tampilkan Semua',
+            ], 'CUST-001'],
+            ['/admin/finance/report/new/customers/filter', [
+                'bulan' => 1, 'tahun' => 2026,
+            ], 'CUST-001'],
+        ];
+
+        foreach ($requests as [$uri, $payload, $expected]) {
+            $key = str_contains($expected, 'REPORT') ? 'code' : 'idpel';
+
+            $this->actingAs($user)->postJson($uri, $payload)
+                ->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.'.$key, $expected);
         }
     }
 

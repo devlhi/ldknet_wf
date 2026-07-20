@@ -39,15 +39,12 @@ class ServicesController extends Controller
         return array_values(array_filter($response, 'is_array'));
     }
 
-    public function services(Request $request)
+    public function services()
     {
-        $showData = $request->boolean('show_data');
-
         return view('admin.services.index', [
             'title' => 'Services',
-            'getServices' => $showData ? Service::all() : collect(),
+            'getServices' => Service::all(),
             'router' => Router::all(),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 

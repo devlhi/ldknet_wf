@@ -16,7 +16,7 @@
             <div class="card">
                 <div class="card-body">
                     <form method="GET" class="mb-3">
-                        <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
+                        <button type="submit" class="btn btn-primary"><i class="uil uil-filter me-1"></i> Terapkan Filter</button>
                     </form>
                     <table id="datatable" class="table table-bordered dt-responsive nowrap" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                         <thead>
@@ -30,10 +30,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @if (! $showData)
-                                <tr><td colspan="6" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                            @else
-                                @foreach ($rows as $row)
+@foreach ($rows as $row)
                                     <tr>
                                         <td>{{ $loop->iteration }}</td>
                                         <td>{{ optional($row->tanggal)->format('d-m-Y') }}</td>
@@ -43,7 +40,6 @@
                                         <td>{{ $row->keterangan }}</td>
                                     </tr>
                                 @endforeach
-                            @endif
                         </tbody>
                     </table>
                 </div>

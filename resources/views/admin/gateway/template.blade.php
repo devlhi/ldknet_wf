@@ -1,17 +1,6 @@
 @extends('admin.layout')
 
 @section('content')
-    @unless ($showData)
-        <div class="page-content">
-            <div class="container-fluid">
-                <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <span>Data template pesan belum dimuat.</span>
-                    <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
-                </div>
-            </div>
-        </div>
-    @endunless
-
     @foreach ($content as $row)
         <div class="page-content">
             <div class="container-fluid">

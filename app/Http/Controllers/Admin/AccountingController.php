@@ -9,16 +9,10 @@ use App\Models\AccJournal;
 use App\Models\AccJournalLine;
 use App\Models\Website;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class AccountingController extends Controller
 {
-    private function emptyPaginator(Request $request, int $perPage = 25): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator([], 0, $perPage, 1, ['path' => $request->url(), 'query' => $request->query()]);
-    }
-
     private function websiteData(): array
     {
         $website = Website::first();
@@ -57,44 +51,41 @@ class AccountingController extends Controller
 
     public function index(Request $request)
     {
-        $showData = $request->boolean('show_data');
 
-        $accounts = $showData ? AccAccount::get(['id', 'type', 'is_cash', 'opening_balance']) : collect();
+        $accounts = AccAccount::get(['id', 'type', 'is_cash', 'opening_balance']);
         $accountCount = $accounts->count();
-        $journalCount = $showData ? AccJournal::count() : 0;
-        $contactCount = $showData ? AccContact::count() : 0;
+        $journalCount = AccJournal::count();
+        $contactCount = AccContact::count();
 
         $start = now()->startOfMonth()->toDateString();
         $end = now()->endOfMonth()->toDateString();
-        $balances = $showData ? $this->accountBalances($start, $end) : collect();
+        $balances = $this->accountBalances($start, $end);
 
         $income = 0;
         $expense = 0;
         $cash = 0;
-        $allBalances = $showData ? $this->accountBalances(null, $end) : collect();
+        $allBalances = $this->accountBalances(null, $end);
 
-        if ($showData) {
-            foreach ($accounts as $acc) {
-                $b = $balances->get($acc->id);
-                if ($b) {
-                    if ($acc->type === 'revenue') {
-                        $income += ((float) $b->total_credit - (float) $b->total_debit);
-                    } elseif ($acc->type === 'expense') {
-                        $expense += ((float) $b->total_debit - (float) $b->total_credit);
-                    }
+        foreach ($accounts as $acc) {
+            $b = $balances->get($acc->id);
+            if ($b) {
+                if ($acc->type === 'revenue') {
+                    $income += ((float) $b->total_credit - (float) $b->total_debit);
+                } elseif ($acc->type === 'expense') {
+                    $expense += ((float) $b->total_debit - (float) $b->total_credit);
                 }
+            }
 
-                if ($acc->is_cash) {
-                    $ab = $allBalances->get($acc->id);
-                    if ($ab) {
-                        $cash += ((float) $ab->total_debit - (float) $ab->total_credit);
-                    }
-                    $cash += (float) $acc->opening_balance;
+            if ($acc->is_cash) {
+                $ab = $allBalances->get($acc->id);
+                if ($ab) {
+                    $cash += ((float) $ab->total_debit - (float) $ab->total_credit);
                 }
+                $cash += (float) $acc->opening_balance;
             }
         }
 
-        $recentJournals = $showData ? AccJournal::orderByDesc('date')->orderByDesc('id')->limit(10)->get() : collect();
+        $recentJournals = AccJournal::orderByDesc('date')->orderByDesc('id')->limit(10)->get();
 
         return view('admin.accounting.index', [
             'title' => 'Dashboard Akuntansi',
@@ -106,7 +97,6 @@ class AccountingController extends Controller
             'netProfit' => $income - $expense,
             'cash' => $cash,
             'recentJournals' => $recentJournals,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -125,10 +115,8 @@ class AccountingController extends Controller
                     ->orWhere('name', 'like', "%{$search}%");
             });
         }
-
-        $showData = $request->boolean('show_data');
-        $accounts = $showData ? $query->get() : collect();
-        $balances = $showData ? $this->accountBalances() : collect();
+        $accounts = $query->get();
+        $balances = $this->accountBalances();
 
         return view('admin.accounting.accounts', [
             'title' => 'Daftar Akun (Chart of Accounts)',
@@ -136,7 +124,6 @@ class AccountingController extends Controller
             'balances' => $balances,
             'filterType' => $type,
             'search' => $request->input('q'),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -236,9 +223,7 @@ class AccountingController extends Controller
                     ->orWhere('reference', 'like', "%{$search}%");
             });
         }
-
-        $showData = $request->boolean('show_data');
-        $journals = $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request);
+        $journals = $query->paginate(25)->withQueryString();
 
         return view('admin.accounting.journals', [
             'title' => 'Jurnal Umum',
@@ -246,7 +231,6 @@ class AccountingController extends Controller
             'start' => $request->input('start'),
             'end' => $request->input('end'),
             'search' => $request->input('q'),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -432,14 +416,11 @@ class AccountingController extends Controller
             });
         }
 
-        $showData = $request->boolean('show_data');
-
         return view('admin.accounting.contacts', [
             'title' => 'Kontak',
-            'contacts' => $showData ? $query->paginate(25)->withQueryString() : $this->emptyPaginator($request),
+            'contacts' => $query->paginate(25)->withQueryString(),
             'filterType' => $type,
             'search' => $request->input('q'),
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -503,13 +484,12 @@ class AccountingController extends Controller
         $start = $request->input('start', now()->startOfMonth()->toDateString());
         $end = $request->input('end', now()->endOfMonth()->toDateString());
         $accountId = $request->input('account_id');
-        $showData = $request->boolean('show_data');
 
         $accounts = AccAccount::orderBy('code')->get();
         $ledger = null;
         $selectedAccount = null;
 
-        if ($showData && $accountId) {
+        if ($accountId) {
             $selectedAccount = AccAccount::findOrFail($accountId);
 
             // Opening balance = opening_balance + movements before start date
@@ -568,7 +548,6 @@ class AccountingController extends Controller
             'ledger' => $ledger,
             'start' => $start,
             'end' => $end,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -577,10 +556,9 @@ class AccountingController extends Controller
     public function reportTrialBalance(Request $request)
     {
         $end = $request->input('end', now()->endOfMonth()->toDateString());
-        $showData = $request->boolean('show_data');
 
-        $balances = $showData ? $this->accountBalances(null, $end) : collect();
-        $accounts = $showData ? AccAccount::orderBy('code')->get() : collect();
+        $balances = $this->accountBalances(null, $end);
+        $accounts = AccAccount::orderBy('code')->get();
 
         $rows = [];
         $totalDebit = 0;
@@ -620,7 +598,6 @@ class AccountingController extends Controller
             'totalDebit' => $totalDebit,
             'totalCredit' => $totalCredit,
             'end' => $end,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -630,9 +607,8 @@ class AccountingController extends Controller
     {
         $start = $request->input('start', now()->startOfMonth()->toDateString());
         $end = $request->input('end', now()->endOfMonth()->toDateString());
-        $showData = $request->boolean('show_data');
 
-        $balances = $showData ? $this->accountBalances($start, $end) : collect();
+        $balances = $this->accountBalances($start, $end);
 
         $revenue = [];
         $cogs = [];
@@ -641,7 +617,7 @@ class AccountingController extends Controller
         $totalCogs = 0;
         $totalExpense = 0;
 
-        foreach ($showData ? AccAccount::orderBy('code')->get() : [] as $acc) {
+        foreach (AccAccount::orderBy('code')->get() as $acc) {
             $b = $balances->get($acc->id);
             if (! $b) {
                 continue;
@@ -684,7 +660,6 @@ class AccountingController extends Controller
             'netProfit' => $netProfit,
             'start' => $start,
             'end' => $end,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -693,9 +668,8 @@ class AccountingController extends Controller
     public function reportBalanceSheet(Request $request)
     {
         $end = $request->input('end', now()->endOfMonth()->toDateString());
-        $showData = $request->boolean('show_data');
 
-        $balances = $showData ? $this->accountBalances(null, $end) : collect();
+        $balances = $this->accountBalances(null, $end);
 
         $assets = [];
         $liabilities = [];
@@ -707,7 +681,7 @@ class AccountingController extends Controller
         // Net profit up to end date (revenue - expense) flows into equity
         $netProfit = 0;
 
-        foreach ($showData ? AccAccount::orderBy('code')->get() : [] as $acc) {
+        foreach (AccAccount::orderBy('code')->get() as $acc) {
             $b = $balances->get($acc->id);
             $movement = $b ? ((float) $b->total_debit - (float) $b->total_credit) : 0;
 
@@ -739,10 +713,8 @@ class AccountingController extends Controller
         }
 
         // Add current period profit to equity section
-        if ($showData) {
-            $equity[] = ['name' => 'Laba (Rugi) Berjalan', 'amount' => $netProfit];
-            $totalEquity += $netProfit;
-        }
+        $equity[] = ['name' => 'Laba (Rugi) Berjalan', 'amount' => $netProfit];
+        $totalEquity += $netProfit;
 
         return view('admin.accounting.report-balance-sheet', [
             'title' => 'Neraca (Balance Sheet)',
@@ -754,7 +726,6 @@ class AccountingController extends Controller
             'totalEquity' => $totalEquity,
             'totalLiabEquity' => $totalLiabilities + $totalEquity,
             'end' => $end,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 
@@ -764,62 +735,58 @@ class AccountingController extends Controller
     {
         $start = $request->input('start', now()->startOfMonth()->toDateString());
         $end = $request->input('end', now()->endOfMonth()->toDateString());
-        $showData = $request->boolean('show_data');
 
         $rows = [];
         $openingTotal = 0;
         $inflow = 0;
         $outflow = 0;
 
-        if ($showData) {
-            $cashAccounts = AccAccount::where('is_cash', true)->orderBy('code')->get();
-            $cashIds = $cashAccounts->pluck('id')->all();
+        $cashAccounts = AccAccount::where('is_cash', true)->orderBy('code')->get();
+        $cashIds = $cashAccounts->pluck('id')->all();
 
-            foreach ($cashAccounts as $acc) {
-                // opening = opening_balance + movement before start
-                $before = AccJournalLine::query()
-                    ->join('acc_journals', 'acc_journals.id', '=', 'acc_journal_lines.journal_id')
-                    ->where('acc_journals.is_posted', true)
-                    ->where('acc_journal_lines.account_id', $acc->id)
-                    ->where('acc_journals.date', '<', $start)
-                    ->selectRaw('COALESCE(SUM(debit),0) as d, COALESCE(SUM(credit),0) as c')
-                    ->first();
-
-                $openingTotal += (float) $acc->opening_balance + ((float) $before->d - (float) $before->c);
-            }
-
-            // Movements within period on cash accounts
-            $movements = AccJournalLine::query()
+        foreach ($cashAccounts as $acc) {
+            // opening = opening_balance + movement before start
+            $before = AccJournalLine::query()
                 ->join('acc_journals', 'acc_journals.id', '=', 'acc_journal_lines.journal_id')
                 ->where('acc_journals.is_posted', true)
-                ->whereIn('acc_journal_lines.account_id', $cashIds)
-                ->whereBetween('acc_journals.date', [$start, $end])
-                ->orderBy('acc_journals.date')
-                ->orderBy('acc_journals.id')
-                ->select(
-                    'acc_journal_lines.debit',
-                    'acc_journal_lines.credit',
-                    'acc_journal_lines.memo',
-                    'acc_journals.number as j_number',
-                    'acc_journals.date as j_date',
-                    'acc_journals.description as j_description'
-                )
-                ->get();
+                ->where('acc_journal_lines.account_id', $acc->id)
+                ->where('acc_journals.date', '<', $start)
+                ->selectRaw('COALESCE(SUM(debit),0) as d, COALESCE(SUM(credit),0) as c')
+                ->first();
 
-            foreach ($movements as $m) {
-                $in = (float) $m->debit;
-                $out = (float) $m->credit;
-                $inflow += $in;
-                $outflow += $out;
-                $rows[] = [
-                    'date' => $m->j_date,
-                    'number' => $m->j_number,
-                    'memo' => $m->memo ?: $m->j_description,
-                    'in' => $in,
-                    'out' => $out,
-                ];
-            }
+            $openingTotal += (float) $acc->opening_balance + ((float) $before->d - (float) $before->c);
+        }
 
+        // Movements within period on cash accounts
+        $movements = AccJournalLine::query()
+            ->join('acc_journals', 'acc_journals.id', '=', 'acc_journal_lines.journal_id')
+            ->where('acc_journals.is_posted', true)
+            ->whereIn('acc_journal_lines.account_id', $cashIds)
+            ->whereBetween('acc_journals.date', [$start, $end])
+            ->orderBy('acc_journals.date')
+            ->orderBy('acc_journals.id')
+            ->select(
+                'acc_journal_lines.debit',
+                'acc_journal_lines.credit',
+                'acc_journal_lines.memo',
+                'acc_journals.number as j_number',
+                'acc_journals.date as j_date',
+                'acc_journals.description as j_description'
+            )
+            ->get();
+
+        foreach ($movements as $m) {
+            $in = (float) $m->debit;
+            $out = (float) $m->credit;
+            $inflow += $in;
+            $outflow += $out;
+            $rows[] = [
+                'date' => $m->j_date,
+                'number' => $m->j_number,
+                'memo' => $m->memo ?: $m->j_description,
+                'in' => $in,
+                'out' => $out,
+            ];
         }
 
         return view('admin.accounting.report-cash-flow', [
@@ -831,7 +798,6 @@ class AccountingController extends Controller
             'closing' => $openingTotal + $inflow - $outflow,
             'start' => $start,
             'end' => $end,
-            'showData' => $showData,
         ] + $this->websiteData());
     }
 }

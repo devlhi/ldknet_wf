@@ -128,7 +128,7 @@
                             </select>
                         </div>
                         <div class="col-12">
-                            <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-database me-1"></i> Tampilkan Data</button>
+                            <button type="submit" class="btn btn-primary"><i class="uil uil-filter me-1"></i> Terapkan Filter</button>
                             <a href="{{ url('admin/absensi/rekap') }}" class="btn btn-light">Reset</a>
                         </div>
                     </form>

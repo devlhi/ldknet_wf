@@ -57,14 +57,6 @@
             <div class="col-12 col-xl-12 stretch-card">
                 <div class="card">
                     <div class="card-body">
-                        @if (! ($dataLoaded ?? true))
-                            <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <span><i class="mdi mdi-information-outline me-2"></i> Data dashboard OLT belum dimuat. Klik tombol untuk mengambil data dari OLT.</span>
-                                <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">
-                                    <i class="mdi mdi-download"></i> Tampilkan Data
-                                </a>
-                            </div>
-                        @endif
                         <div class="table-responsive">
                             <table class="table table-bordered">
                                 <thead>

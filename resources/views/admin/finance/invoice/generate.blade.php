@@ -13,7 +13,6 @@
                         @endforeach
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="btn-close"></button>
                     </div>
-                @endif
 
                 @if (session('success'))
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -25,14 +24,6 @@
                     </div>
                 @endif
 
-                @unless ($showData)
-                    <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                        <span>Daftar pelanggan belum dimuat.</span>
-                        <a href="{{ request()->fullUrlWithQuery(['show_data' => 1]) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
-                    </div>
-                @endunless
-
-                @if ($showData)
                 <div class="card border-0 shadow-sm overflow-hidden">
                     <div class="card-header bg-white border-bottom py-3">
                         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">

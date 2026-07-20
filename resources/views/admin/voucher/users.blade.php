@@ -32,9 +32,6 @@
                 @endif
 
                 <div class="d-flex gap-2 mb-3">
-                    <form method="GET">
-                        <button type="submit" name="show_data" value="1" class="btn btn-primary"><i class="uil uil-eye me-1"></i> Tampilkan Data</button>
-                    </form>
                     <button type="button" class="btn btn-success waves-effect waves-light" data-bs-toggle="modal" data-bs-target="#myModal"><i class="mdi mdi-plus me-1"></i> Add Reseller</button>
                 </div>
 
@@ -112,9 +109,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (! $showData)
-                                    <tr><td colspan="8" class="text-center text-muted">Klik Tampilkan Data untuk memuat data.</td></tr>
-                                @else
                                     @php ($i = 1)
                                     @foreach ($account as $row)
                                         <tr>
@@ -128,7 +122,6 @@
                                             <td><a href="{{ url('admin/manage/user/edit/' . $row->id) }}" class="btn btn-sm btn-primary"><i class="uil-edit"></i> Edit Data</a></td>
                                         </tr>
                                     @endforeach
-                                @endif
                             </tbody>
                         </table>
                     </div>

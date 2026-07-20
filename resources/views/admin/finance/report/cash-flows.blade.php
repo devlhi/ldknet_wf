@@ -105,7 +105,7 @@
                                 </div>
                                 <br>
                                 <button class="btn btn-primary d-inline-block" id="filterButton">
-                                    <i class="uil-eye"></i> Tampilkan Data
+                                    <i class="uil-eye"></i> Terapkan Filter
                                 </button>
 
                                 <button class="btn btn-success d-inline-block" id="refreshButton" name="refresh">
@@ -242,7 +242,6 @@
                     type: "POST",
                     dataType: 'json',
                     data: {
-                        show_data: 1,
                         bulan: bulan,
                         tahun: tahun,
                         kategori: kategori,

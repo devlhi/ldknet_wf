@@ -25,12 +25,6 @@
                         <div class="card shadow mb-4">
                             <!-- Card Body -->
                             <div class="card-body">
-                                @if (! ($dataLoaded ?? true))
-                                    <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                        <span>Data PPP Profile belum dimuat dari RouterOS.</span>
-                                        <a href="{{ request()->fullUrlWithQuery(['show_data' => '1']) }}" class="btn btn-primary btn-sm">Tampilkan Data</a>
-                                    </div>
-                                @endif
 
                                 <!-- sample modal content -->
                                 <div id="myModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
