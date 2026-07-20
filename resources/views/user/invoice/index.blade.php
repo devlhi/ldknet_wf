@@ -26,11 +26,11 @@
                                                 <td>{{ $row->code }}</td>
                                                 <td>{{ $row->package }}</td>
                                                 <td>{{ function_exists('rupiah') ? rupiah($row->price) : $row->price }}</td>
-                                                <td>{{ $row->status }}</td>
+                                                <td>{{ $row->status === 'Error' ? 'Cancel' : $row->status }}</td>
                                                 <td>{{ $row->expdate }}</td>
                                                 <td>
                                                     <a href="{{ url('user/invoice/detail/'.$row->code) }}" class="btn btn-sm btn-info">Detail</a>
-                                                    @if ($row->status !== 'Paid')
+                                                    @if ($row->status === 'Unpaid')
                                                         <a href="{{ url('user/invoice/payment/'.$row->code) }}" class="btn btn-sm btn-primary">Bayar</a>
                                                     @endif
                                                 </td>

@@ -207,6 +207,7 @@
                                 var cls = 'bg-secondary';
                                 if (row.status === 'Paid') { text = 'Sudah Terbayar'; cls = 'bg-success'; }
                                 else if (row.status === 'Unpaid') { text = 'Belum Terbayar'; cls = 'bg-danger'; }
+                                else if (row.status === 'Error') { text = 'Cancel'; cls = 'bg-secondary'; }
                                 return '<span class="badge ' + cls + '">' + text + '</span>';
                             }
                         },

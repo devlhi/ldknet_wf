@@ -58,53 +58,108 @@ class AutoController extends Controller
         $failed = 0;
 
         Order::where('status', 'Isolir')->orderBy('id')->chunkById(100, function ($orders) use (&$attempted, &$succeeded, &$failed) {
-            foreach ($orders as $data) {
+            foreach ($orders as $snapshot) {
                 $attempted++;
-                $router = Router::find($data->id_router);
-                if (! $router) {
-                    $failed++;
-                    Log::warning("Retry isolir ditunda, router tidak ditemukan ({$data->idpel}, router {$data->id_router})");
-
-                    continue;
-                }
-
-                $ros = $this->makeRouteros();
+                $accessLock = Invoice::customerAccessLockName((string) $snapshot->idpel);
+                $lockAcquired = false;
+                $ros = null;
+                $router = null;
 
                 try {
-                    if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
-                        $failed++;
-                        Log::warning("Retry isolir ditunda, Mikrotik tidak terhubung ({$data->idpel}, router {$router->id})");
+                    $lockAcquired = Invoice::acquireNamedLock($accessLock);
+                    if (! $lockAcquired) {
+                        throw new \RuntimeException('Akses pelanggan sedang diproses oleh proses lain.');
+                    }
+
+                    // Reload setelah lock: jangan terapkan snapshot Isolir jika
+                    // pembayaran manual/callback sudah mengubah state pelanggan.
+                    $data = Order::whereKey($snapshot->id)->first();
+                    if (! $data || $data->status !== 'Isolir') {
+                        $attempted--;
 
                         continue;
                     }
 
+                    $router = Router::find($data->id_router);
+                    if (! $router) {
+                        Log::warning("Retry isolir ditunda, router tidak ditemukan ({$data->idpel}, router {$data->id_router})");
+                        throw new \RuntimeException('Router pelanggan tidak ditemukan.');
+                    }
+
+                    $ros = $this->makeRouteros();
+                    if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
+                        Log::warning("Retry isolir ditunda, Mikrotik tidak terhubung ({$data->idpel}, router {$router->id})");
+                        throw new \RuntimeException('Mikrotik tidak terhubung.');
+                    }
+
+                    // Pembayaran sudah memperpanjang expdate tetapi RouterOS sempat
+                    // gagal dibuka. Status Isolir dipertahankan sebagai antrean retry.
+                    $restoreAccess = strtotime((string) $data->expdate) >= strtotime(date('Y-m-d'));
+                    $profile = 'isolir';
+                    if ($restoreAccess) {
+                        $profile = (string) (Service::where('paket', $data->paket)->value('ppp_profile') ?? '');
+                        if ($profile === '') {
+                            throw new \RuntimeException('Profil paket untuk buka isolir tidak ditemukan.');
+                        }
+                    }
+
                     if ($data->mode === 'pppoe') {
-                        $ros->comm('/ppp/secret/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ppp/secret/set', ['numbers' => $data->pppoe_user, 'profile' => $profile]));
                         $active = $ros->comm('/ppp/active/getall', ['.proplist' => '.id', '?name' => $data->pppoe_user]);
-                        foreach ($active ?: [] as $act) {
-                            $ros->comm('/ppp/active/remove', ['.id' => $act['.id']]);
+                        foreach (is_array($active) ? $active : [] as $act) {
+                            if (! empty($act['.id'])) {
+                                $this->ensureRouterCommandSucceeded($ros->comm('/ppp/active/remove', ['.id' => $act['.id']]));
+                            }
                         }
                     } elseif ($data->mode === 'hotspot') {
-                        $ros->comm('/ip/hotspot/user/set', ['numbers' => $data->pppoe_user, 'profile' => 'isolir']);
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/user/set', ['numbers' => $data->pppoe_user, 'profile' => $profile]));
                         $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $data->pppoe_user]);
-                        foreach ($active ?: [] as $act) {
-                            $ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]);
+                        foreach (is_array($active) ? $active : [] as $act) {
+                            if (! empty($act['.id'])) {
+                                $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]));
+                            }
                         }
                     } else {
                         throw new \RuntimeException("Mode pelanggan tidak didukung: {$data->mode}");
                     }
 
+                    if ($restoreAccess) {
+                        Order::whereKey($data->id)
+                            ->where('status', 'Isolir')
+                            ->where('expdate', $data->expdate)
+                            ->update(['status' => 'Active']);
+                    }
+
                     $succeeded++;
                 } catch (\Throwable $e) {
                     $failed++;
-                    Log::warning("Retry isolir gagal ({$data->idpel}, router {$router->id}): {$e->getMessage()}");
+                    $routerId = $router?->id ?? $snapshot->id_router;
+                    if (! in_array($e->getMessage(), ['Router pelanggan tidak ditemukan.', 'Mikrotik tidak terhubung.'], true)) {
+                        Log::warning("Retry isolir gagal ({$snapshot->idpel}, router {$routerId}): {$e->getMessage()}");
+                    }
                 } finally {
-                    $ros->disconnect();
+                    $ros?->disconnect();
+                    if ($lockAcquired) {
+                        try {
+                            Invoice::releaseNamedLock($accessLock);
+                        } catch (\Throwable $e) {
+                            Log::warning("Gagal melepas customer access lock cron ({$snapshot->idpel}): {$e->getMessage()}");
+                        }
+                    }
                 }
             }
         });
 
         echo "Isolir: {$attempted} dicoba, {$succeeded} berhasil, {$failed} akan dicoba lagi pada jadwal berikutnya<br/>";
+    }
+
+    private function ensureRouterCommandSucceeded(mixed $response): void
+    {
+        if (is_array($response) && (isset($response['!trap']) || isset($response['!fatal']))) {
+            $message = $response['!trap'][0]['message'] ?? $response['!fatal'][0]['message'] ?? 'Perintah RouterOS gagal.';
+
+            throw new \RuntimeException($message);
+        }
     }
 
     protected function makeRouteros(): RouterosAPI

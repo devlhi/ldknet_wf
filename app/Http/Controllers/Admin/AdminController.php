@@ -88,7 +88,8 @@ class AdminController extends Controller
             'income' => $months->map(fn ($month) => (int) ($incomeByMonth[$month] ?? 0))->values(),
             'expense' => $months->map(fn ($month) => (int) ($expenseByMonth[$month] ?? 0))->values(),
             'newCustomers' => $months->map(fn ($month) => (int) ($newCustomersByMonth[$month] ?? 0))->values(),
-            'invoiceStatusLabels' => ['Paid', 'Unpaid', 'Pending', 'Success', 'Error'],
+            // Nilai DB tetap `Error` karena enum legacy; label dashboard tampil `Cancel`.
+            'invoiceStatusLabels' => ['Paid', 'Unpaid', 'Pending', 'Success', 'Cancel'],
             'invoiceStatus' => collect(['Paid', 'Unpaid', 'Pending', 'Success', 'Error'])
                 ->map(fn ($status) => (int) ($invoiceStatus[$status] ?? 0))
                 ->values(),

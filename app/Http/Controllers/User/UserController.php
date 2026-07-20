@@ -138,10 +138,13 @@ class UserController extends Controller
 
     public function invoicePayment($id)
     {
-        $history = Invoice::where('code', $id)->where('idpel', $this->idpel())->get();
+        $invoice = Invoice::where('code', $id)
+            ->where('idpel', $this->idpel())
+            ->where('status', 'Unpaid')
+            ->first();
 
-        if ($history->isEmpty()) {
-            return redirect('user/invoice');
+        if (! $invoice) {
+            return redirect('user/invoice')->with('auth_errors', ['Invoice tidak ditemukan atau tidak dapat dibayar']);
         }
 
         $gateway = PaymentGateway::where('payment_default', '1')->first();
@@ -152,7 +155,7 @@ class UserController extends Controller
             'method' => PaymentMethod::where('status', '1')
                 ->when($gateway, fn ($query) => $query->where('provider', $gateway->name))
                 ->get(),
-            'history' => $history,
+            'history' => collect([$invoice]),
         ] + $this->websiteData());
     }
 
@@ -170,6 +173,10 @@ class UserController extends Controller
 
         if (! $dataInvoice) {
             return redirect('user/invoice')->with('auth_errors', ['Invoice tidak ditemukan']);
+        }
+
+        if ($dataInvoice->status !== 'Unpaid') {
+            return redirect('user/invoice')->with('auth_errors', ['Invoice tidak dapat dibayar karena statusnya '.($dataInvoice->status === 'Error' ? 'Cancel' : $dataInvoice->status)]);
         }
 
         $payment = PaymentMethod::where('id', $postService)->where('status', '1')->first();

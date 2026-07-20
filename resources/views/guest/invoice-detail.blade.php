@@ -20,7 +20,7 @@
                                 <li class="list-group-item"><strong>Nama:</strong> {{ $invoice->nama }}</li>
                                 <li class="list-group-item"><strong>Paket:</strong> {{ $invoice->package }}</li>
                                 <li class="list-group-item"><strong>Harga:</strong> {{ function_exists('rupiah') ? rupiah($invoice->price) : $invoice->price }}</li>
-                                <li class="list-group-item"><strong>Status:</strong> {{ $invoice->status }}</li>
+                                <li class="list-group-item"><strong>Status:</strong> {{ $invoice->status === 'Error' ? 'Cancel' : $invoice->status }}</li>
                                 <li class="list-group-item"><strong>Jatuh Tempo:</strong> {{ $invoice->expdate }}</li>
                             </ul>
                         @endforeach

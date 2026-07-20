@@ -19,9 +19,9 @@
                             <li class="list-group-item"><strong>Nama:</strong> {{ $invoice->nama }}</li>
                             <li class="list-group-item"><strong>Paket:</strong> {{ $invoice->package }}</li>
                             <li class="list-group-item"><strong>Harga:</strong> {{ function_exists('rupiah') ? rupiah($invoice->price) : $invoice->price }}</li>
-                            <li class="list-group-item"><strong>Status:</strong> {{ $invoice->status }}</li>
+                            <li class="list-group-item"><strong>Status:</strong> {{ $invoice->status === 'Error' ? 'Cancel' : $invoice->status }}</li>
                         </ul>
-                        @if ($invoice->status !== 'Paid')
+                        @if ($invoice->status === 'Unpaid')
                             <form action="{{ url('tagihan/process') }}" method="post">
                                 @csrf
                                 <input type="hidden" name="invoice" value="{{ $invoice->code }}">

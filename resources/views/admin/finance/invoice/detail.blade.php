@@ -70,6 +70,8 @@
                                             $status = 'Sudah terbayar';
                                         } elseif ($row->status == 'Unpaid') {
                                             $status = 'Belum terbayar';
+                                        } elseif ($row->status == 'Error') {
+                                            $status = 'Cancel';
                                         } else {
                                             $status = $row->status ?? '-';
                                         }

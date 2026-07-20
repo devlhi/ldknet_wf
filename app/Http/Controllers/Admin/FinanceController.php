@@ -24,7 +24,7 @@ use App\Support\WhatsAppNotifier;
 use Brevo\Client\Api\TransactionalEmailsApi;
 use Brevo\Client\Configuration;
 use Brevo\Client\Model\SendSmtpEmail;
-use DateTime;
+use Carbon\CarbonImmutable;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -338,15 +338,18 @@ class FinanceController extends Controller
 
     public function editInvoice($id)
     {
-        $cekInvoice = Invoice::where('code', $id)->get();
+        $invoice = Invoice::where('code', $id)
+            ->where('account', 'user')
+            ->where('status', 'Unpaid')
+            ->first();
 
-        if ($cekInvoice->count() == 0) {
-            return redirect('admin/finance/invoice')->with('auth_errors', ['Data tidak ditemukan']);
+        if (! $invoice) {
+            return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice tidak ditemukan atau sudah tidak dapat dikonfirmasi']);
         }
 
         return view('admin.finance.invoice.edit', [
             'title' => 'Invoice #'.$id,
-            'payment' => $cekInvoice,
+            'payment' => collect([$invoice]),
         ] + $this->websiteData());
     }
 
@@ -363,6 +366,7 @@ class FinanceController extends Controller
             'status' => 'required|in:Paid',
             'category' => 'required|string|max:100',
             'metode' => 'required|string|max:150',
+            'confirmation_period' => 'nullable|in:current,next',
             // Admin boleh konfirmasi tanpa upload bukti: bukti wajib hanya bila
             // memilih "ya" (default form). Nilai lain -> bukti opsional.
             'upload_bukti' => 'nullable|in:ya,tidak',
@@ -378,12 +382,12 @@ class FinanceController extends Controller
             return redirect()->back()->withInput()->with('auth_errors', $validator->errors()->all());
         }
 
-        $code = $request->post('code');
-        $idpel = $request->post('idpel');
-        $status = $request->post('status');
-        $target = $request->post('target');
-        $category = $request->post('category');
-        $metode = $request->post('metode');
+        $code = trim((string) $request->post('code'));
+        $idpel = trim((string) $request->post('idpel'));
+        $target = (int) $request->post('target');
+        $category = (string) $request->post('category');
+        $metode = (string) $request->post('metode');
+        $advanceMonth = $request->post('confirmation_period', 'current') === 'next';
 
         $invoice = Invoice::where('id', $target)
             ->where('code', $code)
@@ -395,270 +399,396 @@ class FinanceController extends Controller
             return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice tidak ditemukan atau data tidak cocok']);
         }
 
-        if ($invoice->status === 'Paid') {
-            return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
+        if ($invoice->status !== 'Unpaid') {
+            $message = $invoice->status === 'Paid'
+                ? 'Invoice #'.$code.' sudah terbayar'
+                : 'Invoice #'.$code.' tidak dapat dikonfirmasi karena statusnya '.($invoice->status === 'Error' ? 'Cancel' : $invoice->status);
+
+            return redirect('admin/finance/invoice')->with('auth_errors', [$message]);
         }
 
         $order = Order::where('idpel', $idpel)->first();
-
         if (! $order) {
             return redirect('admin/finance/invoice')->with('auth_errors', ['Pelanggan invoice tidak ditemukan']);
         }
 
         $service = Service::where('paket', $invoice->package)->first();
-
         if (! $service) {
             return redirect('admin/finance/invoice')->with('auth_errors', ['Paket pelanggan tidak ditemukan']);
         }
 
-        $user = $invoice->nama;
-        $package = $invoice->package;
-        $price = $invoice->price;
-        $expdate = $order->expdate ?: $invoice->expdate;
-        $ppprofile = $service->ppp_profile;
-        $emailnya = $order->email;
-        $nomornya = $order->nomor;
-        $statusorder = $order->status;
-        $users = $order->pppoe_user;
-        $idrouter = $order->id_router;
-        $mode = $order->mode;
+        if ($this->invoiceHasActiveGatewayTransaction($invoice)) {
+            return redirect('admin/finance/invoice')->withInput()->with('auth_errors', [
+                'Invoice #'.$invoice->code.' masih memiliki transaksi pembayaran online aktif. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.',
+            ]);
+        }
 
-        // Bukti pembayaran opsional. Kalau tidak diupload, simpan string kosong
-        // (di laporan tampil sebagai "Tidak ada bukti").
+        if ($advanceMonth && ($advanceError = $this->advancePaymentPreflightError($invoice))) {
+            return redirect('admin/finance/invoice')->withInput()->with('auth_errors', [$advanceError]);
+        }
+
+        $lockNames = $this->manualPaymentLockNames($invoice, $advanceMonth);
+        $acquiredLockNames = [];
         $filename = '';
-        if ($request->hasFile('image')) {
-            $gambar = $request->file('image');
-            // Ekstensi diturunkan dari isi file (guessExtension), BUKAN nama asli klien.
-            // getClientOriginalExtension() bisa dipakai upload file .php ber-konten
-            // gambar valid (lolos rule image) ke folder publik -> RCE. Whitelist ketat.
-            $ext = strtolower((string) $gambar->guessExtension());
-            $ext = in_array($ext, ['jpg', 'jpeg', 'png'], true) ? $ext : 'jpg';
-            $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$ext;
-            $gambar->move(public_path('data/bukti'), $filename);
-        }
+        $paymentCommitted = false;
+        $paymentResult = null;
 
-        if ($status == 'Paid') {
-            $date = date('Y-m-d');
-            $tgl2 = date('Y-m-d', strtotime('+1 month', strtotime((string) $expdate)));
+        try {
+            foreach ($lockNames as $lockName) {
+                if (! Invoice::acquireNamedLock($lockName)) {
+                    return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice sedang diproses, coba lagi beberapa saat']);
+                }
 
-            $router = Router::where('id', $idrouter)->first();
-
-            if ($statusorder == 'Isolir' && ! $router) {
-                return redirect('admin/finance/invoice')->with('auth_errors', ['Router pelanggan tidak ditemukan']);
+                $acquiredLockNames[] = $lockName;
             }
 
-            $ip = $router?->ip;
-            $uname = $router?->username;
-            $pass = $router ? legacy_decrypt($router->password) : null;
+            // File baru dipindahkan setelah advisory lock didapat. Jika transaksi DB
+            // ditolak/exception, finally menghapus file agar tidak menjadi orphan.
+            if ($request->hasFile('image')) {
+                $gambar = $request->file('image');
+                // Ekstensi berdasarkan isi file, bukan nama dari client.
+                $ext = strtolower((string) $gambar->guessExtension());
+                $ext = in_array($ext, ['jpg', 'jpeg', 'png'], true) ? $ext : 'jpg';
+                $filename = 'bukti-pembayaran-'.$code.'-'.date('ymd').'-'.Str::random(12).'.'.$ext;
+                $gambar->move(public_path('data/bukti'), $filename);
+            }
 
-            $ros = new RouterosAPI;
+            $paidAt = CarbonImmutable::now('Asia/Jakarta')->startOfDay();
+            $date = $paidAt->toDateString();
+            $update = [
+                'status' => 'Paid',
+                'category' => $category,
+                'service' => $metode,
+                'method' => $metode,
+                'received' => (int) $invoice->price,
+                'last_update' => $date,
+                'update_by' => (string) auth()->user()?->nama,
+            ];
+            if ($filename !== '') {
+                // Jangan hapus proof lama milik invoice tujuan jika admin tidak
+                // mengunggah proof baru saat memakai destination yang sudah ada.
+                $update['bukti_pembayaran'] = $filename;
+            }
 
-            if ($statusorder == 'Isolir') {
-                if ($mode == 'pppoe') {
-                    if ($ros->connect($ip, $uname, $pass)) {
-                        $all = $ros->comm(
-                            '/ppp/secret/getall',
-                            [
-                                '.proplist' => '.id',
-                                '?name' => $users,
-                            ]
-                        );
+            $paymentResult = $this->commitInvoicePayment(
+                $target,
+                $update,
+                $idpel,
+                (int) $invoice->price,
+                (string) $invoice->nama,
+                $date,
+                $advanceMonth
+            );
 
-                        $ros->comm(
-                            '/ppp/secret/set',
-                            [
-                                '.id' => $all[0]['.id'],
-                                'profile' => $ppprofile,
-                            ]
-                        );
-                        $active = $ros->comm('/ppp/active/getall', [
-                            '.proplist' => '.id',
-                            '?name' => $users,
-                        ]);
+            if (! $paymentResult['ok']) {
+                return redirect('admin/finance/invoice')->with('auth_errors', [$paymentResult['message']]);
+            }
 
-                        if ($active == true) {
-                            $ros->comm(
-                                '/ppp/active/remove',
-                                [
-                                    '.id' => $active[0]['.id'],
-                                ]
-                            );
-                        }
+            $paymentCommitted = true;
+        } catch (\Throwable $e) {
+            Log::error("Konfirmasi manual invoice #{$code} gagal sebelum commit: {$e->getMessage()}", ['exception' => $e]);
 
-                        $update = [
-                            'status' => $status,
-                            'category' => $category,
-                            'service' => $metode,
-                            'method' => $metode,
-                            'received' => $price,
-                            'last_update' => $date,
-                            'update_by' => auth()->user()->nama,
-                            'bukti_pembayaran' => $filename,
-                        ];
-
-                        if (! $this->commitInvoicePayment($target, $update, $idpel, $tgl2, $price, $user, $date)) {
-                            return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
-                        }
-
-                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
-
-                        $apiInstance = $this->brevoApiInstance($key, $name, $email);
-
-                        $sendSmtpEmail = $this->buildBrevoEmail(
-                            'Tagihan Internet '.$titletext.' Telah Terbayar - #'.$code.' ',
-                            $pesanemail,
-                            $logo,
-                            $titletext,
-                            $name,
-                            $email,
-                            $emailnya
-                        );
-
-                        try {
-                            $apiInstance->sendTransacEmail($sendSmtpEmail);
-                        } catch (\Throwable $e) {
-                            \Log::warning("Gagal kirim email terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
-                        }
-
-                        return redirect('admin/finance/invoice')->with('success', ['Berhasil mengupdate invoice #'.$code]);
-                    } else {
-                        return redirect('admin/finance/invoice')->with('auth_errors', ['Gagal mengupdate invoice, Router Not Connected']);
-                    }
-                } elseif ($mode == 'hotspot') {
-                    if ($ros->connect($ip, $uname, $pass)) {
-                        $ros->comm('/ip/hotspot/user/set', [
-                            'numbers' => $users,
-                            'profile' => $ppprofile,
-                        ]);
-
-                        // Find and remove active sessions by username
-                        $active = $ros->comm('/ip/hotspot/active/print', [
-                            '?user' => $users,
-                        ]);
-
-                        if (! empty($active)) {
-                            foreach ($active as $act) {
-                                $ros->comm(
-                                    '/ip/hotspot/active/remove',
-                                    [
-                                        '.id' => $act['.id'],
-                                    ]
-                                );
-                            }
-                        }
-
-                        $update = [
-                            'status' => $status,
-                            'category' => $category,
-                            'service' => $metode,
-                            'method' => $metode,
-                            'received' => $price,
-                            'last_update' => $date,
-                            'update_by' => auth()->user()->nama,
-                            'bukti_pembayaran' => $filename,
-                        ];
-
-                        if (! $this->commitInvoicePayment($target, $update, $idpel, $tgl2, $price, $user, $date)) {
-                            return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
-                        }
-
-                        [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
-
-                        $apiInstance = $this->brevoApiInstance($key, $name, $email);
-
-                        $sendSmtpEmail = $this->buildBrevoEmail(
-                            'Tagihan Internet '.$titletext.' Telah Terbayar - #'.$code.' ',
-                            $pesanemail,
-                            $logo,
-                            $titletext,
-                            $name,
-                            $email,
-                            $emailnya
-                        );
-
-                        try {
-                            $apiInstance->sendTransacEmail($sendSmtpEmail);
-                        } catch (\Throwable $e) {
-                            \Log::warning("Gagal kirim email terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
-                        }
-
-                        return redirect('admin/finance/invoice')->with('success', ['Berhasil mengupdate invoice #'.$code]);
-                    } else {
-                        return redirect('admin/finance/invoice')->with('auth_errors', ['Gagal mengupdate invoice, Router Not Connected']);
-                    }
+            return redirect('admin/finance/invoice')->with('auth_errors', ['Gagal mengonfirmasi invoice. Silakan coba lagi.']);
+        } finally {
+            if (! $paymentCommitted && $filename !== '') {
+                $proofPath = public_path('data/bukti/'.$filename);
+                if (is_file($proofPath) && ! @unlink($proofPath)) {
+                    Log::warning("Gagal membersihkan bukti pembayaran orphan: {$proofPath}");
                 }
-            } else {
-                $update = [
-                    'status' => $status,
-                    'category' => $category,
-                    'service' => $metode,
-                    'method' => $metode,
-                    'received' => $price,
-                    'last_update' => $date,
-                    'update_by' => auth()->user()->nama,
-                    'bukti_pembayaran' => $filename,
-                ];
+            }
 
-                if (! $this->commitInvoicePayment($target, $update, $idpel, $tgl2, $price, $user, $date)) {
-                    return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice #'.$code.' sudah terbayar']);
-                }
-
-                [$message, $pesanemail] = $this->preparePaidNotification($idpel, $code, $nomornya, $statusorder === 'Isolir');
-
-                $apiInstance = $this->brevoApiInstance($key, $name, $email);
-
-                $sendSmtpEmail = $this->buildBrevoEmail(
-                    'Tagihan Internet '.$titletext.' Telah Terbayar - #'.$code.' ',
-                    $pesanemail,
-                    $logo,
-                    $titletext,
-                    $name,
-                    $email,
-                    $emailnya
-                );
-
+            foreach (array_reverse($acquiredLockNames) as $acquiredLockName) {
                 try {
-                    $apiInstance->sendTransacEmail($sendSmtpEmail);
+                    Invoice::releaseNamedLock($acquiredLockName);
                 } catch (\Throwable $e) {
-                    \Log::warning("Gagal kirim email terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
+                    Log::warning("Gagal melepas advisory lock konfirmasi invoice #{$code}: {$e->getMessage()}");
                 }
-
-                return redirect('admin/finance/invoice')->with('success', ['Berhasil mengupdate invoice #'.$code]);
             }
         }
 
-        // Status selain 'Paid' (mis. Unpaid/Pending) atau pengiriman email gagal:
-        // beri respons redirect eksplisit agar tidak mengembalikan halaman kosong.
-        return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice tidak diupdate — status bukan "Paid" atau proses gagal.']);
+        // Mulai titik ini pembayaran sudah committed. Kegagalan RouterOS atau
+        // notifikasi tidak boleh dilaporkan sebagai kegagalan pembayaran.
+        $paidCode = $paymentResult['code'];
+        $wasIsolir = $paymentResult['was_isolir'];
+        $routerRestored = true;
+
+        try {
+            if ($wasIsolir) {
+                $routerRestored = $this->restoreCustomerAccessAfterPayment(
+                    $idpel,
+                    (string) $service->ppp_profile,
+                    $paymentResult['expdate']
+                );
+            }
+        } catch (\Throwable $e) {
+            $routerRestored = false;
+            Log::warning("Post-commit buka isolir invoice #{$paidCode} ({$idpel}) gagal: {$e->getMessage()}");
+            $this->queueCustomerAccessRestore($idpel, $paymentResult['expdate']);
+        }
+
+        try {
+            [, $pesanemail] = $this->preparePaidNotification(
+                $idpel,
+                $paidCode,
+                (string) $order->nomor,
+                $wasIsolir && $routerRestored
+            );
+            $this->sendPaidEmail($paidCode, $idpel, $pesanemail, $logo, $titletext, (string) $order->email);
+        } catch (\Throwable $e) {
+            Log::warning("Post-commit notifikasi invoice #{$paidCode} ({$idpel}) gagal: {$e->getMessage()}");
+        }
+
+        $successMessage = $advanceMonth
+            ? 'Invoice #'.$code.' dibatalkan dan pembayaran dikonfirmasi ke invoice #'.$paidCode
+            : 'Berhasil mengupdate invoice #'.$paidCode;
+
+        if ($wasIsolir && ! $routerRestored) {
+            $successMessage .= '. Pembayaran sudah tercatat, tetapi Router belum dapat diaktifkan; sistem akan mencoba lagi pada jadwal berikutnya.';
+        }
+
+        return redirect('admin/finance/invoice')->with('success', [$successMessage]);
     }
 
     /**
-     * Commit pembayaran invoice secara atomik dengan OPTIMISTIC LOCK.
-     *
-     * Update invoice memakai syarat `status != 'Paid'` di WHERE, sehingga bila
-     * dua request paralel (double-submit / retry karena router lambat) lolos guard
-     * status di awal invoiceUpdate(), hanya SATU yang benar-benar meng-update baris.
-     * Yang kalah race → affected rows = 0 → transaksi dibatalkan (Order &
-     * Report Pemasukan TIDAK ikut ditulis) → cegah pemasukan tercatat 2x.
-     *
-     * @return bool true bila pembayaran ter-commit; false bila baris sudah Paid (race kalah).
+     * Validasi awal sebelum RouterOS disentuh. Validasi yang sama diulang dengan
+     * row lock saat commit untuk mencegah perubahan status di request paralel.
      */
-    private function commitInvoicePayment($target, array $update, $idpel, $tgl2, $price, $user, $date): bool
+    private function advancePaymentPreflightError(Invoice $source): ?string
     {
-        return DB::transaction(function () use ($target, $update, $idpel, $tgl2, $price, $user, $date) {
-            $affected = Invoice::where('id', $target)
-                ->where('status', '!=', 'Paid')
-                ->update($update);
+        if ($this->invoiceHasActiveGatewayTransaction($source)) {
+            return 'Invoice #'.$source->code.' masih memiliki transaksi pembayaran online. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.';
+        }
 
-            // Race kalah: request lain sudah menandai Paid lebih dulu. Batalkan tanpa
-            // menulis Order/Report agar pemasukan tidak dobel.
-            if ($affected === 0) {
-                return false;
+        try {
+            $targetPeriod = CarbonImmutable::parse((string) $source->date, 'Asia/Jakarta')->addMonthNoOverflow();
+        } catch (\Throwable) {
+            return 'Periode invoice #'.$source->code.' tidak valid.';
+        }
+
+        $targets = Invoice::where('idpel', $source->idpel)
+            ->where('account', 'user')
+            ->whereMonth('date', $targetPeriod->month)
+            ->whereYear('date', $targetPeriod->year)
+            ->get();
+
+        if ($targets->count() > 1) {
+            return 'Ditemukan lebih dari satu invoice pada periode tujuan. Selesaikan data duplikat terlebih dahulu.';
+        }
+
+        $target = $targets->first();
+        if ($target && $target->status !== 'Unpaid') {
+            return 'Invoice periode '.bulan_indo($targetPeriod->toDateString()).' sudah berstatus '.$target->status.'.';
+        }
+
+        if ($target && $this->invoiceHasActiveGatewayTransaction($target)) {
+            return 'Invoice periode '.bulan_indo($targetPeriod->toDateString()).' masih memiliki transaksi pembayaran online. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.';
+        }
+
+        if ($target && ((int) $target->price !== (int) $source->price || $target->package !== $source->package)) {
+            return 'Nominal atau paket invoice periode tujuan berbeda. Konfirmasi invoice tujuan secara langsung.';
+        }
+
+        return null;
+    }
+
+    private function invoiceHasActiveGatewayTransaction(Invoice $invoice): bool
+    {
+        return $invoice->hasActiveGatewayTransaction();
+    }
+
+    /**
+     * Kunci source, target invoice yang sudah ada, dan predicate target period
+     * dalam urutan stabil. Period lock wajib ada walau destination belum dibuat;
+     * row lock saja tidak dapat mengunci baris yang belum ada.
+     *
+     * @return list<string>
+     */
+    private function manualPaymentLockNames(Invoice $source, bool $advanceMonth): array
+    {
+        $names = [Invoice::paymentLockName((string) $source->code)];
+
+        if ($advanceMonth) {
+            try {
+                $targetPeriod = CarbonImmutable::parse((string) $source->date, 'Asia/Jakarta')->addMonthNoOverflow();
+                $period = $targetPeriod->format('Y-m');
+                $names[] = Invoice::periodLockName((string) $source->idpel, $period);
+
+                $targetCodes = Invoice::where('idpel', $source->idpel)
+                    ->where('account', 'user')
+                    ->whereMonth('date', $targetPeriod->month)
+                    ->whereYear('date', $targetPeriod->year)
+                    ->pluck('code')
+                    ->map(static fn ($code): string => (string) $code)
+                    ->all();
+                foreach ($targetCodes as $targetCode) {
+                    $names[] = Invoice::paymentLockName($targetCode);
+                }
+            } catch (\Throwable) {
+                // Preflight/transaction menghasilkan pesan validasi periode.
+            }
+        }
+
+        $names = array_values(array_unique(array_filter($names, static fn ($name): bool => $name !== '')));
+        sort($names, SORT_STRING);
+
+        return $names;
+    }
+
+    /**
+     * Commit pembayaran manual secara atomik.
+     *
+     * Untuk mode maju satu bulan, invoice sumber diubah ke status enum legacy
+     * `Error` (ditampilkan sebagai Cancel), lalu invoice periode berikut dibuat
+     * atau digunakan dan ditandai Paid. Order dan pemasukan ikut dalam transaksi.
+     *
+     * @return array{ok: bool, code: string, message: string, expdate?: string, was_isolir?: bool}
+     */
+    private function commitInvoicePayment($target, array $update, $idpel, $price, $user, $date, bool $advanceMonth = false): array
+    {
+        return DB::transaction(function () use ($target, $update, $idpel, $price, $user, $date, $advanceMonth) {
+            $sourceSnapshot = Invoice::where('id', $target)->first();
+            if (! $sourceSnapshot || $sourceSnapshot->idpel !== $idpel || $sourceSnapshot->account !== 'user') {
+                return ['ok' => false, 'code' => '', 'message' => 'Invoice tidak dapat dikonfirmasi.'];
             }
 
-            Order::where('idpel', $idpel)->update([
+            $targetPeriod = null;
+            $invoiceIds = [(int) $sourceSnapshot->id];
+
+            if ($advanceMonth) {
+                try {
+                    $targetPeriod = CarbonImmutable::parse((string) $sourceSnapshot->date, 'Asia/Jakarta')->addMonthNoOverflow();
+                } catch (\Throwable) {
+                    return ['ok' => false, 'code' => '', 'message' => 'Periode invoice sumber tidak valid.'];
+                }
+
+                // Query ulang destination setelah period advisory lock diperoleh.
+                // Ini menutup race ketika destination belum ada saat preflight.
+                $targetIds = Invoice::where('idpel', $idpel)
+                    ->where('account', 'user')
+                    ->whereMonth('date', $targetPeriod->month)
+                    ->whereYear('date', $targetPeriod->year)
+                    ->pluck('id')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->all();
+                $invoiceIds = array_merge($invoiceIds, $targetIds);
+            }
+
+            // Seluruh invoice dikunci lebih dahulu dalam urutan PK konsisten,
+            // kemudian row order. Hindari deadlock source -> order -> target.
+            $lockedInvoices = Invoice::whereIn('id', array_values(array_unique($invoiceIds)))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $source = $lockedInvoices->get((int) $target);
+
+            if (! $source || $source->idpel !== $idpel || $source->account !== 'user' || $source->status !== 'Unpaid') {
+                return [
+                    'ok' => false,
+                    'code' => (string) ($source?->code ?? ''),
+                    'message' => 'Invoice sudah berubah status atau tidak dapat dikonfirmasi.',
+                ];
+            }
+
+            if ($this->invoiceHasActiveGatewayTransaction($source)) {
+                return ['ok' => false, 'code' => '', 'message' => 'Invoice masih memiliki transaksi pembayaran online aktif.'];
+            }
+
+            $paidInvoice = $source;
+            if ($advanceMonth) {
+                $targets = $lockedInvoices
+                    ->filter(fn (Invoice $candidate): bool => $candidate->idpel === $idpel
+                        && $candidate->account === 'user'
+                        && (int) CarbonImmutable::parse((string) $candidate->date, 'Asia/Jakarta')->month === $targetPeriod->month
+                        && (int) CarbonImmutable::parse((string) $candidate->date, 'Asia/Jakarta')->year === $targetPeriod->year)
+                    ->values();
+
+                if ($targets->count() > 1) {
+                    return ['ok' => false, 'code' => '', 'message' => 'Invoice periode tujuan duplikat. Pembayaran dibatalkan.'];
+                }
+
+                $paidInvoice = $targets->first();
+                if ($paidInvoice && $paidInvoice->status !== 'Unpaid') {
+                    return ['ok' => false, 'code' => '', 'message' => 'Invoice periode tujuan sudah berstatus '.$paidInvoice->status.'.'];
+                }
+
+                if ($paidInvoice && $this->invoiceHasActiveGatewayTransaction($paidInvoice)) {
+                    return ['ok' => false, 'code' => '', 'message' => 'Invoice periode tujuan masih memiliki transaksi pembayaran online aktif.'];
+                }
+
+                if ($paidInvoice && ((int) $paidInvoice->price !== (int) $price || $paidInvoice->package !== $source->package)) {
+                    return ['ok' => false, 'code' => '', 'message' => 'Nominal atau paket invoice periode tujuan berbeda.'];
+                }
+            }
+
+            $order = Order::where('idpel', $idpel)->lockForUpdate()->first();
+            if (! $order) {
+                return ['ok' => false, 'code' => '', 'message' => 'Pelanggan invoice tidak ditemukan.'];
+            }
+
+            $wasIsolir = $order->status === 'Isolir';
+            $expdate = $advanceMonth
+                ? CarbonImmutable::parse($date, 'Asia/Jakarta')->addMonthNoOverflow()->toDateString()
+                // Pertahankan semantik legacy PHP: 31 Januari + 1 bulan = 3 Maret.
+                : date('Y-m-d', strtotime('+1 month', strtotime((string) ($order->expdate ?: $source->expdate))));
+
+            if ($advanceMonth && ! $paidInvoice) {
+                $paidInvoice = $source->replicate();
+                $paidInvoice->code = $this->generateUniqueInvoiceCode();
+                $paidInvoice->date = $targetPeriod->toDateString();
+                $paidInvoice->expdate = $expdate;
+                $paidInvoice->status = 'Unpaid';
+                $paidInvoice->category = '';
+                $paidInvoice->service = '';
+                $paidInvoice->method = '';
+                $paidInvoice->penerima = '';
+                $paidInvoice->metode_pembayaran = '';
+                $paidInvoice->random_price = 0;
+                $paidInvoice->received = 0;
+                $paidInvoice->reference = '';
+                $paidInvoice->exppay = '';
+                $paidInvoice->payment_url = null;
+                $paidInvoice->qr_url = null;
+                $paidInvoice->last_update = $date;
+                $paidInvoice->update_by = '';
+                $paidInvoice->bukti_pembayaran = '';
+                $paidInvoice->data_invoice = '';
+                $paidInvoice->code_coupon = '';
+                $paidInvoice->otp = '';
+                $paidInvoice->provider = '';
+                $paidInvoice->save();
+            }
+
+            if ($advanceMonth) {
+                $source->update([
+                    'status' => 'Error',
+                    'last_update' => $date,
+                    'update_by' => auth()->user()?->nama.' (Cancel - konfirmasi maju 1 bulan)',
+                    // Reference hanya bisa sampai di sini jika sudah expired.
+                    'reference' => '',
+                    'exppay' => '',
+                    'payment_url' => null,
+                    'qr_url' => null,
+                    'random_price' => 0,
+                    'provider' => '',
+                ]);
+            }
+
+            // Manual confirmation mengambil alih transaksi expired: hapus metadata
+            // provider supaya callback/tautan lama tidak terlihat sebagai transaksi aktif.
+            $paidInvoice->fill($update);
+            $paidInvoice->expdate = $expdate;
+            $paidInvoice->reference = '';
+            $paidInvoice->exppay = '';
+            $paidInvoice->payment_url = null;
+            $paidInvoice->qr_url = null;
+            $paidInvoice->random_price = 0;
+            $paidInvoice->provider = '';
+            $paidInvoice->save();
+
+            $order->update([
                 'status' => 'Active',
-                'expdate' => $tgl2,
+                'expdate' => $expdate,
             ]);
 
             Report::insert([
@@ -673,8 +803,170 @@ class FinanceController extends Controller
                 'image' => '',
             ]);
 
-            return true;
+            return [
+                'ok' => true,
+                'code' => (string) $paidInvoice->code,
+                'message' => 'Pembayaran berhasil dikonfirmasi.',
+                'expdate' => $expdate,
+                'was_isolir' => $wasIsolir,
+            ];
         });
+    }
+
+    /**
+     * Koordinasikan perubahan RouterOS per pelanggan dan reload order setelah
+     * lock didapat agar cron tidak dapat menerapkan snapshot Isolir yang stale.
+     */
+    private function restoreCustomerAccessAfterPayment(string $idpel, string $profile, string $expectedExpdate): bool
+    {
+        $lockName = Invoice::customerAccessLockName($idpel);
+        if (! Invoice::acquireNamedLock($lockName)) {
+            $this->queueCustomerAccessRestore($idpel, $expectedExpdate);
+
+            return false;
+        }
+
+        try {
+            $order = Order::where('idpel', $idpel)->first();
+            if (! $order || $order->status !== 'Active' || (string) $order->expdate !== $expectedExpdate) {
+                Log::warning("Buka isolir manual ditunda karena state pelanggan berubah ({$idpel}).");
+
+                return false;
+            }
+
+            $restored = $this->restoreCustomerRouterAccess($order, $profile);
+            if (! $restored) {
+                $this->queueCustomerAccessRestore($idpel, $expectedExpdate);
+            }
+
+            return $restored;
+        } finally {
+            try {
+                Invoice::releaseNamedLock($lockName);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal melepas customer access lock ({$idpel}): {$e->getMessage()}");
+            }
+        }
+    }
+
+    private function queueCustomerAccessRestore(string $idpel, string $expectedExpdate): void
+    {
+        // Status Isolir + expdate masa depan menjadi penanda retry aman untuk
+        // AutoController::isolir(); pembayaran tetap sah/committed.
+        Order::where('idpel', $idpel)
+            ->where('status', 'Active')
+            ->where('expdate', $expectedExpdate)
+            ->update(['status' => 'Isolir']);
+    }
+
+    /**
+     * Buka isolir hanya setelah transaksi pembayaran berhasil commit.
+     */
+    protected function restoreCustomerRouterAccess(Order $order, string $profile): bool
+    {
+        $router = Router::find($order->id_router);
+        if (! $router) {
+            Log::warning("Buka isolir manual ditunda, router tidak ditemukan ({$order->idpel}, router {$order->id_router})");
+
+            return false;
+        }
+
+        $ros = $this->makeRouteros();
+
+        try {
+            if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
+                Log::warning("Buka isolir manual ditunda, Mikrotik tidak terhubung ({$order->idpel}, router {$router->id})");
+
+                return false;
+            }
+
+            if ($order->mode === 'pppoe') {
+                $secrets = $ros->comm('/ppp/secret/getall', [
+                    '.proplist' => '.id',
+                    '?name' => $order->pppoe_user,
+                ]);
+                $secretId = is_array($secrets) ? ($secrets[0]['.id'] ?? null) : null;
+                if (! $secretId) {
+                    throw new \RuntimeException('PPPoE secret tidak ditemukan.');
+                }
+
+                $this->ensureRouterCommandSucceeded($ros->comm('/ppp/secret/set', [
+                    '.id' => $secretId,
+                    'profile' => $profile,
+                ]));
+
+                $active = $ros->comm('/ppp/active/getall', [
+                    '.proplist' => '.id',
+                    '?name' => $order->pppoe_user,
+                ]);
+                foreach (is_array($active) ? $active : [] as $session) {
+                    if (! empty($session['.id'])) {
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ppp/active/remove', ['.id' => $session['.id']]));
+                    }
+                }
+            } elseif ($order->mode === 'hotspot') {
+                $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/user/set', [
+                    'numbers' => $order->pppoe_user,
+                    'profile' => $profile,
+                ]));
+
+                $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $order->pppoe_user]);
+                foreach (is_array($active) ? $active : [] as $session) {
+                    if (! empty($session['.id'])) {
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/active/remove', ['.id' => $session['.id']]));
+                    }
+                }
+            } else {
+                throw new \RuntimeException("Mode pelanggan tidak didukung: {$order->mode}");
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning("Buka isolir manual gagal ({$order->idpel}, router {$router->id}): {$e->getMessage()}");
+
+            return false;
+        } finally {
+            $ros->disconnect();
+        }
+    }
+
+    protected function makeRouteros(): RouterosAPI
+    {
+        return new RouterosAPI;
+    }
+
+    private function ensureRouterCommandSucceeded(mixed $response): void
+    {
+        if (is_array($response) && (isset($response['!trap']) || isset($response['!fatal']))) {
+            $message = $response['!trap'][0]['message'] ?? $response['!fatal'][0]['message'] ?? 'Perintah RouterOS gagal.';
+
+            throw new \RuntimeException($message);
+        }
+    }
+
+    private function generateUniqueInvoiceCode(): string
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            do {
+                $sequence = (int) Invoice::where('code', 'like', 'INV%')
+                    ->pluck('code')
+                    ->map(function ($code) {
+                        return preg_match('/^INV(\d+)[A-Za-z0-9]{5}$/', (string) $code, $matches)
+                            ? (int) $matches[1]
+                            : 0;
+                    })
+                    ->max() + 1;
+                $code = 'INV'.sprintf('%04d', $sequence).randinv(5);
+            } while (Invoice::where('code', $code)->exists());
+
+            return $code;
+        }
+
+        do {
+            $code = $this->generateInvoiceCode().randinv(5);
+        } while (Invoice::where('code', $code)->exists());
+
+        return $code;
     }
 
     public function detailInvoice($id)
@@ -891,15 +1183,18 @@ class FinanceController extends Controller
 
     public function bayar($id)
     {
-        $cek = Invoice::where('code', $id)->get();
-        if ($cek->count() == 0) {
-            return redirect('admin/finance/invoice');
+        $invoice = Invoice::where('code', $id)
+            ->where('account', 'user')
+            ->where('status', 'Unpaid')
+            ->first();
+        if (! $invoice) {
+            return redirect('admin/finance/invoice')->with('auth_errors', ['Invoice tidak ditemukan atau tidak dapat dibayar']);
         }
 
         return view('admin.finance.invoice.bayar', [
             'title' => 'Payment Invoice #'.$id,
             'category' => PaymentCat::where('status', '1')->get(),
-            'history' => $cek,
+            'history' => collect([$invoice]),
         ] + $this->websiteData());
     }
 
@@ -952,10 +1247,7 @@ class FinanceController extends Controller
             return view($result['view_name'], $result['view'] + ['backUrl' => url('admin/finance/invoice')]);
         }
 
-        $lockName = 'pay_invoice_'.$invoiceCode;
-        $lock = DB::selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockName]);
-
-        if (! $lock || (int) $lock->acquired !== 1) {
+        if (! Invoice::acquirePaymentLock($invoiceCode)) {
             return redirect('admin/finance/invoice/bayar/'.$invoiceCode)->with('auth_errors', ['Invoice sedang diproses, coba lagi beberapa saat']);
         }
 
@@ -976,13 +1268,7 @@ class FinanceController extends Controller
 
             // Bila transaksi Tripay lama masih aktif, jangan buat VA/reference baru
             // untuk invoice yang sama agar customer tidak memegang beberapa kode bayar.
-            $paymentStillActive = ! empty($invoice->reference);
-            if ($paymentStillActive && ! empty($invoice->exppay)) {
-                $expiredAt = DateTime::createFromFormat('d-m-Y H:i:s', $invoice->exppay);
-                $paymentStillActive = $expiredAt ? $expiredAt->getTimestamp() > time() : true;
-            }
-
-            if ($paymentStillActive) {
+            if ($invoice->hasActiveGatewayTransaction()) {
                 return redirect('admin/finance/invoice/bayar/'.$invoiceCode)->with('auth_errors', ['Transaksi pembayaran invoice #'.$invoiceCode.' masih aktif. Tunggu sampai expired sebelum membuat transaksi baru.']);
             }
 
@@ -993,11 +1279,10 @@ class FinanceController extends Controller
             $package = $invoice->package;
             $price = (int) $invoice->price; // Ambil nominal dari DB, jangan percaya hidden form.
 
-            date_default_timezone_set('Asia/Jakarta');
             $randangka = rand(1, 999);
             $total = $price + $randangka;
-            $satuhari = mktime(0, 0, 0, date('n'), date('j') + 1, date('Y'));
-            $expired = date('d-m-Y', $satuhari).' '.date('H:i:s');
+            $deadline = CarbonImmutable::now(config('app.timezone', 'Asia/Jakarta'))->addDay();
+            $expired = $deadline->format('d-m-Y H:i:s');
 
             $tripay = new TripayPayment($paymentGateway->api_url.$paymentGateway->url, $paymentGateway->code_merchant, $paymentGateway->api_key, $paymentGateway->private_key, $paymentGateway->callback);
             $signature = hash_hmac('sha256', $paymentGateway->code_merchant.$invoiceCode.$total, $paymentGateway->private_key);
@@ -1015,7 +1300,7 @@ class FinanceController extends Controller
                         'quantity' => 1,
                     ],
                 ],
-                'expired_time' => (time() + (24 * 60 * 60)), // 24 jam
+                'expired_time' => $deadline->getTimestamp(), // deadline sama dengan exppay lokal
                 'signature' => $signature,
             ]);
 
@@ -1085,7 +1370,11 @@ class FinanceController extends Controller
 
             return view('admin.finance.invoice.pay.tripay', $mix);
         } finally {
-            DB::selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockName]);
+            try {
+                Invoice::releasePaymentLock($invoiceCode);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal melepas admin Tripay payment lock #{$invoiceCode}: {$e->getMessage()}");
+            }
         }
     }
 
@@ -1516,6 +1805,35 @@ class FinanceController extends Controller
         }
 
         return [$message, $pesanemail];
+    }
+
+    private function sendPaidEmail($code, $idpel, $pesanemail, $logo, $titletext, $toEmail): void
+    {
+        if (trim((string) $toEmail) === '') {
+            return;
+        }
+
+        try {
+            $apiInstance = $this->brevoApiInstance($key, $name, $email);
+            if (trim((string) $key) === '' || trim((string) $email) === '') {
+                Log::warning("Email terbayar invoice #{$code} ({$idpel}) tidak dikirim: konfigurasi SMTP belum lengkap.");
+
+                return;
+            }
+
+            $sendSmtpEmail = $this->buildBrevoEmail(
+                'Tagihan Internet '.$titletext.' Telah Terbayar - #'.$code.' ',
+                $pesanemail,
+                $logo,
+                $titletext,
+                $name,
+                $email,
+                $toEmail
+            );
+            $apiInstance->sendTransacEmail($sendSmtpEmail);
+        } catch (\Throwable $e) {
+            Log::warning("Gagal kirim email terbayar invoice #{$code} ({$idpel}): {$e->getMessage()}");
+        }
     }
 
     private function brevoApiInstance(&$key = null, &$name = null, &$email = null)

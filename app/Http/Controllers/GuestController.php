@@ -139,6 +139,10 @@ class GuestController extends Controller
             return redirect('tagihan')->with('auth_errors', ['Invoice tidak ditemukan']);
         }
 
+        if ($dataInvoice->status !== 'Unpaid') {
+            return redirect('tagihan/'.$invoice)->with('auth_errors', ['Invoice ini tidak dapat dibayar karena statusnya '.($dataInvoice->status === 'Error' ? 'Cancel' : $dataInvoice->status)]);
+        }
+
         $payment = PaymentMethod::where('id', $postService)->where('status', '1')->first();
 
         if (! $payment || $payment->category != $postCategory) {

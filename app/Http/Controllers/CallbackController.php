@@ -56,79 +56,23 @@ class CallbackController extends Controller
             return response()->json(['error' => 'Unrecognized payment status']);
         }
 
-        $uniqueRef = $data->merchant_ref;
-        $invoice = Invoice::where('code', $uniqueRef)->where('status', 'Unpaid')->first();
-        if (! $invoice) {
-            // Sudah diproses (atau tidak ada). Balas sukses agar Tripay berhenti retry.
-            return response()->json(['success' => true]);
+        $uniqueRef = trim((string) ($data->merchant_ref ?? ''));
+        if ($uniqueRef === '') {
+            return response('Invalid merchant reference', 400);
         }
 
-        date_default_timezone_set('Asia/Jakarta');
-        $date = date('Y-m-d');
-
-        if ($invoice->account !== 'user') {
-            // Bukan tagihan pelanggan biasa — cukup tandai Paid.
-            Invoice::where('code', $uniqueRef)->where('status', 'Unpaid')->update([
-                'status' => 'Paid',
-                'last_update' => $date,
-                'update_by' => 'System Payment Gateway Tripay',
-            ]);
-
-            return response()->json(['success' => true]);
-        }
-
-        $order = Order::where('idpel', $invoice->idpel)->first();
-        $tgl2 = date('Y-m-d', strtotime('+1 month', strtotime((string) $invoice->expdate)));
-
-        // Tangkap status Isolir sebelum transaksi mengubahnya ke Active, dipakai
-        // untuk memutuskan kirim notifikasi "buka isolir" setelah pembayaran.
-        $wasIsolir = $order && $order->status === 'Isolir';
-
-        // Buka isolir di router bila pelanggan sedang Isolir (port dari CI4:
-        // pembayaran online sebelumnya tidak mengembalikan profil normal).
-        if ($wasIsolir) {
-            $this->reconnectRouter($order, $invoice->package);
-        }
-
-        // Tulis pembayaran secara atomik dengan optimistic lock: hanya request
-        // pertama (status masih Unpaid) yang mencatat Report + extend order,
-        // sehingga callback ganda tidak menggandakan pemasukan.
-        $committed = DB::transaction(function () use ($uniqueRef, $invoice, $order, $tgl2, $date) {
-            $affected = Invoice::where('code', $uniqueRef)
-                ->where('status', 'Unpaid')
-                ->update([
-                    'status' => 'Paid',
-                    'last_update' => $date,
-                    'update_by' => 'System Payment Gateway Tripay',
-                ]);
-
-            if ($affected === 0) {
-                return false;
-            }
-
-            Report::insert([
-                'category' => 'Pemasukan',
-                'jenis_kategori' => 'Pemasukan',
-                'balance' => $invoice->received,
-                'asal' => 'Pembayaran Online dari '.$invoice->nama.', ID Pelanggan '.$invoice->idpel,
-                'date' => $date,
-                // Kolom NOT NULL tanpa default (share CI4, strict mode ON di Laravel).
-                'account' => '',
-                'image' => '',
-            ]);
-
-            if ($order) {
-                Order::where('idpel', $invoice->idpel)->update([
-                    'status' => 'Active',
-                    'expdate' => $tgl2,
-                ]);
-            }
-
-            return true;
-        });
-
-        if ($committed) {
-            $this->sendPaidNotification($invoice, $order, $wasIsolir);
+        $result = $this->commitGatewayPayment($uniqueRef, 'Tripay', [
+            'provider_reference' => (string) ($data->reference ?? ''),
+            'amount' => (string) ($data->total_amount ?? ''),
+        ]);
+        if ($result['committed']) {
+            $routerRestored = ! $result['was_isolir']
+                || $this->restoreGatewayCustomerAccess($result['order'], $result['invoice']);
+            $this->sendPaidNotificationSafely(
+                $result['invoice'],
+                $result['order'],
+                $result['was_isolir'] && $routerRestored
+            );
         }
 
         return response()->json(['success' => true]);
@@ -151,102 +95,213 @@ class CallbackController extends Controller
             return response('Unrecognized payment status', 200);
         }
 
-        $uniqueRef = $request->post('merchantOrderId');
-        $invoice = Invoice::where('code', $uniqueRef)->where('status', 'Unpaid')->first();
-        if (! $invoice) {
-            // Sudah diproses (atau tidak ada). Balas sukses agar Duitku berhenti retry.
-            return response('SUCCESS', 200);
+        $uniqueRef = trim((string) $request->post('merchantOrderId'));
+        if ($uniqueRef === '') {
+            return response('Invalid merchant reference', 400);
         }
 
-        date_default_timezone_set('Asia/Jakarta');
-        $date = date('Y-m-d');
-
-        if ($invoice->account !== 'user') {
-            Invoice::where('code', $uniqueRef)->where('status', 'Unpaid')->update([
-                'status' => 'Paid',
-                'last_update' => $date,
-                'update_by' => 'System Payment Gateway Duitku',
-            ]);
-
-            return response('SUCCESS', 200);
-        }
-
-        $order = Order::where('idpel', $invoice->idpel)->first();
-        $tgl2 = date('Y-m-d', strtotime('+1 month', strtotime((string) $invoice->expdate)));
-
-        // Tangkap status Isolir sebelum transaksi mengubahnya ke Active, dipakai
-        // untuk memutuskan kirim notifikasi "buka isolir" setelah pembayaran.
-        $wasIsolir = $order && $order->status === 'Isolir';
-
-        if ($wasIsolir) {
-            $this->reconnectRouter($order, $invoice->package);
-        }
-
-        $committed = DB::transaction(function () use ($uniqueRef, $invoice, $order, $tgl2, $date) {
-            $affected = Invoice::where('code', $uniqueRef)
-                ->where('status', 'Unpaid')
-                ->update([
-                    'status' => 'Paid',
-                    'last_update' => $date,
-                    'update_by' => 'System Payment Gateway Duitku',
-                ]);
-
-            if ($affected === 0) {
-                return false;
-            }
-
-            Report::insert([
-                'category' => 'Pemasukan',
-                'jenis_kategori' => 'Pemasukan',
-                'balance' => $invoice->received,
-                'asal' => 'Pembayaran Online dari '.$invoice->nama.', ID Pelanggan '.$invoice->idpel,
-                'date' => $date,
-                'account' => '',
-                'image' => '',
-            ]);
-
-            if ($order) {
-                Order::where('idpel', $invoice->idpel)->update([
-                    'status' => 'Active',
-                    'expdate' => $tgl2,
-                ]);
-            }
-
-            return true;
-        });
-
-        if ($committed) {
-            $this->sendPaidNotification($invoice, $order, $wasIsolir);
+        $result = $this->commitGatewayPayment($uniqueRef, 'Duitku', [
+            'provider_reference' => (string) $request->post('reference'),
+            'amount' => (string) $request->post('amount'),
+        ]);
+        if ($result['committed']) {
+            $routerRestored = ! $result['was_isolir']
+                || $this->restoreGatewayCustomerAccess($result['order'], $result['invoice']);
+            $this->sendPaidNotificationSafely(
+                $result['invoice'],
+                $result['order'],
+                $result['was_isolir'] && $routerRestored
+            );
         }
 
         return response('SUCCESS', 200);
     }
 
     /**
-     * Kembalikan profil PPPoE/hotspot pelanggan ke profil paket (buka isolir)
-     * lalu putuskan sesi aktif agar reconnect memakai profil baru. Semua error
-     * router ditelan (log) agar callback tetap membalas sukses ke Tripay —
-     * pembayaran tetap tercatat walau router sedang tak terjangkau.
+     * Transition callback dibuat atomik dan memakai advisory lock invoice yang
+     * sama dengan transaction creator/manual takeover.
+     *
+     * @param  array<string, string>  $callbackContext
+     * @return array{committed: bool, invoice: ?Invoice, order: ?Order, was_isolir: bool}
      */
-    private function reconnectRouter(Order $order, ?string $package): void
+    protected function commitGatewayPayment(string $invoiceCode, string $providerName, array $callbackContext): array
     {
+        if (! Invoice::acquirePaymentLock($invoiceCode)) {
+            // Provider akan retry callback ketika endpoint tidak mengembalikan 2xx,
+            // tetapi controller legacy harus tetap cepat. Exception menghasilkan 500.
+            throw new \RuntimeException("Invoice #{$invoiceCode} sedang diproses.");
+        }
+
+        try {
+            return DB::transaction(function () use ($invoiceCode, $providerName, $callbackContext) {
+                $invoice = Invoice::where('code', $invoiceCode)->lockForUpdate()->first();
+                if (! $invoice) {
+                    return ['committed' => false, 'invoice' => null, 'order' => null, 'was_isolir' => false];
+                }
+
+                if ($invoice->status !== 'Unpaid') {
+                    $callbackReference = (string) ($callbackContext['provider_reference'] ?? '');
+                    $matchesStoredProviderTransaction = $invoice->status === 'Error'
+                        && (string) $invoice->reference !== ''
+                        && $callbackReference !== ''
+                        && hash_equals((string) $invoice->reference, $callbackReference);
+
+                    if ($matchesStoredProviderTransaction) {
+                        Log::critical('Callback pembayaran datang setelah manual takeover.', [
+                            'invoice_code' => $invoiceCode,
+                            'idpel' => $invoice->idpel,
+                            'provider' => $providerName,
+                            'stored_reference' => $invoice->reference,
+                            'callback_reference' => $callbackReference,
+                            'callback_amount' => $callbackContext['amount'] ?? '',
+                        ]);
+                    }
+
+                    return ['committed' => false, 'invoice' => $invoice, 'order' => null, 'was_isolir' => false];
+                }
+
+                $date = now('Asia/Jakarta')->toDateString();
+                if ($invoice->account !== 'user') {
+                    $invoice->update([
+                        'status' => 'Paid',
+                        'last_update' => $date,
+                        'update_by' => 'System Payment Gateway '.$providerName,
+                    ]);
+
+                    return ['committed' => true, 'invoice' => $invoice->fresh(), 'order' => null, 'was_isolir' => false];
+                }
+
+                $order = Order::where('idpel', $invoice->idpel)->lockForUpdate()->first();
+                $wasIsolir = $order?->status === 'Isolir';
+                $newExpiration = date('Y-m-d', strtotime('+1 month', strtotime((string) $invoice->expdate)));
+                if ($order && strtotime((string) $order->expdate) > strtotime($newExpiration)) {
+                    // Pembayaran invoice periode lama tidak boleh memundurkan
+                    // expiration yang sudah diperpanjang callback lain.
+                    $newExpiration = (string) $order->expdate;
+                }
+
+                $invoice->update([
+                    'status' => 'Paid',
+                    'last_update' => $date,
+                    'update_by' => 'System Payment Gateway '.$providerName,
+                ]);
+
+                Report::insert([
+                    'category' => 'Pemasukan',
+                    'jenis_kategori' => 'Pemasukan',
+                    'balance' => $invoice->received,
+                    'asal' => 'Pembayaran Online dari '.$invoice->nama.', ID Pelanggan '.$invoice->idpel,
+                    'date' => $date,
+                    'account' => '',
+                    'image' => '',
+                ]);
+
+                if ($order) {
+                    $order->update([
+                        'status' => 'Active',
+                        'expdate' => $newExpiration,
+                    ]);
+                }
+
+                return [
+                    'committed' => true,
+                    'invoice' => $invoice->fresh(),
+                    'order' => $order?->fresh(),
+                    'was_isolir' => $wasIsolir,
+                ];
+            });
+        } finally {
+            try {
+                Invoice::releasePaymentLock($invoiceCode);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal melepas callback payment lock #{$invoiceCode}: {$e->getMessage()}");
+            }
+        }
+    }
+
+    protected function restoreGatewayCustomerAccess(?Order $order, ?Invoice $invoice): bool
+    {
+        if (! $order || ! $invoice || $order->status !== 'Active') {
+            return true;
+        }
+
+        // Hanya order yang tadinya Isolir membutuhkan RouterOS restoration.
+        // Caller memakai return ini hanya bersama flag was_isolir.
+        $accessLock = Invoice::customerAccessLockName((string) $order->idpel);
+        $lockAcquired = false;
+
+        try {
+            $lockAcquired = Invoice::acquireNamedLock($accessLock);
+            if (! $lockAcquired) {
+                $this->queueCustomerAccessRestore($order);
+
+                return false;
+            }
+
+            $freshOrder = Order::whereKey($order->id)->first();
+            if (! $freshOrder || $freshOrder->status !== 'Active' || (string) $freshOrder->expdate !== (string) $order->expdate) {
+                return false;
+            }
+
+            $restored = $this->reconnectRouter($freshOrder, $invoice->package);
+            if (! $restored) {
+                $this->queueCustomerAccessRestore($freshOrder);
+            }
+
+            return $restored;
+        } catch (\Throwable $e) {
+            Log::warning("Post-payment RouterOS callback gagal ({$order->idpel}): {$e->getMessage()}");
+            $this->queueCustomerAccessRestore($order);
+
+            return false;
+        } finally {
+            if ($lockAcquired) {
+                try {
+                    Invoice::releaseNamedLock($accessLock);
+                } catch (\Throwable $e) {
+                    Log::warning("Gagal melepas customer access lock callback ({$order->idpel}): {$e->getMessage()}");
+                }
+            }
+        }
+    }
+
+    private function queueCustomerAccessRestore(Order $order): void
+    {
+        try {
+            Order::whereKey($order->id)
+                ->where('status', 'Active')
+                ->where('expdate', $order->expdate)
+                ->update(['status' => 'Isolir']);
+        } catch (\Throwable $e) {
+            Log::error("Gagal menandai retry RouterOS callback ({$order->idpel}): {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Kembalikan profil PPPoE/hotspot pelanggan ke profil paket (buka isolir)
+     * lalu putuskan sesi aktif agar reconnect memakai profil baru.
+     */
+    protected function reconnectRouter(Order $order, ?string $package): bool
+    {
+        $ros = null;
+
         try {
             $router = Router::find($order->id_router);
             if (! $router) {
-                return;
+                return false;
             }
 
             $service = Service::where('paket', $package)->first();
             $ppprofile = $service->ppp_profile ?? null;
             if (! $ppprofile) {
-                return;
+                return false;
             }
 
-            $ros = new RouterosAPI;
+            $ros = $this->makeRouteros();
             if (! $ros->connect($router->ip, $router->username, legacy_decrypt($router->password))) {
                 Log::warning("Buka isolir gagal (router tak merespon) idpel {$order->idpel}");
 
-                return;
+                return false;
             }
 
             $users = $order->pppoe_user;
@@ -256,39 +311,75 @@ class CallbackController extends Controller
                     '.proplist' => '.id',
                     '?name' => $users,
                 ]);
-
-                if (! empty($all[0]['.id'])) {
-                    $ros->comm('/ppp/secret/set', [
-                        '.id' => $all[0]['.id'],
-                        'profile' => $ppprofile,
-                    ]);
+                $secretId = is_array($all) ? ($all[0]['.id'] ?? null) : null;
+                if (! $secretId) {
+                    throw new \RuntimeException('PPPoE secret tidak ditemukan.');
                 }
+
+                $this->ensureRouterCommandSucceeded($ros->comm('/ppp/secret/set', [
+                    '.id' => $secretId,
+                    'profile' => $ppprofile,
+                ]));
 
                 $active = $ros->comm('/ppp/active/getall', [
                     '.proplist' => '.id',
                     '?name' => $users,
                 ]);
-
-                if (! empty($active[0]['.id'])) {
-                    $ros->comm('/ppp/active/remove', ['.id' => $active[0]['.id']]);
-                }
-            } elseif ($order->mode === 'hotspot') {
-                $ros->comm('/ip/hotspot/user/set', [
-                    'numbers' => $users,
-                    'profile' => $ppprofile,
-                ]);
-
-                $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $users]);
-                if (! empty($active)) {
-                    foreach ($active as $act) {
-                        if (! empty($act['.id'])) {
-                            $ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]);
-                        }
+                foreach (is_array($active) ? $active : [] as $session) {
+                    if (! empty($session['.id'])) {
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ppp/active/remove', ['.id' => $session['.id']]));
                     }
                 }
+            } elseif ($order->mode === 'hotspot') {
+                $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/user/set', [
+                    'numbers' => $users,
+                    'profile' => $ppprofile,
+                ]));
+
+                $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $users]);
+                foreach (is_array($active) ? $active : [] as $session) {
+                    if (! empty($session['.id'])) {
+                        $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/active/remove', ['.id' => $session['.id']]));
+                    }
+                }
+            } else {
+                throw new \RuntimeException("Mode pelanggan tidak didukung: {$order->mode}");
             }
+
+            return true;
         } catch (\Throwable $e) {
             Log::warning("Buka isolir error idpel {$order->idpel}: {$e->getMessage()}");
+
+            return false;
+        } finally {
+            try {
+                $ros?->disconnect();
+            } catch (\Throwable $e) {
+                Log::warning("Disconnect RouterOS callback gagal ({$order->idpel}): {$e->getMessage()}");
+            }
+        }
+    }
+
+    protected function makeRouteros(): RouterosAPI
+    {
+        return new RouterosAPI;
+    }
+
+    private function ensureRouterCommandSucceeded(mixed $response): void
+    {
+        if (is_array($response) && (isset($response['!trap']) || isset($response['!fatal']))) {
+            $message = $response['!trap'][0]['message'] ?? $response['!fatal'][0]['message'] ?? 'Perintah RouterOS gagal.';
+
+            throw new \RuntimeException($message);
+        }
+    }
+
+    private function sendPaidNotificationSafely(Invoice $invoice, ?Order $order, bool $wasIsolir = false): void
+    {
+        try {
+            $this->sendPaidNotification($invoice, $order, $wasIsolir);
+        } catch (\Throwable $e) {
+            Log::warning("Notifikasi callback gagal #{$invoice->code} ({$invoice->idpel}): {$e->getMessage()}");
         }
     }
 

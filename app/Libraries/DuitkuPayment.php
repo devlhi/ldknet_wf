@@ -59,6 +59,8 @@ class DuitkuPayment
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_FRESH_CONNECT => true,
             CURLOPT_FAILONERROR => false,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
         ]);
 
         $result = curl_exec($ch);

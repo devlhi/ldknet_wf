@@ -7,7 +7,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\PaymentGateway;
 use App\Models\PaymentMethod;
-use Illuminate\Support\Facades\DB;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 
 class DuitkuInvoicePayment
@@ -27,10 +27,8 @@ class DuitkuInvoicePayment
             return ['ok' => false, 'message' => 'Metode pembayaran tidak cocok dengan payment gateway default'];
         }
 
-        $lockName = 'pay_invoice_'.$invoice->code;
-        $lock = DB::selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockName]);
-
-        if (! $lock || (int) $lock->acquired !== 1) {
+        $invoiceCode = (string) $invoice->code;
+        if (! Invoice::acquirePaymentLock($invoiceCode)) {
             return ['ok' => false, 'message' => 'Invoice sedang diproses, coba lagi beberapa saat'];
         }
 
@@ -48,17 +46,15 @@ class DuitkuInvoicePayment
                 return ['ok' => false, 'message' => 'Invoice #'.$invoice->code.' tidak dapat diproses karena status '.$invoice->status];
             }
 
-            if (self::paymentStillActive($invoice)) {
+            if ($invoice->hasActiveGatewayTransaction()) {
                 return ['ok' => false, 'message' => 'Transaksi pembayaran invoice #'.$invoice->code.' masih aktif. Tunggu sampai expired sebelum membuat transaksi baru.'];
             }
 
-            date_default_timezone_set('Asia/Jakarta');
-
-            $invoiceCode = $invoice->code;
             $package = $invoice->package;
             $price = (int) $invoice->price;
             $total = $price + rand(1, 999);
-            $expired = date('d-m-Y H:i:s', mktime(0, 0, 0, date('n'), date('j') + 1, date('Y')));
+            $deadline = CarbonImmutable::now(config('app.timezone', 'Asia/Jakarta'))->addDay();
+            $expired = $deadline->format('d-m-Y H:i:s');
             $name = $invoice->nama ?: ($order->nama ?? 'Customer');
             $email = $order->email ?? '';
             $phone = $order->nomor ?? '';
@@ -143,22 +139,11 @@ class DuitkuInvoicePayment
                 ],
             ];
         } finally {
-            DB::selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockName]);
+            try {
+                Invoice::releasePaymentLock($invoiceCode);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal melepas Duitku payment lock #{$invoiceCode}: {$e->getMessage()}");
+            }
         }
-    }
-
-    private static function paymentStillActive(Invoice $invoice): bool
-    {
-        if (empty($invoice->reference)) {
-            return false;
-        }
-
-        if (empty($invoice->exppay)) {
-            return true;
-        }
-
-        $expiredAt = \DateTime::createFromFormat('d-m-Y H:i:s', $invoice->exppay);
-
-        return $expiredAt ? $expiredAt->getTimestamp() > time() : true;
     }
 }

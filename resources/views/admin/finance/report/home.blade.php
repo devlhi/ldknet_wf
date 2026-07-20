@@ -202,13 +202,16 @@
                             var currency = parseFloat(totalReceived);
                             var formatRupiah = currency.toLocaleString('id-ID', optioncur);
 
-                            var statusText, statusClass;
+                            var statusText = row.status;
+                            var statusClass = 'btn-secondary';
                             if (row.status === 'Paid') {
                                 statusText = 'Sudah Terbayar';
                                 statusClass = 'btn-success';
                             } else if (row.status === 'Unpaid') {
                                 statusText = 'Belum Terbayar';
                                 statusClass = 'btn-danger';
+                            } else if (row.status === 'Error') {
+                                statusText = 'Cancel';
                             }
 
                             var link = '';

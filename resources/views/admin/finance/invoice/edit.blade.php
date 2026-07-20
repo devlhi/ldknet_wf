@@ -33,7 +33,7 @@
                                 @endif
 
 
-                                <form action="{{ url('admin/finance/invoice/update') }}" method="POST" enctype="multipart/form-data">
+                                <form action="{{ url('admin/finance/invoice/update') }}" method="POST" enctype="multipart/form-data" id="invoiceConfirmationForm">
                                     @csrf
                                     <input type="hidden" name="target" value="{{ $row->id }}">
                                     <input type="hidden" name="expdate" id="expdate" value="{{ $row->expdate }}">
@@ -60,14 +60,38 @@
                                         <label class="form-label">Paket</label>
                                         <input type="text" name="package" id="package" class="form-control" value="{{ $row->package }}" disabled>
 
-                                        <input type="hidden" name="package" id="package" value="{{ $row->package }}">
+                                        <input type="hidden" name="package" value="{{ $row->package }}">
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="form-label">Jumlah yang harus dibayar</label>
                                         <input type="text" name="price" id="price" class="form-control" value="Rp {{ number_format($row->price) }}" disabled>
-                                        <input type="hidden" name="price" id="price" value="{{ $row->price }}">
+                                        <input type="hidden" name="price" value="{{ $row->price }}">
 
+                                    </div>
+                                    @php
+                                        $sourcePeriod = \Carbon\CarbonImmutable::parse($row->date)->locale('id')->translatedFormat('F Y');
+                                        $nextPeriod = \Carbon\CarbonImmutable::parse($row->date)->addMonthNoOverflow()->locale('id')->translatedFormat('F Y');
+                                    @endphp
+                                    <div class="mb-3">
+                                        <label class="form-label">Periode Konfirmasi Pembayaran</label>
+                                        <div class="border rounded p-3">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="radio" name="confirmation_period" id="confirmationCurrent" value="current" @checked(old('confirmation_period', 'current') === 'current')>
+                                                <label class="form-check-label" for="confirmationCurrent">
+                                                    Konfirmasi invoice ini ({{ $sourcePeriod }})
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="confirmation_period" id="confirmationNext" value="next" @checked(old('confirmation_period') === 'next')>
+                                                <label class="form-check-label" for="confirmationNext">
+                                                    Majukan 1 bulan ke {{ $nextPeriod }}
+                                                </label>
+                                            </div>
+                                            <div class="alert alert-warning mt-3 mb-0 d-none" id="advanceWarning">
+                                                Invoice {{ $sourcePeriod }} akan menjadi <strong>Cancel</strong>. Pembayaran dicatat untuk {{ $nextPeriod }} dan masa aktif dihitung satu bulan dari tanggal pembayaran.
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Metode Pembayaran</label>
@@ -140,10 +164,13 @@
         document.addEventListener('DOMContentLoaded', function () {
             var wrapper = document.getElementById('buktiWrapper');
             var fileInput = document.getElementById('image');
-            var radios = document.querySelectorAll('input[name="upload_bukti"]');
+            var uploadRadios = document.querySelectorAll('input[name="upload_bukti"]');
+            var periodRadios = document.querySelectorAll('input[name="confirmation_period"]');
+            var advanceWarning = document.getElementById('advanceWarning');
+            var form = document.getElementById('invoiceConfirmationForm');
             if (!wrapper || !fileInput) return;
 
-            function sync() {
+            function syncUpload() {
                 var checked = document.querySelector('input[name="upload_bukti"]:checked');
                 var wantUpload = checked && checked.value === 'ya';
                 wrapper.style.display = wantUpload ? '' : 'none';
@@ -151,8 +178,24 @@
                 if (!wantUpload) { fileInput.value = ''; }
             }
 
-            radios.forEach(function (r) { r.addEventListener('change', sync); });
-            sync();
+            function syncPeriod() {
+                var checked = document.querySelector('input[name="confirmation_period"]:checked');
+                var advance = checked && checked.value === 'next';
+                if (advanceWarning) advanceWarning.classList.toggle('d-none', !advance);
+            }
+
+            uploadRadios.forEach(function (radio) { radio.addEventListener('change', syncUpload); });
+            periodRadios.forEach(function (radio) { radio.addEventListener('change', syncPeriod); });
+            if (form) {
+                form.addEventListener('submit', function (event) {
+                    var advance = document.querySelector('input[name="confirmation_period"]:checked')?.value === 'next';
+                    if (advance && !window.confirm('Invoice bulan lama akan diubah menjadi Cancel dan pembayaran dimajukan satu bulan. Lanjutkan?')) {
+                        event.preventDefault();
+                    }
+                });
+            }
+            syncUpload();
+            syncPeriod();
         });
     </script>
 @endsection

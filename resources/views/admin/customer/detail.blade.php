@@ -88,9 +88,12 @@
                                                 } elseif ($inv->status == 'Unpaid') {
                                                     $label = 'danger';
                                                     $statustext = 'Belum Terbayar';
+                                                } elseif ($inv->status == 'Error') {
+                                                    $label = 'secondary';
+                                                    $statustext = 'Cancel';
                                                 } else {
-                                                    $label = 'danger';
-                                                    $statustext = 'Error';
+                                                    $label = 'secondary';
+                                                    $statustext = $inv->status;
                                                 }
                                             @endphp
                                             <tr>

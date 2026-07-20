@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class CronLog extends Model
@@ -69,7 +70,7 @@ class CronLog extends Model
         @file_put_contents(storage_path('app/cron_heartbeat'), now()->toDateTimeString());
     }
 
-    public static function lastHeartbeat(): ?\Illuminate\Support\Carbon
+    public static function lastHeartbeat(): ?Carbon
     {
         $path = storage_path('app/cron_heartbeat');
 
@@ -77,6 +78,6 @@ class CronLog extends Model
             return null;
         }
 
-        return \Illuminate\Support\Carbon::createFromTimestamp(filemtime($path))->setTimezone(config('app.timezone'));
+        return Carbon::createFromTimestamp(filemtime($path))->setTimezone(config('app.timezone'));
     }
 }

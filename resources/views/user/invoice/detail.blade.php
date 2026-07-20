@@ -16,7 +16,7 @@
                                 <li class="list-group-item"><strong>Nama:</strong> {{ $row->nama }}</li>
                                 <li class="list-group-item"><strong>Paket:</strong> {{ $row->package }}</li>
                                 <li class="list-group-item"><strong>Harga:</strong> {{ function_exists('rupiah') ? rupiah($row->price) : $row->price }}</li>
-                                <li class="list-group-item"><strong>Status:</strong> {{ $row->status }}</li>
+                                <li class="list-group-item"><strong>Status:</strong> {{ $row->status === 'Error' ? 'Cancel' : $row->status }}</li>
                                 <li class="list-group-item"><strong>Jatuh Tempo:</strong> {{ $row->expdate }}</li>
                             </ul>
                         @endforeach
