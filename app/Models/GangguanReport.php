@@ -30,7 +30,7 @@ class GangguanReport extends Model
         'internet_mati' => ['mati', 'putus', 'tidak konek', 'ga konek', 'gak konek', 'nggak konek', 'gak nyambung', 'tidak nyambung', 'no internet', 'offline', 'disconnect', 'los', 'lampu merah', 'redaman'],
         'internet_lambat' => ['lambat', 'lemot', 'lelet', 'lola', 'lag', 'ngelag', 'buffering', 'loading lama', 'lambat sekali', 'lambat banget', 'kecepatan turun', 'lambat bgt'],
         'tidak_bisa_akses' => ['tidak bisa buka', 'ga bisa buka', 'gak bisa buka', 'tidak bisa browsing', 'ga bisa browsing', 'tidak bisa youtube', 'tidak bisa game', 'error', 'dns', 'tidak bisa akses'],
-        'wifi' => ['wifi', 'wi-fi', 'ganti password', 'password wifi', 'sinyal lemah', 'jangkauan wifi', 'router panas'],
+        'wifi' => ['ganti password', 'password wifi', 'sinyal lemah', 'jangkauan wifi', 'router panas', 'wifi tidak bisa', 'tidak bisa wifi', 'wifi lemot', 'wifi lambat', 'wifi mati', 'wifi putus', 'wifi bermasalah', 'wifi rusak'],
         'pembayaran' => ['sudah bayar', 'sudah transfer', 'konfirmasi bayar', 'belum aktif padahal sudah bayar', 'kok belum aktif'],
     ];
 
@@ -50,6 +50,16 @@ class GangguanReport extends Model
     {
         $t = mb_strtolower(trim($text));
         if ($t === '') {
+            return null;
+        }
+
+        // Cek jika teks tidak mengandung karakter huruf sama sekali (misal hanya emoji/symbol/gibberish)
+        if (! preg_match('/\p{L}/u', $t)) {
+            return null;
+        }
+
+        // Jangan respon/buat laporan jika pesan hanya berupa "wifi" atau "wi-fi" saja
+        if ($t === 'wifi' || $t === 'wi-fi') {
             return null;
         }
 
