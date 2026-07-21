@@ -13,6 +13,7 @@
                         @endforeach
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="btn-close"></button>
                     </div>
+                @endif
 
                 @if (session('success'))
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -89,7 +90,6 @@
                         </form>
                     </div>
                 </div>
-                @endif
             </div>
         </div>
     </div>

@@ -619,7 +619,7 @@ class CustomerController extends Controller
         $name = $request->input('name');
         $idpel = $request->input('idpel');
         $status = $request->input('status');
-        $paket = $request->input('paket');
+        $paket = $request->input('paket') ?: null;
 
         $dataCustomer = Order::where('idpel', $idpel)->first();
 
@@ -627,6 +627,7 @@ class CustomerController extends Controller
             return redirect('admin/customers');
         }
 
+        $paket = $paket ?: $dataCustomer->paket;
         $pppoe = $dataCustomer->pppoe_user;
         $dataRouter = Router::find($dataCustomer->id_router);
 
@@ -641,13 +642,19 @@ class CustomerController extends Controller
         $ros = new RouterosAPI;
 
         if (! $ros->connect($dataRouter->ip, $dataRouter->username, legacy_decrypt($dataRouter->password))) {
-            return redirect('admin/customers')->with('auth_errors', ['Server tidak merespon ']);
+            return redirect('admin/customers')->with('auth_errors', ['Server tidak merespon']);
         }
 
         if ($status == 'Berhenti') {
-            $ros->comm('/ppp/secret/disable', [
-                'numbers' => $pppoe,
-            ]);
+            if ($dataCustomer->mode === 'hotspot') {
+                $ros->comm('/ip/hotspot/user/disable', [
+                    'numbers' => $pppoe,
+                ]);
+            } else {
+                $ros->comm('/ppp/secret/disable', [
+                    'numbers' => $pppoe,
+                ]);
+            }
 
             Order::where('idpel', $idpel)->update(['status' => 'Berhenti']);
             User::where('nama', $name)->update(['status_account' => 'Berhenti']);
@@ -666,32 +673,96 @@ class CustomerController extends Controller
             return redirect('admin/services')->with('auth_errors', ['Harap sinkronkan paket terlebih dahulu']);
         }
 
-        $getsecretid = $ros->comm('/ppp/secret/getall', [
-            '.proplist' => '.id',
-            '?name' => $pppoe,
-        ]);
+        $userType = $dataCustomer->mode === 'hotspot' ? 'User Hotspot' : 'User PPPoE';
 
-        $updatesecret = $ros->comm('/ppp/secret/set', [
-            '.id' => $getsecretid[0]['.id'] ?? '',
-            'profile' => $ppprofile,
-        ]);
-
-        if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
-            return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$updatesecret['!trap'][0]['message']]);
-        }
-
-        $active = $ros->comm('/ppp/active/getall', [
-            '.proplist' => '.id',
-            '?name' => $pppoe,
-        ]);
-
-        if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
-            $ros->comm('/ppp/active/remove', [
-                '.id' => $active[0]['.id'],
+        if ($dataCustomer->mode === 'hotspot') {
+            $getsecretid = $ros->comm('/ip/hotspot/user/print', [
+                '.proplist' => '.id',
+                '?name' => $pppoe,
             ]);
+
+            if (empty($getsecretid) || ! isset($getsecretid[0]['.id'])) {
+                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', ["{$userType} '{$pppoe}' tidak ditemukan pada router Mikrotik."]);
+            }
+
+            $updatesecret = $ros->comm('/ip/hotspot/user/set', [
+                '.id' => $getsecretid[0]['.id'],
+                'profile' => $ppprofile,
+            ]);
+
+            if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
+                $errMsg = $updatesecret['!trap'][0]['message'];
+                if (stripos($errMsg, 'profile') !== false) {
+                    $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                }
+
+                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+            }
+
+            if ($status === 'Active') {
+                $ros->comm('/ip/hotspot/user/enable', [
+                    '.id' => $getsecretid[0]['.id'],
+                ]);
+            }
+
+            $active = $ros->comm('/ip/hotspot/active/print', [
+                '.proplist' => '.id',
+                '?user' => $pppoe,
+            ]);
+
+            if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
+                $ros->comm('/ip/hotspot/active/remove', [
+                    '.id' => $active[0]['.id'],
+                ]);
+            }
+        } else {
+            $getsecretid = $ros->comm('/ppp/secret/getall', [
+                '.proplist' => '.id',
+                '?name' => $pppoe,
+            ]);
+
+            if (empty($getsecretid) || ! isset($getsecretid[0]['.id'])) {
+                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', ["{$userType} '{$pppoe}' tidak ditemukan pada router Mikrotik."]);
+            }
+
+            $updatesecret = $ros->comm('/ppp/secret/set', [
+                '.id' => $getsecretid[0]['.id'],
+                'profile' => $ppprofile,
+            ]);
+
+            if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
+                $errMsg = $updatesecret['!trap'][0]['message'];
+                if (stripos($errMsg, 'profile') !== false) {
+                    $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                }
+
+                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+            }
+
+            if ($status === 'Active') {
+                $ros->comm('/ppp/secret/enable', [
+                    '.id' => $getsecretid[0]['.id'],
+                ]);
+            }
+
+            $active = $ros->comm('/ppp/active/getall', [
+                '.proplist' => '.id',
+                '?name' => $pppoe,
+            ]);
+
+            if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
+                $ros->comm('/ppp/active/remove', [
+                    '.id' => $active[0]['.id'],
+                ]);
+            }
         }
 
-        Order::where('idpel', $idpel)->update(['paket' => $paket]);
+        $updatePayload = ['paket' => $paket];
+        if ($status !== null) {
+            $updatePayload['status'] = $status;
+            User::where('nama', $name)->update(['status_account' => $status]);
+        }
+        Order::where('idpel', $idpel)->update($updatePayload);
 
         return redirect('admin/customer/edit/'.$idpel)->with('success', ['Berhasil mengupdate data']);
     }

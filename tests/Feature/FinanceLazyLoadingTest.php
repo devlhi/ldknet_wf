@@ -184,6 +184,24 @@ class FinanceLazyLoadingTest extends TestCase
         }
     }
 
+    public function test_generate_invoice_view_renders_form_properly(): void
+    {
+        DB::table('orders')->insert([
+            'idpel' => 'CUST-GEN',
+            'nama' => 'Bendu',
+            'paket' => 'Paket 2-Device',
+            'status' => 'Active',
+        ]);
+
+        $response = $this->actingAs($this->financeUser())->get('/admin/finance/invoice/generate');
+
+        $response->assertOk()
+            ->assertSee('Generate Invoice')
+            ->assertSee('Bulan Tagihan')
+            ->assertSee('Tahun Tagihan')
+            ->assertSee('CUST-GEN - Bendu');
+    }
+
     private function financeUser(): User
     {
         return User::create([

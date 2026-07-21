@@ -53,6 +53,15 @@ class CustomerLazyLoadingTest extends TestCase
             $table->string('nama');
             $table->integer('port');
         });
+        Schema::create('services', function (Blueprint $table): void {
+            $table->id();
+            $table->string('paket');
+            $table->integer('harga')->default(0);
+            $table->integer('ppn')->default(0);
+            $table->string('ppp_profile')->nullable();
+            $table->string('status')->default('Tersedia');
+            $table->string('mode')->default('pppoe');
+        });
         Schema::create('orders', function (Blueprint $table): void {
             $table->id();
             $table->string('idpel');
@@ -373,5 +382,115 @@ class CustomerLazyLoadingTest extends TestCase
             ->assertJsonPath('recordsTotal', 1)
             ->assertJsonPath('recordsFiltered', 1)
             ->assertJsonCount(1, 'data');
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_customer_update_data_handles_profile_error_gracefully(): void
+    {
+        $routerId = DB::table('router')->insertGetId([
+            'nama' => 'Main Router',
+            'ip' => '127.0.0.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('pass'),
+        ]);
+
+        DB::table('services')->insert([
+            'paket' => 'Paket 2-Device',
+            'ppp_profile' => 'nonexistent_profile',
+            'status' => 'Tersedia',
+            'mode' => 'pppoe',
+        ]);
+
+        DB::table('orders')->insert([
+            'idpel' => 'P-0422',
+            'nama' => 'Bendu',
+            'paket' => 'Paket 1-Device',
+            'id_router' => (string) $routerId,
+            'mode' => 'pppoe',
+            'pppoe_user' => 'BENDU',
+            'status' => 'Active',
+        ]);
+
+        $mockRos = Mockery::mock('overload:'.RouterosAPI::class);
+        $mockRos->shouldReceive('connect')->andReturn(true);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/getall', Mockery::any())->andReturn([
+            ['.id' => '*1'],
+        ]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/set', Mockery::any())->andReturn([
+            '!trap' => [['message' => 'input does not match any value of profile']],
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/admin/customer/update', [
+            'idpel' => 'P-0422',
+            'name' => 'Bendu',
+            'paket' => 'Paket 2-Device',
+            'status' => 'Active',
+        ]);
+
+        $response->assertRedirect('/admin/customer/edit/P-0422')
+            ->assertSessionHas('auth_errors', [
+                "Profile Mikrotik 'nonexistent_profile' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.",
+            ]);
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_customer_update_data_updates_package_and_status(): void
+    {
+        $routerId = DB::table('router')->insertGetId([
+            'nama' => 'Main Router',
+            'ip' => '127.0.0.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('pass'),
+        ]);
+
+        DB::table('services')->insert([
+            'paket' => 'Paket 2-Device',
+            'ppp_profile' => 'profile_2device',
+            'status' => 'Tersedia',
+            'mode' => 'pppoe',
+        ]);
+
+        DB::table('orders')->insert([
+            'idpel' => 'P-0423',
+            'nama' => 'Bendu2',
+            'paket' => 'Paket 1-Device',
+            'id_router' => (string) $routerId,
+            'mode' => 'pppoe',
+            'pppoe_user' => 'BENDU2',
+            'status' => 'Isolir',
+        ]);
+
+        DB::table('users')->insert([
+            'nama' => 'Bendu2',
+            'email' => 'bendu2@example.test',
+            'password' => 'secret',
+            'level' => 'user',
+            'status_account' => 'Isolir',
+        ]);
+
+        $mockRos = Mockery::mock('overload:'.RouterosAPI::class);
+        $mockRos->shouldReceive('connect')->andReturn(true);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/getall', Mockery::any())->andReturn([
+            ['.id' => '*1'],
+        ]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/set', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/enable', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/active/getall', Mockery::any())->andReturn([]);
+
+        $response = $this->actingAs($this->user)->post('/admin/customer/update', [
+            'idpel' => 'P-0423',
+            'name' => 'Bendu2',
+            'paket' => 'Paket 2-Device',
+            'status' => 'Active',
+        ]);
+
+        $response->assertRedirect('/admin/customer/edit/P-0423')
+            ->assertSessionHas('success');
+
+        $this->assertSame('Paket 2-Device', DB::table('orders')->where('idpel', 'P-0423')->value('paket'));
+        $this->assertSame('Active', DB::table('orders')->where('idpel', 'P-0423')->value('status'));
+        $this->assertSame('Active', DB::table('users')->where('nama', 'Bendu2')->value('status_account'));
     }
 }
