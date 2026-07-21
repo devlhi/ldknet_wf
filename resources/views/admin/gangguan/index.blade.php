@@ -323,7 +323,7 @@
                                         <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#status-{{ $r->id }}">Status</button>
 
                                         {{-- Tutup cepat (tandai selesai) / buka lagi bila sudah ditutup --}}
-                                        <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" class="d-inline swal-confirm"
+                                        <form method="POST" action="{{ url('admin/gangguan/status/'.$r->id) }}" id="status-quick-{{ $r->id }}" class="swal-confirm d-none"
                                             data-text="{{ $r->status === 'selesai' ? 'Buka kembali laporan ini? Status akan menjadi Diproses.' : 'Tutup laporan ini? Status akan menjadi Selesai.' }}"
                                             data-confirm="{{ $r->status === 'selesai' ? 'Ya, Buka' : 'Ya, Tutup' }}"
                                             data-icon="{{ $r->status === 'selesai' ? 'warning' : 'question' }}">
@@ -333,12 +333,12 @@
                                             <input type="hidden" name="tanggal" value="{{ $tanggal }}">
                                             <input type="hidden" name="f_status" value="{{ $statusFilter }}">
                                             <input type="hidden" name="f_kategori" value="{{ $kategoriFilter }}">
-                                            @if ($r->status === 'selesai')
-                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Buka kembali laporan">Buka</button>
-                                            @else
-                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Tutup laporan (tandai selesai)">Tutup</button>
-                                            @endif
                                         </form>
+                                        @if ($r->status === 'selesai')
+                                            <button type="submit" form="status-quick-{{ $r->id }}" class="btn btn-sm btn-outline-secondary" title="Buka kembali laporan">Buka</button>
+                                        @else
+                                            <button type="submit" form="status-quick-{{ $r->id }}" class="btn btn-sm btn-outline-success" title="Tutup laporan (tandai selesai)">Tutup</button>
+                                        @endif
 
                                         <div class="modal fade" id="status-{{ $r->id }}" tabindex="-1" aria-hidden="true">
                                             <div class="modal-dialog modal-dialog-centered">
