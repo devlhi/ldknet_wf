@@ -138,6 +138,18 @@
                                         </div>
                                     </div>
 
+                                    @if ($row->hasActiveGatewayTransaction())
+                                        <div class="mb-3 border border-warning rounded p-3 bg-soft-warning">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="bypass_gateway" id="bypassGateway" value="1" @checked(old('bypass_gateway'))>
+                                                <label class="form-check-label text-dark fw-semibold" for="bypassGateway">
+                                                    Abaikan transaksi online aktif (Bypass)
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block mt-1">Invoice ini memiliki referensi pembayaran gateway aktif (Tripay/Duitku). Centang opsi ini jika pelanggan membayar manual/tunai untuk memproses konfirmasi secara paksa.</small>
+                                        </div>
+                                    @endif
+
                                     <div>
                                         <div>
                                             <a href="{{ url('admin/finance/invoice') }}" class="btn btn-secondary waves-effect">

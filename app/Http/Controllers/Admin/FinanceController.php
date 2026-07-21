@@ -367,6 +367,7 @@ class FinanceController extends Controller
             'category' => 'required|string|max:100',
             'metode' => 'required|string|max:150',
             'confirmation_period' => 'nullable|in:current,next',
+            'bypass_gateway' => 'nullable|in:1',
             // Admin boleh konfirmasi tanpa upload bukti: bukti wajib hanya bila
             // memilih "ya" (default form). Nilai lain -> bukti opsional.
             'upload_bukti' => 'nullable|in:ya,tidak',
@@ -388,6 +389,7 @@ class FinanceController extends Controller
         $category = (string) $request->post('category');
         $metode = (string) $request->post('metode');
         $advanceMonth = $request->post('confirmation_period', 'current') === 'next';
+        $bypassGateway = $request->post('bypass_gateway') === '1';
 
         $invoice = Invoice::where('id', $target)
             ->where('code', $code)
@@ -417,13 +419,13 @@ class FinanceController extends Controller
             return redirect('admin/finance/invoice')->with('auth_errors', ['Paket pelanggan tidak ditemukan']);
         }
 
-        if ($this->invoiceHasActiveGatewayTransaction($invoice)) {
+        if (! $bypassGateway && $this->invoiceHasActiveGatewayTransaction($invoice)) {
             return redirect('admin/finance/invoice')->withInput()->with('auth_errors', [
-                'Invoice #'.$invoice->code.' masih memiliki transaksi pembayaran online aktif. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.',
+                'Invoice #'.$invoice->code.' masih memiliki transaksi pembayaran online aktif. Centang "Abaikan transaksi online aktif (Bypass)" pada halaman edit invoice jika pelanggan membayar secara manual / tunai.',
             ]);
         }
 
-        if ($advanceMonth && ($advanceError = $this->advancePaymentPreflightError($invoice))) {
+        if ($advanceMonth && ($advanceError = $this->advancePaymentPreflightError($invoice, $bypassGateway))) {
             return redirect('admin/finance/invoice')->withInput()->with('auth_errors', [$advanceError]);
         }
 
@@ -477,7 +479,8 @@ class FinanceController extends Controller
                 (int) $invoice->price,
                 (string) $invoice->nama,
                 $date,
-                $advanceMonth
+                $advanceMonth,
+                $bypassGateway
             );
 
             if (! $paymentResult['ok']) {
@@ -485,6 +488,18 @@ class FinanceController extends Controller
             }
 
             $paymentCommitted = true;
+
+            foreach ($paymentResult['gateway_takeovers'] ?? [] as $takeover) {
+                Log::warning('Admin mengonfirmasi pembayaran manual dengan bypass transaksi gateway aktif.', [
+                    'invoice_code' => $takeover['code'],
+                    'idpel' => $idpel,
+                    'provider' => $takeover['provider'],
+                    'reference' => $takeover['reference'],
+                    'expires_at' => $takeover['expires_at'],
+                    'admin_id' => auth()->id(),
+                    'admin_name' => auth()->user()?->nama,
+                ]);
+            }
         } catch (\Throwable $e) {
             Log::error("Konfirmasi manual invoice #{$code} gagal sebelum commit: {$e->getMessage()}", ['exception' => $e]);
 
@@ -553,9 +568,9 @@ class FinanceController extends Controller
      * Validasi awal sebelum RouterOS disentuh. Validasi yang sama diulang dengan
      * row lock saat commit untuk mencegah perubahan status di request paralel.
      */
-    private function advancePaymentPreflightError(Invoice $source): ?string
+    private function advancePaymentPreflightError(Invoice $source, bool $bypassGateway = false): ?string
     {
-        if ($this->invoiceHasActiveGatewayTransaction($source)) {
+        if (! $bypassGateway && $this->invoiceHasActiveGatewayTransaction($source)) {
             return 'Invoice #'.$source->code.' masih memiliki transaksi pembayaran online. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.';
         }
 
@@ -580,7 +595,7 @@ class FinanceController extends Controller
             return 'Invoice periode '.bulan_indo($targetPeriod->toDateString()).' sudah berstatus '.$target->status.'.';
         }
 
-        if ($target && $this->invoiceHasActiveGatewayTransaction($target)) {
+        if (! $bypassGateway && $target && $this->invoiceHasActiveGatewayTransaction($target)) {
             return 'Invoice periode '.bulan_indo($targetPeriod->toDateString()).' masih memiliki transaksi pembayaran online. Tunggu transaksi expired atau selesaikan rekonsiliasi terlebih dahulu.';
         }
 
@@ -641,11 +656,11 @@ class FinanceController extends Controller
      * `Error` (ditampilkan sebagai Cancel), lalu invoice periode berikut dibuat
      * atau digunakan dan ditandai Paid. Order dan pemasukan ikut dalam transaksi.
      *
-     * @return array{ok: bool, code: string, message: string, expdate?: string, was_isolir?: bool}
+     * @return array{ok: bool, code: string, message: string, expdate?: string, was_isolir?: bool, gateway_takeovers?: array<int, array{code: string, provider: string, reference: string, expires_at: string}>}
      */
-    private function commitInvoicePayment($target, array $update, $idpel, $price, $user, $date, bool $advanceMonth = false): array
+    private function commitInvoicePayment($target, array $update, $idpel, $price, $user, $date, bool $advanceMonth = false, bool $bypassGateway = false): array
     {
-        return DB::transaction(function () use ($target, $update, $idpel, $price, $user, $date, $advanceMonth) {
+        return DB::transaction(function () use ($target, $update, $idpel, $price, $user, $date, $advanceMonth, $bypassGateway) {
             $sourceSnapshot = Invoice::where('id', $target)->first();
             if (! $sourceSnapshot || $sourceSnapshot->idpel !== $idpel || $sourceSnapshot->account !== 'user') {
                 return ['ok' => false, 'code' => '', 'message' => 'Invoice tidak dapat dikonfirmasi.'];
@@ -690,7 +705,7 @@ class FinanceController extends Controller
                 ];
             }
 
-            if ($this->invoiceHasActiveGatewayTransaction($source)) {
+            if (! $bypassGateway && $this->invoiceHasActiveGatewayTransaction($source)) {
                 return ['ok' => false, 'code' => '', 'message' => 'Invoice masih memiliki transaksi pembayaran online aktif.'];
             }
 
@@ -712,7 +727,7 @@ class FinanceController extends Controller
                     return ['ok' => false, 'code' => '', 'message' => 'Invoice periode tujuan sudah berstatus '.$paidInvoice->status.'.'];
                 }
 
-                if ($paidInvoice && $this->invoiceHasActiveGatewayTransaction($paidInvoice)) {
+                if (! $bypassGateway && $paidInvoice && $this->invoiceHasActiveGatewayTransaction($paidInvoice)) {
                     return ['ok' => false, 'code' => '', 'message' => 'Invoice periode tujuan masih memiliki transaksi pembayaran online aktif.'];
                 }
 
@@ -759,31 +774,53 @@ class FinanceController extends Controller
                 $paidInvoice->save();
             }
 
+            $gatewayTakeovers = [];
+            $gatewayTakeoverIds = [];
+            if ($bypassGateway) {
+                foreach (collect([$source, $paidInvoice])->filter()->unique('id') as $takeoverInvoice) {
+                    if ($this->invoiceHasActiveGatewayTransaction($takeoverInvoice)) {
+                        $gatewayTakeovers[] = [
+                            'code' => (string) $takeoverInvoice->code,
+                            'provider' => (string) $takeoverInvoice->provider,
+                            'reference' => (string) $takeoverInvoice->reference,
+                            'expires_at' => (string) $takeoverInvoice->exppay,
+                        ];
+                        $gatewayTakeoverIds[(int) $takeoverInvoice->id] = true;
+                    }
+                }
+            }
+
             if ($advanceMonth) {
-                $source->update([
+                $sourceUpdate = [
                     'status' => 'Error',
                     'last_update' => $date,
                     'update_by' => auth()->user()?->nama.' (Cancel - konfirmasi maju 1 bulan)',
-                    // Reference hanya bisa sampai di sini jika sudah expired.
-                    'reference' => '',
-                    'exppay' => '',
-                    'payment_url' => null,
-                    'qr_url' => null,
-                    'random_price' => 0,
-                    'provider' => '',
-                ]);
+                ];
+                if (! isset($gatewayTakeoverIds[(int) $source->id])) {
+                    $sourceUpdate += [
+                        'reference' => '',
+                        'exppay' => '',
+                        'payment_url' => null,
+                        'qr_url' => null,
+                        'random_price' => 0,
+                        'provider' => '',
+                    ];
+                }
+                $source->fill($sourceUpdate)->save();
             }
 
-            // Manual confirmation mengambil alih transaksi expired: hapus metadata
-            // provider supaya callback/tautan lama tidak terlihat sebagai transaksi aktif.
+            // Expired gateway metadata is cleared. An explicit active-transaction
+            // bypass keeps the reference for reconciliation and callback audit.
             $paidInvoice->fill($update);
             $paidInvoice->expdate = $expdate;
-            $paidInvoice->reference = '';
-            $paidInvoice->exppay = '';
-            $paidInvoice->payment_url = null;
-            $paidInvoice->qr_url = null;
-            $paidInvoice->random_price = 0;
-            $paidInvoice->provider = '';
+            if (! isset($gatewayTakeoverIds[(int) $paidInvoice->id])) {
+                $paidInvoice->reference = '';
+                $paidInvoice->exppay = '';
+                $paidInvoice->payment_url = null;
+                $paidInvoice->qr_url = null;
+                $paidInvoice->random_price = 0;
+                $paidInvoice->provider = '';
+            }
             $paidInvoice->save();
 
             $order->update([
@@ -809,6 +846,7 @@ class FinanceController extends Controller
                 'message' => 'Pembayaran berhasil dikonfirmasi.',
                 'expdate' => $expdate,
                 'was_isolir' => $wasIsolir,
+                'gateway_takeovers' => $gatewayTakeovers,
             ];
         });
     }
