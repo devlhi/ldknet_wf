@@ -232,6 +232,13 @@ class GangguanBulkCloseTest extends TestCase
 
     public function test_broadcast_accepts_unique_legacy_assignment_and_ignores_other_odps(): void
     {
+        DB::table('whatsapp_setting')->insert([
+            'type' => 'blast',
+            'mode' => 'on',
+            'api_url' => 'http://127.0.0.1:1',
+            'api_key' => 'test-key',
+            'sender' => '628111111111',
+        ]);
         $admin = $this->createUser('admin');
         GangguanSetting::create(array_merge(GangguanSetting::defaults(), [
             'massal_broadcast_text' => 'Gangguan {odp}{nama}',
@@ -249,7 +256,7 @@ class GangguanBulkCloseTest extends TestCase
         ]);
 
         $response->assertSessionHas('success', [
-            'Broadcast gangguan massal ODP Aping001(P.Hengin) terkirim ke 1 pelanggan.',
+            'Broadcast gangguan massal ODP Aping001(P.Hengin) terkirim ke 0 pelanggan (1 gagal).',
         ]);
     }
 

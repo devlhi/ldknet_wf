@@ -101,11 +101,11 @@ class DuitkuPayment
 
     /**
      * Buat signature untuk request inquiry (create transaction):
-     * md5(merchantCode + merchantOrderId + paymentAmount + apiKey)
+     * HMAC-SHA256(merchantCode + merchantOrderId + paymentAmount, apiKey)
      */
     public function signature($merchantOrderId, $paymentAmount)
     {
-        return md5($this->merchantCode.$merchantOrderId.$paymentAmount.$this->apiKey);
+        return hash_hmac('sha256', $this->merchantCode.$merchantOrderId.$paymentAmount, $this->apiKey);
     }
 
     public function createTransaction()
@@ -114,11 +114,11 @@ class DuitkuPayment
     }
 
     /**
-     * Cek status transaksi. Signature: md5(merchantCode + merchantOrderId + apiKey)
+     * Cek status transaksi. Signature: HMAC-SHA256(merchantCode + merchantOrderId, apiKey)
      */
     public function getTransaction($merchantOrderId)
     {
-        $signature = md5($this->merchantCode.$merchantOrderId.$this->apiKey);
+        $signature = hash_hmac('sha256', $this->merchantCode.$merchantOrderId, $this->apiKey);
 
         return $this->makeRequest('/api/merchant/transactionStatus', 'POST', [
             'merchantCode' => $this->merchantCode,
@@ -145,7 +145,7 @@ class DuitkuPayment
 
     /**
      * Verifikasi callback Duitku.
-     * Signature callback: md5(merchantCode + amount + merchantOrderId + apiKey)
+     * Signature callback: HMAC-SHA256(merchantCode + amount + merchantOrderId, apiKey)
      * Perhatikan: urutan berbeda dari inquiry (amount & orderId ditukar).
      */
     public function verifyCallback($verify = 0)
@@ -163,7 +163,7 @@ class DuitkuPayment
             return false;
         }
 
-        $calcSignature = md5($merchantCode.$amount.$merchantOrderId.$this->apiKey);
+        $calcSignature = hash_hmac('sha256', $merchantCode.$amount.$merchantOrderId, $this->apiKey);
 
         if (! hash_equals($calcSignature, (string) $signature)) {
             $this->lastError = 'Invalid signature. See https://docs.duitku.com/api';

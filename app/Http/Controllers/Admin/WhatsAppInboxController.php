@@ -64,13 +64,23 @@ class WhatsAppInboxController extends Controller
     {
         $number = (string) $request->query('number', '');
         $afterId = (int) $request->query('after_id', 0);
+        $visibleIds = collect(explode(',', (string) $request->query('visible_ids', '')))
+            ->filter(fn (string $id): bool => ctype_digit($id))
+            ->map(fn (string $id): int => (int) $id)
+            ->take(200)
+            ->all();
 
         $messages = collect();
         $canReplyText = false;
 
         if ($number !== '') {
             $messages = WaInboxMessage::where('from_number', $number)
-                ->when($afterId > 0, fn ($q) => $q->where('id', '>', $afterId))
+                ->when($afterId > 0, fn ($q) => $q->where(function ($query) use ($afterId, $visibleIds) {
+                    $query->where('id', '>', $afterId);
+                    if ($visibleIds !== []) {
+                        $query->orWhereIn('id', $visibleIds);
+                    }
+                }))
                 ->orderBy('created_at')
                 ->orderBy('id')
                 ->get();
@@ -89,6 +99,7 @@ class WhatsAppInboxController extends Controller
                 'direction' => $msg->direction,
                 'body' => $msg->body,
                 'status' => $msg->status,
+                'status_label' => $this->outboundStatusLabel((string) $msg->status),
                 'message_type' => $msg->message_type,
                 'media_url' => $msg->hasMedia() ? url('admin/whatsapp/inbox/media/'.$msg->id) : null,
                 'can_reply' => $msg->direction === 'in' && (string) $msg->meta_message_id !== '',
@@ -286,6 +297,17 @@ class WhatsAppInboxController extends Controller
     private function replyWindowIsOpen($lastIncomingAt): bool
     {
         return $lastIncomingAt !== null && $lastIncomingAt->greaterThan(now()->subDay());
+    }
+
+    private function outboundStatusLabel(string $status): string
+    {
+        return match (strtolower($status)) {
+            'read' => 'Dibaca',
+            'delivered' => 'Terkirim',
+            'sent' => 'Dikirim',
+            'failed' => 'Gagal',
+            default => ucfirst($status),
+        };
     }
 
     private function conversations()

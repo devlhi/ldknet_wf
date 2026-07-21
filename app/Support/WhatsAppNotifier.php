@@ -36,11 +36,22 @@ class WhatsAppNotifier
         self::EVENT_BUKA_ISOLIR => 'notif_buka_isolir',
     ];
 
-    public static function sendText(string $number, string $message, bool $logOutbound = true): mixed
+    public static function sendText(string $number, string $message, bool $logOutbound = true, bool $requireOpenWindow = false): mixed
     {
         $gateway = WhatsAppGatewayResolver::active();
         if (! $gateway) {
             return null;
+        }
+
+        if ($requireOpenWindow && WhatsAppGatewayResolver::isMeta($gateway)) {
+            $normalizedNumber = self::normalizeNumber($number);
+            $lastIncomingAt = WaInboxMessage::where('from_number', $normalizedNumber)
+                ->where('direction', 'in')
+                ->latest('created_at')
+                ->first()?->created_at;
+            if (! $lastIncomingAt || ! $lastIncomingAt->greaterThan(now()->subDay())) {
+                return ['error' => ['message' => 'Jendela layanan Meta 24 jam tidak aktif.']];
+            }
         }
 
         $response = WhatsAppGatewayResolver::make($gateway)->sendMessage(WhatsAppGatewayResolver::sender($gateway), $number, $message);
@@ -113,6 +124,30 @@ class WhatsAppNotifier
         }
 
         return $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $number, $message);
+    }
+
+    public static function sendTemplate(string $number, string $templateName, array $parameters = [], ?string $language = null, ?string $urlButtonParam = null): mixed
+    {
+        $gateway = WhatsAppGatewayResolver::active();
+        if (! $gateway || ! WhatsAppGatewayResolver::isMeta($gateway)) {
+            return null;
+        }
+
+        $templateName = trim($templateName);
+        $params = array_values($parameters);
+
+        $response = WhatsAppGatewayResolver::make($gateway)->sendTemplate(
+            WhatsAppGatewayResolver::sender($gateway),
+            $number,
+            $templateName,
+            $params,
+            $language ?: (string) (WhatsAppGatewayResolver::metaSettings($gateway)['language'] ?? 'id'),
+            $urlButtonParam
+        );
+        $body = self::renderTemplateBody($gateway, $templateName, $params) ?? 'Template: '.$templateName;
+        self::logOutbound($gateway, $number, $body, 'template:'.$templateName, $response);
+
+        return $response;
     }
 
     /**
@@ -255,6 +290,16 @@ class WhatsAppNotifier
         }
 
         return null;
+    }
+
+    public static function sendTextSucceeded(string $number, string $message, bool $logOutbound = true, bool $requireOpenWindow = false): bool
+    {
+        $gateway = WhatsAppGatewayResolver::active();
+
+        return self::responseSucceeded(
+            self::sendText($number, $message, $logOutbound, $requireOpenWindow),
+            $gateway
+        );
     }
 
     public static function responseSucceeded(mixed $response, ?WhatsappSetting $gateway = null): bool

@@ -611,23 +611,80 @@ class GatewayController extends Controller
 
     public function whatsappMetaTest(Request $request)
     {
+        $validated = $request->validate([
+            'number' => ['required', 'string', 'max:30'],
+            'template_name' => ['required', 'string', 'max:512', 'regex:/^[a-z0-9_]+$/'],
+            'template_language' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z_\-]+$/'],
+            'parameters' => ['nullable', 'array', 'max:20'],
+            'parameters.*' => ['nullable', 'string', 'max:1000'],
+            'button_parameter' => ['nullable', 'string', 'max:1000'],
+        ]);
         $gateway = WhatsAppGatewayResolver::active();
+        $redirect = redirect(url('admin/whatsapp/meta/templates?number='.rawurlencode($validated['number']).'#send-template'));
 
         if (! $gateway || ! WhatsAppGatewayResolver::isMeta($gateway)) {
-            return redirect(url('admin/whatsapp'))->with('auth_errors', ['Meta Official gateway tidak aktif']);
+            return $redirect->withInput()->with('auth_errors', ['Meta Official gateway tidak aktif']);
         }
 
-        $api = WhatsAppGatewayResolver::make($gateway);
-        $response = $api->sendMessage(WhatsAppGatewayResolver::sender($gateway), $request->post('number'), $request->post('message'));
-        $result = json_decode($response, true);
-
-        if (isset($result['messages'][0]['id'])) {
-            return redirect(url('admin/whatsapp'))->with('success', ['Test Meta berhasil: '.$result['messages'][0]['id']]);
+        $wabaId = WhatsAppGatewayResolver::metaWabaId($gateway);
+        if ($wabaId === '') {
+            return $redirect->withInput()->with('auth_errors', ['WABA ID belum dikonfigurasi.']);
         }
 
-        $error = $result['error']['message'] ?? 'Gagal mengirim pesan Meta';
+        try {
+            $remoteTemplates = WhatsAppGatewayResolver::make($gateway)->templates($wabaId);
+            $approvedTemplate = collect((array) data_get($remoteTemplates, 'data', []))
+                ->first(fn (array $template): bool => strtoupper((string) ($template['status'] ?? '')) === 'APPROVED'
+                    && (string) ($template['name'] ?? '') === $validated['template_name']
+                    && (string) ($template['language'] ?? '') === $validated['template_language']);
+        } catch (\Throwable) {
+            return $redirect->withInput()->with('auth_errors', ['Daftar template approved tidak dapat diperiksa ke Meta.']);
+        }
 
-        return redirect(url('admin/whatsapp'))->with('auth_errors', [$error]);
+        if (! is_array($approvedTemplate)) {
+            return $redirect->withInput()->with('auth_errors', ['Template atau bahasa belum berstatus APPROVED di Meta.']);
+        }
+
+        $expectedBodyParameters = 0;
+        $requiresUrlButtonParameter = false;
+        foreach ((array) ($approvedTemplate['components'] ?? []) as $component) {
+            $componentType = strtoupper((string) ($component['type'] ?? ''));
+            if ($componentType === 'BODY') {
+                preg_match_all('/\{\{\d+\}\}/', (string) ($component['text'] ?? ''), $matches);
+                $expectedBodyParameters = count(array_unique($matches[0] ?? []));
+            }
+            if ($componentType === 'BUTTONS') {
+                $requiresUrlButtonParameter = collect((array) ($component['buttons'] ?? []))
+                    ->contains(fn (array $button): bool => strtoupper((string) ($button['type'] ?? '')) === 'URL'
+                        && str_contains((string) ($button['url'] ?? ''), '{{1}}'));
+            }
+        }
+
+        $parameters = array_values($validated['parameters'] ?? []);
+        if (count($parameters) !== $expectedBodyParameters) {
+            return $redirect->withInput()->with('auth_errors', ["Template membutuhkan {$expectedBodyParameters} parameter body."]);
+        }
+        if ($requiresUrlButtonParameter && ! filled($validated['button_parameter'] ?? null)) {
+            return $redirect->withInput()->with('auth_errors', ['Template membutuhkan parameter URL tombol.']);
+        }
+
+        try {
+            $response = WhatsAppNotifier::sendTemplate(
+                $validated['number'],
+                $validated['template_name'],
+                $parameters,
+                $validated['template_language'],
+                $requiresUrlButtonParameter ? $validated['button_parameter'] : null
+            );
+        } catch (\Throwable) {
+            return $redirect->withInput()->with('auth_errors', ['Pengiriman template gagal: Meta tidak dapat dihubungi.']);
+        }
+
+        if (WhatsAppNotifier::responseSucceeded($response, $gateway)) {
+            return $redirect->with('success', ['Template berhasil dikirim. Percakapan dapat dilanjutkan dengan pesan bebas setelah pelanggan membalas.']);
+        }
+
+        return $redirect->withInput()->with('auth_errors', ['Pengiriman template gagal: '.WhatsAppNotifier::responseError($response)]);
     }
 
     public function whatsappTemplate()
@@ -706,7 +763,7 @@ class GatewayController extends Controller
         }
 
         try {
-            $response = WhatsAppNotifier::sendText($validated['received'], $validated['message']);
+            $response = WhatsAppNotifier::sendText($validated['received'], $validated['message'], true, true);
         } catch (\Throwable) {
             return redirect(url('admin/whatsapp/message/text-message'))
                 ->withInput()

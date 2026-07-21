@@ -99,7 +99,7 @@ class BroadcastController extends Controller
         }
 
         [$sent, $failed] = $this->broadcastResults($getAccount, function (User $account) use ($text) {
-            return WhatsAppNotifier::sendText($account->nomor, $text, false);
+            return WhatsAppNotifier::sendText($account->nomor, $text, false, true);
         }, $gateway);
 
         return $this->broadcastRedirect('broadcast', $sent, $failed);

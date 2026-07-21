@@ -160,11 +160,23 @@ class WhatsAppMetaApi
 
     public function templates($businessAccountId)
     {
-        $response = Http::withToken($this->apiKey)
-            ->acceptJson()
-            ->get($this->apiUrl.'/'.trim((string) $businessAccountId).'/message_templates');
+        $url = $this->apiUrl.'/'.trim((string) $businessAccountId).'/message_templates';
+        $templates = [];
 
-        return $response->json();
+        do {
+            $response = Http::withToken($this->apiKey)
+                ->acceptJson()
+                ->get($url);
+            $result = $response->json();
+            if (! is_array($result) || isset($result['error'])) {
+                return $result;
+            }
+
+            $templates = array_merge($templates, (array) ($result['data'] ?? []));
+            $url = (string) data_get($result, 'paging.next', '');
+        } while ($url !== '');
+
+        return ['data' => $templates];
     }
 
     public function createTemplate($businessAccountId, string $name, string $language, string $category, array|string $bodyTexts, ?string $headerText = null, string $footerText = 'Salam Hangat - ANNORTY NET', array $bodyExample = [], array $button = []): array

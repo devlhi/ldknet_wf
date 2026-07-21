@@ -246,18 +246,56 @@
                         </div>
 
                         <hr>
-                        <h5>Kirim Test Pesan Meta</h5>
-                        <form method="post" action="{{ url('admin/whatsapp/meta/test') }}">
+                        <h5 id="send-template">Kirim Template Meta</h5>
+                        <div class="alert alert-warning small">
+                            Pesan bebas hanya boleh dikirim selama 24 jam setelah pelanggan mengirim pesan. Untuk memulai chat atau menghubungi kembali setelah 24 jam, pilih template yang berstatus <strong>APPROVED</strong>.
+                        </div>
+                        @php
+                            $approvedTemplates = collect($templates)->filter(fn ($tpl) => strtoupper((string) ($tpl['status'] ?? '')) === 'APPROVED');
+                        @endphp
+                        <form method="post" action="{{ url('admin/whatsapp/meta/test') }}" id="metaTemplateSendForm">
                             @csrf
                             <div class="mb-3">
                                 <label class="form-label">Nomor Tujuan (format 62...)</label>
-                                <input type="text" name="number" class="form-control" required>
+                                <input type="text" name="number" class="form-control" value="{{ old('number', request('number')) }}" required>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Pesan Text (test)</label>
-                                <textarea name="message" class="form-control" rows="3" required>Test WhatsApp Meta Official dari ANNORTY NET</textarea>
+                                <label class="form-label">Template APPROVED</label>
+                                <select name="template_name" id="metaTemplateName" class="form-select" required>
+                                    <option value="">-- Pilih template --</option>
+                                    @foreach ($approvedTemplates as $tpl)
+                                        @php
+                                            $bodyText = collect($tpl['components'] ?? [])->first(fn ($component) => strtoupper((string) ($component['type'] ?? '')) === 'BODY')['text'] ?? '';
+                                            preg_match_all('/\{\{\d+\}\}/', (string) $bodyText, $bodyMatches);
+                                            $parameterCount = count(array_unique($bodyMatches[0] ?? []));
+                                            $hasDynamicUrlButton = collect($tpl['components'] ?? [])->filter(fn ($component) => strtoupper((string) ($component['type'] ?? '')) === 'BUTTONS')
+                                                ->flatMap(fn ($component) => $component['buttons'] ?? [])
+                                                ->contains(fn ($button) => strtoupper((string) ($button['type'] ?? '')) === 'URL' && str_contains((string) ($button['url'] ?? ''), '{{1}}'));
+                                            $templateLanguage = (string) ($tpl['language'] ?? 'id');
+                                        @endphp
+                                        <option value="{{ $tpl['name'] }}" data-language="{{ $templateLanguage }}" data-parameter-count="{{ $parameterCount }}" data-dynamic-button="{{ $hasDynamicUrlButton ? '1' : '0' }}" @selected(old('template_name') === ($tpl['name'] ?? '') && old('template_language') === $templateLanguage)>{{ $tpl['name'] }} ({{ $templateLanguage }})</option>
+                                    @endforeach
+                                </select>
+                                <input type="hidden" name="template_language" id="metaTemplateLanguage" value="{{ old('template_language') }}">
+                                @if ($approvedTemplates->isEmpty())
+                                    <small class="text-danger">Belum ada template APPROVED yang terbaca. Klik Cek Template terlebih dahulu.</small>
+                                @endif
                             </div>
-                            <button type="submit" class="btn btn-primary">Kirim Test</button>
+                            <div class="mb-3" id="metaTemplateParameters">
+                                @for ($i = 0; $i < 20; $i++)
+                                    <div class="mb-2 meta-template-parameter d-none" data-index="{{ $i }}">
+                                        <label class="form-label">Parameter {{ $i + 1 }}</label>
+                                        <input type="text" name="parameters[]" class="form-control" maxlength="1000" value="{{ old('parameters.'.$i) }}" disabled>
+                                    </div>
+                                @endfor
+                                <small class="text-muted">Isi parameter sesuai urutan {{1}}, {{2}}, dan seterusnya pada template.</small>
+                            </div>
+                            <div class="mb-3 d-none" id="metaTemplateButtonParameter">
+                                <label class="form-label">Parameter URL Tombol</label>
+                                <input type="text" name="button_parameter" class="form-control" maxlength="1000" value="{{ old('button_parameter') }}" disabled>
+                                <small class="text-muted">Isi akhiran dinamis tombol, misalnya kode invoice atau ID pelanggan.</small>
+                            </div>
+                            <button type="submit" class="btn btn-primary"><i class="uil uil-message"></i> Kirim Template</button>
                         </form>
                     </div>
                 </div>
@@ -269,6 +307,37 @@
 
 @section('scripts')
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    var select = document.getElementById('metaTemplateName');
+    var language = document.getElementById('metaTemplateLanguage');
+    var fields = document.querySelectorAll('.meta-template-parameter');
+    var buttonWrapper = document.getElementById('metaTemplateButtonParameter');
+    if (!select) return;
+
+    function syncTemplateParameters() {
+        var selected = select.options[select.selectedIndex];
+        var count = parseInt(selected?.dataset.parameterCount || '0', 10);
+        var hasDynamicButton = selected?.dataset.dynamicButton === '1';
+        if (language) language.value = selected?.dataset.language || '';
+        fields.forEach(function (wrapper, index) {
+            var input = wrapper.querySelector('input');
+            var visible = index < count;
+            wrapper.classList.toggle('d-none', !visible);
+            input.disabled = !visible;
+            input.required = visible;
+        });
+        if (buttonWrapper) {
+            var buttonInput = buttonWrapper.querySelector('input');
+            buttonWrapper.classList.toggle('d-none', !hasDynamicButton);
+            buttonInput.disabled = !hasDynamicButton;
+            buttonInput.required = hasDynamicButton;
+        }
+    }
+
+    select.addEventListener('change', syncTemplateParameters);
+    syncTemplateParameters();
+});
+
 function copyToClipboard(text, label) {
     const done = () => {
         if (window.Swal) {

@@ -69,6 +69,47 @@
                                         <input type="hidden" name="price" value="{{ $row->price }}">
 
                                     </div>
+
+                                    @if (trim((string) $row->reference) !== '')
+                                        @php
+                                            $gatewayStateClasses = [
+                                                'paid' => 'bg-success',
+                                                'pending' => 'bg-warning text-dark',
+                                                'expired' => 'bg-secondary',
+                                                'failed' => 'bg-danger',
+                                                'unknown' => 'bg-secondary',
+                                            ];
+                                            $gatewayStateClass = $gatewayStateClasses[$gatewayStatus['state'] ?? 'unknown'] ?? 'bg-secondary';
+                                        @endphp
+                                        <div class="card border border-info mb-3" id="gatewayTransactionCard" data-status-url="{{ url('admin/finance/invoice/status/'.$row->code) }}">
+                                            <div class="card-header bg-soft-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <strong><i class="uil uil-credit-card"></i> Transaksi Pembayaran Online</strong>
+                                                <span class="badge {{ $gatewayStateClass }}" id="gatewayStatusBadge">{{ $gatewayStatus['label'] ?? 'Status tidak diketahui' }}</span>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row g-2 small">
+                                                    <div class="col-md-4"><strong>Provider:</strong> {{ strtoupper($row->provider ?: '-') }}</div>
+                                                    <div class="col-md-8"><strong>Referensi:</strong> <code>{{ $row->reference }}</code></div>
+                                                    <div class="col-md-4"><strong>Metode:</strong> {{ $row->method ?: '-' }}</div>
+                                                    <div class="col-md-4"><strong>VA/Tujuan:</strong> {{ $row->penerima ?: '-' }}</div>
+                                                    <div class="col-md-4"><strong>Nominal online:</strong> Rp {{ number_format((int) ($row->random_price ?: $row->received ?: $row->price)) }}</div>
+                                                    <div class="col-md-6"><strong>Berlaku sampai:</strong> {{ $row->exppay ?: 'Tidak diketahui' }}</div>
+                                                    <div class="col-md-6"><strong>Status provider:</strong> <span id="gatewayProviderStatus">Belum diperiksa</span></div>
+                                                </div>
+                                                <div class="mt-3 d-flex flex-wrap gap-2">
+                                                    <button type="button" class="btn btn-sm btn-outline-info" id="refreshGatewayStatus">
+                                                        <i class="uil uil-sync"></i> Cek Status Provider
+                                                    </button>
+                                                    @if ($row->payment_url)
+                                                        <a href="{{ $row->payment_url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
+                                                            <i class="uil uil-external-link-alt"></i> Buka Halaman Pembayaran
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <div class="alert alert-light border mt-3 mb-0 py-2 d-none" id="gatewayStatusDetails"></div>
+                                            </div>
+                                        </div>
+                                    @endif
                                     @php
                                         $sourcePeriod = \Carbon\CarbonImmutable::parse($row->date)->locale('id')->translatedFormat('F Y');
                                         $nextPeriod = \Carbon\CarbonImmutable::parse($row->date)->addMonthNoOverflow()->locale('id')->translatedFormat('F Y');
@@ -143,10 +184,10 @@
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" name="bypass_gateway" id="bypassGateway" value="1" @checked(old('bypass_gateway'))>
                                                 <label class="form-check-label text-dark fw-semibold" for="bypassGateway">
-                                                    Abaikan transaksi online aktif (Bypass)
+                                                    Ambil alih transaksi online dan konfirmasi manual
                                                 </label>
                                             </div>
-                                            <small class="text-muted d-block mt-1">Invoice ini memiliki referensi pembayaran gateway aktif (Tripay/Duitku). Centang opsi ini jika pelanggan membayar manual/tunai untuk memproses konfirmasi secara paksa.</small>
+                                            <small class="text-muted d-block mt-1">Sistem belum memiliki endpoint pembatalan provider yang dapat diverifikasi. Opsi ini menghentikan transaksi online dari sisi pencatatan invoice dan mencegah callback menggandakan pembayaran, tetapi VA/QR lama mungkin masih dapat dibayar di provider.</small>
                                         </div>
                                     @endif
 
@@ -180,7 +221,50 @@
             var periodRadios = document.querySelectorAll('input[name="confirmation_period"]');
             var advanceWarning = document.getElementById('advanceWarning');
             var form = document.getElementById('invoiceConfirmationForm');
+            var gatewayCard = document.getElementById('gatewayTransactionCard');
+            var refreshGatewayStatus = document.getElementById('refreshGatewayStatus');
+            var gatewayStatusBadge = document.getElementById('gatewayStatusBadge');
+            var gatewayProviderStatus = document.getElementById('gatewayProviderStatus');
+            var gatewayStatusDetails = document.getElementById('gatewayStatusDetails');
             if (!wrapper || !fileInput) return;
+
+            function gatewayBadgeClass(state) {
+                if (state === 'paid') return 'bg-success';
+                if (state === 'pending') return 'bg-warning text-dark';
+                if (state === 'failed') return 'bg-danger';
+                return 'bg-secondary';
+            }
+
+            function showGatewayStatus(data) {
+                gatewayStatusBadge.className = 'badge ' + gatewayBadgeClass(data.state);
+                gatewayStatusBadge.textContent = data.label || 'Status tidak diketahui';
+                gatewayProviderStatus.textContent = data.provider_status || '-';
+                var details = [];
+                if (data.checked_at) details.push('Diperiksa: ' + data.checked_at);
+                if (data.amount !== null && data.amount !== undefined) details.push('Nominal provider: Rp ' + Number(data.amount).toLocaleString('id-ID'));
+                if (data.message) details.push(data.message);
+                gatewayStatusDetails.textContent = details.join(' · ');
+                gatewayStatusDetails.classList.toggle('d-none', details.length === 0);
+            }
+
+            async function checkGatewayStatus() {
+                if (!gatewayCard || !refreshGatewayStatus) return;
+                refreshGatewayStatus.disabled = true;
+                gatewayProviderStatus.textContent = 'Memeriksa...';
+                try {
+                    var response = await fetch(gatewayCard.dataset.statusUrl, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        credentials: 'same-origin'
+                    });
+                    var data = await response.json();
+                    if (!response.ok) throw new Error(data.message || 'Gagal memeriksa status provider.');
+                    showGatewayStatus(data);
+                } catch (error) {
+                    showGatewayStatus({ state: 'unknown', label: 'Status tidak dapat diperiksa', provider_status: '-', message: error.message });
+                } finally {
+                    refreshGatewayStatus.disabled = false;
+                }
+            }
 
             function syncUpload() {
                 var checked = document.querySelector('input[name="upload_bukti"]:checked');
@@ -198,10 +282,16 @@
 
             uploadRadios.forEach(function (radio) { radio.addEventListener('change', syncUpload); });
             periodRadios.forEach(function (radio) { radio.addEventListener('change', syncPeriod); });
+            if (refreshGatewayStatus) refreshGatewayStatus.addEventListener('click', checkGatewayStatus);
             if (form) {
                 form.addEventListener('submit', function (event) {
                     var advance = document.querySelector('input[name="confirmation_period"]:checked')?.value === 'next';
+                    var takeover = document.getElementById('bypassGateway')?.checked;
                     if (advance && !window.confirm('Invoice bulan lama akan diubah menjadi Cancel dan pembayaran dimajukan satu bulan. Lanjutkan?')) {
+                        event.preventDefault();
+                        return;
+                    }
+                    if (takeover && !window.confirm('Transaksi provider tidak dibatalkan dari sisi Tripay/Duitku dan VA/QR lama mungkin masih dapat dibayar. Tetap ambil alih dan konfirmasi manual?')) {
                         event.preventDefault();
                     }
                 });

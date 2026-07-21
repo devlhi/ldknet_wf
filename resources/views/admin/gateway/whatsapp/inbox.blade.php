@@ -393,7 +393,17 @@
                             <div class="wa-thread" id="chatThread" role="log" aria-live="polite" aria-relevant="additions"
                                  data-number="{{ $selectedNumber }}" data-last-id="{{ optional($messages->last())->id ?? 0 }}">
                                 @foreach ($messages as $msg)
-                                    @php $out = $msg->direction === 'out'; $failed = $out && $msg->status === 'failed'; @endphp
+                                    @php
+                                        $out = $msg->direction === 'out';
+                                        $failed = $out && $msg->status === 'failed';
+                                        $statusLabel = match ((string) $msg->status) {
+                                            'read' => 'Dibaca',
+                                            'delivered' => 'Terkirim',
+                                            'sent' => 'Dikirim',
+                                            'failed' => 'Gagal',
+                                            default => ucfirst((string) $msg->status),
+                                        };
+                                    @endphp
                                     <div class="wa-message-row {{ $out ? 'is-outgoing' : 'is-incoming' }}" data-message-id="{{ $msg->id }}">
                                         <div class="wa-bubble {{ $out ? ($failed ? 'is-failed' : 'is-outgoing') : 'is-incoming' }}">
                                             @if ($out && str_starts_with((string) $msg->message_type, 'template'))
@@ -408,7 +418,7 @@
                                             <span class="wa-message-meta">
                                                 {{ optional($msg->created_at)->format('H:i') }}
                                                 @if ($out)
-                                                    &middot; {{ $failed ? '✗' : '✓' }}
+                                                    &middot; {{ $failed ? '✗ '.$statusLabel : '✓ '.$statusLabel }}
                                                 @endif
                                             </span>
                                             @if ($canReplyText && $msg->direction === 'in' && filled($msg->meta_message_id))
@@ -462,7 +472,7 @@
                                     <div class="alert alert-warning mb-0">
                                         <i class="uil uil-clock"></i>
                                         Jendela balas 24 jam sudah habis. Anda hanya bisa mengirim <strong>template message</strong> ke nomor ini.
-                                        <a href="{{ url('admin/whatsapp/message/text-message') }}" class="alert-link">Kirim via Test Message</a>
+                                        <a href="{{ url('admin/whatsapp/meta/templates?number='.rawurlencode($selectedNumber)) }}#send-template" class="alert-link">Kirim Template APPROVED</a>
                                     </div>
                                 @endif
                             </div>
@@ -510,7 +520,7 @@
         var badge = isTemplate
             ? '<span class="wa-template-label">Notifikasi: ' + escapeHtml((msg.message_type || '').replace('template:', '')) + '</span>'
             : '';
-        var statusMark = out ? ' &middot; ' + (failed ? '✗' : '✓') : '';
+        var statusMark = out ? ' &middot; ' + (failed ? '✗ ' : '✓ ') + escapeHtml(msg.status_label || msg.status || '') : '';
         var media = msg.media_url
             ? '<a class="wa-media" href="' + escapeHtml(msg.media_url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(msg.media_url) + '" alt="Gambar chat"></a>'
             : '';
@@ -522,6 +532,18 @@
             '<span class="message-body">' + escapeHtml(msg.body) + '</span>' +
             '<span class="wa-message-meta">' + escapeHtml(msg.created_at) + statusMark + '</span>' + reply +
             '</div></div>';
+    }
+
+    function refreshVisibleMessageStatus(msg) {
+        if (!thread) return false;
+        var row = thread.querySelector('[data-message-id="' + msg.id + '"]');
+        if (!row) return false;
+        var meta = row.querySelector('.wa-message-meta');
+        if (meta && msg.direction === 'out') {
+            var failed = msg.status === 'failed';
+            meta.innerHTML = escapeHtml(msg.created_at) + ' &middot; ' + (failed ? '✗ ' : '✓ ') + escapeHtml(msg.status_label || msg.status || '');
+        }
+        return true;
     }
 
     function clearReplySelection() {
@@ -596,6 +618,12 @@
         var params = new URLSearchParams();
         if (number) params.set('number', number);
         if (lastId > 0) params.set('after_id', lastId);
+        if (thread) {
+            var visibleIds = Array.from(thread.querySelectorAll('[data-message-id]'))
+                .map(function (row) { return row.getAttribute('data-message-id'); })
+                .filter(Boolean);
+            if (visibleIds.length) params.set('visible_ids', visibleIds.slice(-200).join(','));
+        }
 
         fetch(pollUrl + '?' + params.toString(), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -607,7 +635,7 @@
 
             if (data.messages.length && thread && !isSubmitting) {
                 data.messages.forEach(function (msg) {
-                    if (thread.querySelector('[data-message-id="' + msg.id + '"]')) return;
+                    if (refreshVisibleMessageStatus(msg)) return;
                     thread.insertAdjacentHTML('beforeend', renderMessage(msg));
                     if (msg.id > lastId) { thread.setAttribute('data-last-id', msg.id); }
                 });

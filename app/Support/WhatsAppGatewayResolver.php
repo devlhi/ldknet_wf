@@ -87,8 +87,13 @@ class WhatsAppGatewayResolver
     public static function metaSettings(WhatsappSetting $gateway): array
     {
         $json = self::extractMetaJson($gateway);
+        $settings = array_replace_recursive(self::defaultMetaSettings(), $json);
 
-        return array_replace_recursive(self::defaultMetaSettings(), $json);
+        if (($settings['templates']['pelanggan_baru'] ?? '') === 'notif_pelanggan_baru') {
+            $settings['templates']['pelanggan_baru'] = 'notif_daftar_berhasil';
+        }
+
+        return $settings;
     }
 
     public static function saveMetaSettings(WhatsappSetting $gateway, array $settings): void

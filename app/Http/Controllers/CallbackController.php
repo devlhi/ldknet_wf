@@ -160,6 +160,25 @@ class CallbackController extends Controller
                     return ['committed' => false, 'invoice' => $invoice, 'order' => null, 'was_isolir' => false];
                 }
 
+                $storedReference = trim((string) $invoice->reference);
+                $callbackReference = trim((string) ($callbackContext['provider_reference'] ?? ''));
+                $storedProvider = strtolower(trim((string) $invoice->provider));
+                if ($storedReference === ''
+                    || $callbackReference === ''
+                    || ! hash_equals($storedReference, $callbackReference)
+                    || $storedProvider !== strtolower($providerName)) {
+                    Log::warning('Callback pembayaran ditolak karena transaksi provider tidak cocok.', [
+                        'invoice_code' => $invoiceCode,
+                        'idpel' => $invoice->idpel,
+                        'stored_provider' => $storedProvider,
+                        'callback_provider' => strtolower($providerName),
+                        'stored_reference' => $storedReference,
+                        'callback_reference' => $callbackReference,
+                    ]);
+
+                    return ['committed' => false, 'invoice' => $invoice, 'order' => null, 'was_isolir' => false];
+                }
+
                 $date = now('Asia/Jakarta')->toDateString();
                 if ($invoice->account !== 'user') {
                     $invoice->update([

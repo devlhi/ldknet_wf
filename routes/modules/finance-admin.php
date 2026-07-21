@@ -44,6 +44,7 @@ Route::middleware(['auth', 'level:admin,developer,finance'])->prefix('admin')->g
     // Invoice
     Route::get('finance/invoice', [FinanceController::class, 'invoice']);
     Route::get('finance/invoice/edit/{any}', [FinanceController::class, 'editInvoice']);
+    Route::get('finance/invoice/status/{any}', [FinanceController::class, 'invoiceGatewayStatus'])->middleware('throttle:20,1');
     Route::post('finance/invoice/update', [FinanceController::class, 'invoiceUpdate']);
     Route::get('finance/invoice/detail/{any}', [FinanceController::class, 'detailInvoice']);
     Route::get('finance/invoice/generate', [FinanceController::class, 'generateInvoice']);

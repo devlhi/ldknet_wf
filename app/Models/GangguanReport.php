@@ -160,7 +160,9 @@ class GangguanReport extends Model
                 '{kategori}' => self::kategoriLabel($report->kategori),
             ]);
 
-            WhatsAppNotifier::sendText($report->from_number, $message);
+            if (! WhatsAppNotifier::sendTextSucceeded($report->from_number, $message, true, true)) {
+                return;
+            }
 
             $report->auto_reply_sent = true;
             $report->save();

@@ -19,6 +19,7 @@ use App\Models\Service;
 use App\Models\SmtpSetting;
 use App\Models\TemplateMessage;
 use App\Models\Website;
+use App\Support\InvoiceGatewayStatus;
 use App\Support\InvoicePayment;
 use App\Support\WhatsAppNotifier;
 use Brevo\Client\Api\TransactionalEmailsApi;
@@ -350,7 +351,25 @@ class FinanceController extends Controller
         return view('admin.finance.invoice.edit', [
             'title' => 'Invoice #'.$id,
             'payment' => collect([$invoice]),
+            'gatewayStatus' => app(InvoiceGatewayStatus::class)->localSummary($invoice),
         ] + $this->websiteData());
+    }
+
+    public function invoiceGatewayStatus($id)
+    {
+        $invoice = Invoice::where('code', $id)
+            ->where('account', 'user')
+            ->first();
+
+        if (! $invoice) {
+            return response()->json(['message' => 'Invoice tidak ditemukan.'], 404);
+        }
+
+        if (trim((string) $invoice->reference) === '') {
+            return response()->json(['message' => 'Invoice tidak memiliki transaksi online.'], 422);
+        }
+
+        return response()->json(app(InvoiceGatewayStatus::class)->fetch($invoice));
     }
 
     public function invoiceUpdate(Request $request)
@@ -421,7 +440,7 @@ class FinanceController extends Controller
 
         if (! $bypassGateway && $this->invoiceHasActiveGatewayTransaction($invoice)) {
             return redirect('admin/finance/invoice')->withInput()->with('auth_errors', [
-                'Invoice #'.$invoice->code.' masih memiliki transaksi pembayaran online aktif. Centang "Abaikan transaksi online aktif (Bypass)" pada halaman edit invoice jika pelanggan membayar secara manual / tunai.',
+                'Invoice #'.$invoice->code.' masih memiliki transaksi pembayaran online aktif. Centang "Ambil alih transaksi online dan konfirmasi manual" pada halaman edit invoice jika pelanggan membayar secara manual / tunai.',
             ]);
         }
 

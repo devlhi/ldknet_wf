@@ -2771,10 +2771,55 @@ class WebhookController extends Controller
                         $this->handleMetaMessage($api, $gateway, $message, $contacts);
                     }
                 }
+
+                foreach ((array) data_get($value, 'statuses', []) as $status) {
+                    if (is_array($status)) {
+                        $this->handleMetaMessageStatus($status);
+                    }
+                }
             }
         }
 
         return response()->json(['status' => 'ok']);
+    }
+
+    private function handleMetaMessageStatus(array $status): void
+    {
+        $metaMessageId = trim((string) data_get($status, 'id', ''));
+        $incomingStatus = strtolower(trim((string) data_get($status, 'status', '')));
+        if ($metaMessageId === '' || ! in_array($incomingStatus, ['sent', 'delivered', 'read', 'failed'], true)) {
+            return;
+        }
+
+        $message = WaInboxMessage::where('meta_message_id', $metaMessageId)
+            ->where('direction', 'out')
+            ->first();
+        if (! $message) {
+            return;
+        }
+
+        $ranks = ['sent' => 1, 'delivered' => 2, 'read' => 3];
+        $currentStatus = strtolower((string) $message->status);
+        $shouldUpdate = $currentStatus === 'failed'
+            ? false
+            : ($incomingStatus === 'failed'
+                ? $currentStatus !== 'read'
+                : (($ranks[$incomingStatus] ?? 0) > ($ranks[$currentStatus] ?? 0)));
+
+        if ($shouldUpdate) {
+            $message->status = $incomingStatus;
+            $message->save();
+        }
+
+        if ($incomingStatus === 'failed') {
+            $error = data_get($status, 'errors.0');
+            Log::warning('Pesan WhatsApp Meta gagal dikirim.', [
+                'message_id_hash' => hash('sha256', $metaMessageId),
+                'inbox_message_id' => $message->id,
+                'error_code' => is_array($error) ? ($error['code'] ?? null) : null,
+                'error_title' => is_array($error) ? ($error['title'] ?? null) : null,
+            ]);
+        }
     }
 
     private function handleMetaMessage(WhatsAppMetaApi $api, WhatsappSetting $gateway, array $message, array $contacts): void

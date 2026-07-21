@@ -423,8 +423,7 @@ class GangguanController extends Controller
                 '{nama}' => trim((string) $pel->nama) !== '' ? ' '.$pel->nama : '',
             ]);
             try {
-                WhatsAppNotifier::sendText($pel->nomor, $message);
-                $terkirim++;
+                WhatsAppNotifier::sendTextSucceeded($pel->nomor, $message, true, true) ? $terkirim++ : $gagal++;
             } catch (\Throwable $e) {
                 $gagal++;
             }

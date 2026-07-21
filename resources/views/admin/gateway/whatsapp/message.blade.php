@@ -28,6 +28,11 @@
                         <h3 class="card-title"><i class="uil uil-whatsapp"></i> Text Message</h3>
                     </div>
                     <div class="card-body">
+                        @if ($content->contains(fn ($gateway) => \App\Support\WhatsAppGatewayResolver::isMeta($gateway)))
+                            <div class="alert alert-info small">
+                                Meta hanya menerima pesan teks bebas dalam 24 jam setelah pelanggan mengirim pesan. Untuk pesan pertama atau percakapan yang sudah lewat 24 jam, gunakan <a href="{{ url('admin/whatsapp/meta/templates') }}" class="alert-link">Template APPROVED</a>.
+                            </div>
+                        @endif
                         <form autocomplete="off" name="formadd" method="post" action="{{ url('admin/whatsapp/message/text-message/send') }}">
                             @csrf
 
