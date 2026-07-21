@@ -252,7 +252,7 @@
                 </div>
 
                 {{-- Input checkbox menggunakan atribut form agar tidak bersarang dengan form aksi per-baris. --}}
-                <form method="POST" action="{{ url('admin/gangguan/bulk-close') }}" id="bulk-close-form" class="swal-confirm"
+                <form method="POST" action="{{ url('admin/gangguan/bulk-close') }}" id="bulk-close-form" class="swal-confirm d-none"
                     data-text="Tutup semua laporan terpilih? Status akan menjadi Selesai."
                     data-confirm="Ya, Tutup" data-icon="question">
                     @csrf
@@ -263,7 +263,7 @@
                 </form>
 
                 @if ($openFilteredCount > 0)
-                    <form method="POST" action="{{ url('admin/gangguan/bulk-close') }}" id="bulk-close-all-form" class="swal-confirm"
+                    <form method="POST" action="{{ url('admin/gangguan/bulk-close') }}" id="bulk-close-all-form" class="swal-confirm d-none"
                         data-text="Tutup semua {{ $openFilteredCount }} laporan terbuka dalam periode dan filter aktif?"
                         data-confirm="Ya, Tutup Semua" data-icon="warning">
                         @csrf
