@@ -56,4 +56,4 @@ Sedang berjalan / belum selesai:
 - `admin-dashboard` — layout admin + halaman dashboard — update: 2026-07-10 WIB (fix Pelanggan Baru: baca dari orders bukan psb) -> .multibrain/indexes/admin-dashboard.md
 - `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-21 20:53 WIB (status live Tripay/Duitku, takeover aman, callback reference hardening) -> .multibrain/indexes/modules-parallel.md
 - `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-21 20:53 WIB (template first-contact, aturan 24 jam, delivery statuses) -> .multibrain/indexes/wa-gateway.md
-- `features` — fitur tambahan lintas modul — update: 2026-07-21 11:20 WIB (bersihkan total teks hitam glyph font laporan gangguan) -> .multibrain/indexes/features.md
+- `features` — fitur tambahan lintas modul — update: 2026-07-21 22:25 WIB (halaman admin Laravel Logs dengan copy dan clear aman) -> .multibrain/indexes/features.md

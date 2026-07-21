@@ -265,6 +265,9 @@
                                 <li><a href="{{ url('admin/setting/company') }}">Company</a></li>
                                 <li><a href="{{ url('admin/setting/notification') }}">Setting Notification</a></li>
                                 <li><a href="{{ url('admin/setting/cron') }}">Setting Cron</a></li>
+                                @if (in_array(auth()->user()->level, ['admin', 'developer'], true))
+                                    <li><a href="{{ url('admin/logs') }}">Laravel Logs</a></li>
+                                @endif
                             </ul>
                         </li>
 
