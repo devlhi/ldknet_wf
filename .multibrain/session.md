@@ -54,6 +54,6 @@ Sedang berjalan / belum selesai:
 
 - `auth` — login/forgot/reset + middleware role — update: 2026-07-10 WIB (security: reset password, throttle, anti-enumerasi) -> .multibrain/indexes/auth.md
 - `admin-dashboard` — layout admin + halaman dashboard — update: 2026-07-10 WIB (fix Pelanggan Baru: baca dari orders bukan psb) -> .multibrain/indexes/admin-dashboard.md
-- `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-21 20:53 WIB (status live Tripay/Duitku, takeover aman, callback reference hardening) -> .multibrain/indexes/modules-parallel.md
+- `modules-parallel` — migrasi 6 modul via sub-agent paralel — update: 2026-07-21 22:51 WIB (retry isolir RouterOS exact lookup `.id`, missing-account aman) -> .multibrain/indexes/modules-parallel.md
 - `wa-gateway` — WhatsApp gateway (lama + Meta Official) & template — update: 2026-07-21 20:53 WIB (template first-contact, aturan 24 jam, delivery statuses) -> .multibrain/indexes/wa-gateway.md
 - `features` — fitur tambahan lintas modul — update: 2026-07-21 22:25 WIB (halaman admin Laravel Logs dengan copy dan clear aman) -> .multibrain/indexes/features.md

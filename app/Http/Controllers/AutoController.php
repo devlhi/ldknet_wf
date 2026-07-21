@@ -103,24 +103,21 @@ class AutoController extends Controller
                         }
                     }
 
-                    if ($data->mode === 'pppoe') {
-                        $this->ensureRouterCommandSucceeded($ros->comm('/ppp/secret/set', ['numbers' => $data->pppoe_user, 'profile' => $profile]));
-                        $active = $ros->comm('/ppp/active/getall', ['.proplist' => '.id', '?name' => $data->pppoe_user]);
-                        foreach (is_array($active) ? $active : [] as $act) {
-                            if (! empty($act['.id'])) {
-                                $this->ensureRouterCommandSucceeded($ros->comm('/ppp/active/remove', ['.id' => $act['.id']]));
-                            }
-                        }
-                    } elseif ($data->mode === 'hotspot') {
-                        $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/user/set', ['numbers' => $data->pppoe_user, 'profile' => $profile]));
-                        $active = $ros->comm('/ip/hotspot/active/print', ['?user' => $data->pppoe_user]);
-                        foreach (is_array($active) ? $active : [] as $act) {
-                            if (! empty($act['.id'])) {
-                                $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/active/remove', ['.id' => $act['.id']]));
-                            }
-                        }
-                    } else {
-                        throw new \RuntimeException("Mode pelanggan tidak didukung: {$data->mode}");
+                    $username = trim((string) $data->pppoe_user);
+                    if ($username === '') {
+                        throw new \RuntimeException('Username RouterOS pelanggan kosong.');
+                    }
+
+                    $accountFound = match ($data->mode) {
+                        'pppoe' => $this->applyPppoeProfile($ros, $username, $profile, $restoreAccess),
+                        'hotspot' => $this->applyHotspotProfile($ros, $username, $profile, $restoreAccess),
+                        default => throw new \RuntimeException("Mode pelanggan tidak didukung: {$data->mode}"),
+                    };
+
+                    if (! $accountFound && $restoreAccess) {
+                        throw new \RuntimeException($data->mode === 'pppoe'
+                            ? "PPPoE secret '{$username}' tidak ditemukan."
+                            : "User hotspot '{$username}' tidak ditemukan.");
                     }
 
                     if ($restoreAccess) {
@@ -153,12 +150,117 @@ class AutoController extends Controller
         echo "Isolir: {$attempted} dicoba, {$succeeded} berhasil, {$failed} akan dicoba lagi pada jadwal berikutnya<br/>";
     }
 
-    private function ensureRouterCommandSucceeded(mixed $response): void
+    private function applyPppoeProfile(RouterosAPI $ros, string $username, string $profile, bool $accountRequired): bool
+    {
+        $secrets = $ros->comm('/ppp/secret/getall', [
+            '.proplist' => '.id,profile',
+            '?name' => $username,
+        ]);
+        $this->ensureRouterCommandSucceeded($secrets, 'Lookup PPPoE secret');
+        $secret = $this->findExactRouterItem($secrets, 'PPPoE secret');
+
+        if (! $secret && $accountRequired) {
+            return false;
+        }
+
+        if ($secret) {
+            if (($secret['profile'] ?? null) !== $profile) {
+                $this->ensureRouterCommandSucceeded($ros->comm('/ppp/secret/set', [
+                    '.id' => $secret['.id'],
+                    'profile' => $profile,
+                ]), 'Ubah profil PPPoE');
+            }
+        }
+
+        $active = $ros->comm('/ppp/active/getall', [
+            '.proplist' => '.id',
+            '?name' => $username,
+        ]);
+        $this->ensureRouterCommandSucceeded($active, 'Lookup sesi aktif PPPoE');
+        $this->removeActiveSessions($ros, '/ppp/active/remove', $active, 'Hapus sesi aktif PPPoE');
+
+        return $secret !== null;
+    }
+
+    private function applyHotspotProfile(RouterosAPI $ros, string $username, string $profile, bool $accountRequired): bool
+    {
+        $users = $ros->comm('/ip/hotspot/user/print', [
+            '.proplist' => '.id,profile',
+            '?name' => $username,
+        ]);
+        $this->ensureRouterCommandSucceeded($users, 'Lookup user hotspot');
+        $user = $this->findExactRouterItem($users, 'User hotspot');
+
+        if (! $user && $accountRequired) {
+            return false;
+        }
+
+        if ($user) {
+            if (($user['profile'] ?? null) !== $profile) {
+                $this->ensureRouterCommandSucceeded($ros->comm('/ip/hotspot/user/set', [
+                    '.id' => $user['.id'],
+                    'profile' => $profile,
+                ]), 'Ubah profil hotspot');
+            }
+        }
+
+        $active = $ros->comm('/ip/hotspot/active/print', [
+            '.proplist' => '.id',
+            '?user' => $username,
+        ]);
+        $this->ensureRouterCommandSucceeded($active, 'Lookup sesi aktif hotspot');
+        $this->removeActiveSessions($ros, '/ip/hotspot/active/remove', $active, 'Hapus sesi aktif hotspot');
+
+        return $user !== null;
+    }
+
+    private function findExactRouterItem(mixed $response, string $label): ?array
+    {
+        if (! is_array($response)) {
+            throw new \RuntimeException("Respons lookup {$label} tidak valid.");
+        }
+
+        $items = array_values(array_filter($response, fn ($item) => is_array($item) && ! empty($item['.id'])));
+        if (count($items) > 1) {
+            throw new \RuntimeException("{$label} ditemukan lebih dari satu.");
+        }
+
+        return $items[0] ?? null;
+    }
+
+    private function removeActiveSessions(RouterosAPI $ros, string $command, mixed $sessions, string $context): void
+    {
+        foreach (is_array($sessions) ? $sessions : [] as $session) {
+            if (empty($session['.id'])) {
+                continue;
+            }
+
+            $response = $ros->comm($command, ['.id' => $session['.id']]);
+            if ($this->isNoSuchItemResponse($response)) {
+                continue;
+            }
+
+            $this->ensureRouterCommandSucceeded($response, $context);
+        }
+    }
+
+    private function isNoSuchItemResponse(mixed $response): bool
+    {
+        if (! is_array($response) || (! isset($response['!trap']) && ! isset($response['!fatal']))) {
+            return false;
+        }
+
+        $message = (string) ($response['!trap'][0]['message'] ?? $response['!fatal'][0]['message'] ?? '');
+
+        return strcasecmp(trim($message), 'no such item') === 0;
+    }
+
+    private function ensureRouterCommandSucceeded(mixed $response, ?string $context = null): void
     {
         if (is_array($response) && (isset($response['!trap']) || isset($response['!fatal']))) {
             $message = $response['!trap'][0]['message'] ?? $response['!fatal'][0]['message'] ?? 'Perintah RouterOS gagal.';
 
-            throw new \RuntimeException($message);
+            throw new \RuntimeException($context ? "{$context}: {$message}" : $message);
         }
     }
 

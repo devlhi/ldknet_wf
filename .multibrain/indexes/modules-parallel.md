@@ -9,6 +9,7 @@ Migrasi 6 modul via sub-agent paralel (Services+Coverage, Customers+Broadcast, F
 
 ## Entries
 
+- 2026-07-21 22:51 WIB | Droid | Perbaiki retry isolir RouterOS dengan exact username lookup dan update `.id`, missing akun kedaluwarsa idempotent, restore berbayar tetap retry, serta validasi trap/session race; test fitur dihapus atas permintaan user, suite tersisa 68 PASS/2 skip/376 assertions. -> .multibrain/context/2026-07-21-2251-droid-routeros-isolir-exact-id-retry.md
 - 2026-07-21 20:53 WIB | Droid | Tambah status lokal/live Tripay-Duitku pada konfirmasi invoice, pengambilalihan manual berperingatan tanpa fake cancel, callback wajib cocok provider/reference, dan signature Duitku HMAC v2; full 97 PASS/1 skip/540 assertions. -> .multibrain/context/2026-07-21-2053-droid-gateway-status-meta-first-contact.md
 - 2026-07-21 12:00 WIB | Droid | Tambah bypass eksplisit transaksi gateway aktif untuk konfirmasi invoice manual, audit log, metadata rekonsiliasi, dan regresi callback idempotent; 88 PASS/1 skip/507 assertions. -> .multibrain/context/2026-07-21-1200-droid-invoice-gateway-manual-bypass.md
 - 2026-07-20 16:18 WIB | GitHub Copilot | Konfirmasi manual maju 1 bulan (source jadi Error/Cancel, target Paid, expdate dari tgl bayar) + hardening callback Tripay/Duitku & MySQL advisory locks <= 64 char. Suite 101 passed. -> .multibrain/context/2026-07-20-1618-copilot-manual-confirmation-advance-and-callback-hardening.md
