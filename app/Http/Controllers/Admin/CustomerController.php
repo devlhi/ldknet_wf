@@ -645,8 +645,18 @@ class CustomerController extends Controller
             return redirect('admin/customers')->with('auth_errors', ['Server tidak merespon']);
         }
 
+        $service = Service::where('paket', $paket)->get()->last();
+        $ppprofile = $service->ppp_profile ?? null;
+
+        if ($ppprofile == null) {
+            return redirect('admin/services')->with('auth_errors', ['Harap sinkronkan paket terlebih dahulu']);
+        }
+
+        $oldMode = $dataCustomer->mode ?: 'pppoe';
+        $newMode = $service->mode ?: 'pppoe';
+
         if ($status == 'Berhenti') {
-            if ($dataCustomer->mode === 'hotspot') {
+            if ($oldMode === 'hotspot') {
                 $ros->comm('/ip/hotspot/user/disable', [
                     'numbers' => $pppoe,
                 ]);
@@ -666,50 +676,127 @@ class CustomerController extends Controller
             return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', ['Harap sinkronkan pppoe user terlebih dahulu']);
         }
 
-        $service = Service::where('paket', $paket)->get()->last();
-        $ppprofile = $service->ppp_profile ?? null;
-
-        if ($ppprofile == null) {
-            return redirect('admin/services')->with('auth_errors', ['Harap sinkronkan paket terlebih dahulu']);
+        // 1. Dapatkan password user lama dari Mikrotik
+        $userPassword = '123456';
+        if ($oldMode === 'hotspot') {
+            $oldSecret = $ros->comm('/ip/hotspot/user/print', [
+                '.proplist' => 'password',
+                '?name' => $pppoe,
+            ]);
+            if (! empty($oldSecret) && isset($oldSecret[0]['password'])) {
+                $userPassword = $oldSecret[0]['password'];
+            }
+        } else {
+            $oldSecret = $ros->comm('/ppp/secret/getall', [
+                '.proplist' => 'password',
+                '?name' => $pppoe,
+            ]);
+            if (! empty($oldSecret) && isset($oldSecret[0]['password'])) {
+                $userPassword = $oldSecret[0]['password'];
+            }
         }
 
-        $userType = $dataCustomer->mode === 'hotspot' ? 'User Hotspot' : 'User PPPoE';
+        // 2. Jika mode berubah, bersihkan/hapus user dari mode lama
+        if ($oldMode !== $newMode) {
+            if ($oldMode === 'hotspot') {
+                // Hapus user hotspot
+                $getsecretid = $ros->comm('/ip/hotspot/user/print', [
+                    '.proplist' => '.id',
+                    '?name' => $pppoe,
+                ]);
+                if (! empty($getsecretid) && isset($getsecretid[0]['.id'])) {
+                    $ros->comm('/ip/hotspot/user/remove', [
+                        '.id' => $getsecretid[0]['.id'],
+                    ]);
+                }
+                // Hapus session hotspot aktif
+                $active = $ros->comm('/ip/hotspot/active/print', [
+                    '.proplist' => '.id',
+                    '?user' => $pppoe,
+                ]);
+                if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
+                    $ros->comm('/ip/hotspot/active/remove', [
+                        '.id' => $active[0]['.id'],
+                    ]);
+                }
+            } else {
+                // Hapus secret PPPoE
+                $getsecretid = $ros->comm('/ppp/secret/getall', [
+                    '.proplist' => '.id',
+                    '?name' => $pppoe,
+                ]);
+                if (! empty($getsecretid) && isset($getsecretid[0]['.id'])) {
+                    $ros->comm('/ppp/secret/remove', [
+                        '.id' => $getsecretid[0]['.id'],
+                    ]);
+                }
+                // Hapus session PPPoE aktif
+                $active = $ros->comm('/ppp/active/getall', [
+                    '.proplist' => '.id',
+                    '?name' => $pppoe,
+                ]);
+                if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
+                    $ros->comm('/ppp/active/remove', [
+                        '.id' => $active[0]['.id'],
+                    ]);
+                }
+            }
+        }
 
-        if ($dataCustomer->mode === 'hotspot') {
+        // 3. Konfigurasi secret/user di mode baru
+        if ($newMode === 'hotspot') {
             $getsecretid = $ros->comm('/ip/hotspot/user/print', [
                 '.proplist' => '.id',
                 '?name' => $pppoe,
             ]);
 
             if (empty($getsecretid) || ! isset($getsecretid[0]['.id'])) {
-                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', ["{$userType} '{$pppoe}' tidak ditemukan pada router Mikrotik."]);
-            }
+                // Jika tidak ada di hotspot (misal karena baru switch dari pppoe), buat baru
+                $addResult = $ros->comm('/ip/hotspot/user/add', [
+                    'server' => 'all',
+                    'name' => $pppoe,
+                    'password' => $userPassword,
+                    'profile' => $ppprofile,
+                ]);
+                if (is_array($addResult) && isset($addResult['!trap'][0]['message'])) {
+                    $errMsg = $addResult['!trap'][0]['message'];
+                    if (stripos($errMsg, 'profile') !== false) {
+                        $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    }
 
-            $updatesecret = $ros->comm('/ip/hotspot/user/set', [
-                '.id' => $getsecretid[0]['.id'],
-                'profile' => $ppprofile,
-            ]);
-
-            if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
-                $errMsg = $updatesecret['!trap'][0]['message'];
-                if (stripos($errMsg, 'profile') !== false) {
-                    $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
                 }
+                $getsecretid = $ros->comm('/ip/hotspot/user/print', [
+                    '.proplist' => '.id',
+                    '?name' => $pppoe,
+                ]);
+            } else {
+                // Update profile yang ada
+                $updatesecret = $ros->comm('/ip/hotspot/user/set', [
+                    '.id' => $getsecretid[0]['.id'],
+                    'profile' => $ppprofile,
+                ]);
+                if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
+                    $errMsg = $updatesecret['!trap'][0]['message'];
+                    if (stripos($errMsg, 'profile') !== false) {
+                        $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    }
 
-                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+                    return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+                }
             }
 
-            if ($status === 'Active') {
+            if ($status === 'Active' && ! empty($getsecretid) && isset($getsecretid[0]['.id'])) {
                 $ros->comm('/ip/hotspot/user/enable', [
                     '.id' => $getsecretid[0]['.id'],
                 ]);
             }
 
+            // Hapus session aktif
             $active = $ros->comm('/ip/hotspot/active/print', [
                 '.proplist' => '.id',
                 '?user' => $pppoe,
             ]);
-
             if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
                 $ros->comm('/ip/hotspot/active/remove', [
                     '.id' => $active[0]['.id'],
@@ -722,34 +809,52 @@ class CustomerController extends Controller
             ]);
 
             if (empty($getsecretid) || ! isset($getsecretid[0]['.id'])) {
-                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', ["{$userType} '{$pppoe}' tidak ditemukan pada router Mikrotik."]);
-            }
+                // Jika tidak ada di pppoe (misal karena baru switch dari hotspot), buat baru
+                $addResult = $ros->comm('/ppp/secret/add', [
+                    'name' => $pppoe,
+                    'password' => $userPassword,
+                    'service' => 'pppoe',
+                    'profile' => $ppprofile,
+                ]);
+                if (is_array($addResult) && isset($addResult['!trap'][0]['message'])) {
+                    $errMsg = $addResult['!trap'][0]['message'];
+                    if (stripos($errMsg, 'profile') !== false) {
+                        $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    }
 
-            $updatesecret = $ros->comm('/ppp/secret/set', [
-                '.id' => $getsecretid[0]['.id'],
-                'profile' => $ppprofile,
-            ]);
-
-            if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
-                $errMsg = $updatesecret['!trap'][0]['message'];
-                if (stripos($errMsg, 'profile') !== false) {
-                    $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
                 }
+                $getsecretid = $ros->comm('/ppp/secret/getall', [
+                    '.proplist' => '.id',
+                    '?name' => $pppoe,
+                ]);
+            } else {
+                // Update profile yang ada
+                $updatesecret = $ros->comm('/ppp/secret/set', [
+                    '.id' => $getsecretid[0]['.id'],
+                    'profile' => $ppprofile,
+                ]);
+                if (is_array($updatesecret) && isset($updatesecret['!trap'][0]['message'])) {
+                    $errMsg = $updatesecret['!trap'][0]['message'];
+                    if (stripos($errMsg, 'profile') !== false) {
+                        $errMsg = "Profile Mikrotik '{$ppprofile}' untuk paket ini tidak ditemukan pada router. Harap buat profile di Mikrotik atau sinkronkan ulang di menu Data Paket.";
+                    }
 
-                return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+                    return redirect('admin/customer/edit/'.$idpel)->with('auth_errors', [$errMsg]);
+                }
             }
 
-            if ($status === 'Active') {
+            if ($status === 'Active' && ! empty($getsecretid) && isset($getsecretid[0]['.id'])) {
                 $ros->comm('/ppp/secret/enable', [
                     '.id' => $getsecretid[0]['.id'],
                 ]);
             }
 
+            // Hapus session aktif
             $active = $ros->comm('/ppp/active/getall', [
                 '.proplist' => '.id',
                 '?name' => $pppoe,
             ]);
-
             if (! empty($active) && isset($active[0]) && isset($active[0]['.id'])) {
                 $ros->comm('/ppp/active/remove', [
                     '.id' => $active[0]['.id'],
@@ -757,7 +862,10 @@ class CustomerController extends Controller
             }
         }
 
-        $updatePayload = ['paket' => $paket];
+        $updatePayload = [
+            'paket' => $paket,
+            'mode' => $newMode,
+        ];
         if ($status !== null) {
             $updatePayload['status'] = $status;
             User::where('nama', $name)->update(['status_account' => $status]);

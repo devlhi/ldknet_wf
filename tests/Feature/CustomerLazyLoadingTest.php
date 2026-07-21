@@ -493,4 +493,112 @@ class CustomerLazyLoadingTest extends TestCase
         $this->assertSame('Active', DB::table('orders')->where('idpel', 'P-0423')->value('status'));
         $this->assertSame('Active', DB::table('users')->where('nama', 'Bendu2')->value('status_account'));
     }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_customer_update_data_switches_pppoe_to_hotspot(): void
+    {
+        $routerId = DB::table('router')->insertGetId([
+            'nama' => 'Main Router',
+            'ip' => '127.0.0.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('pass'),
+        ]);
+
+        DB::table('services')->insert([
+            'paket' => 'Paket Hotspot 5M',
+            'ppp_profile' => 'profile_hs5m',
+            'status' => 'Tersedia',
+            'mode' => 'hotspot',
+        ]);
+
+        DB::table('orders')->insert([
+            'idpel' => 'P-0424',
+            'nama' => 'BenduHS',
+            'paket' => 'Paket 1-Device',
+            'id_router' => (string) $routerId,
+            'mode' => 'pppoe',
+            'pppoe_user' => 'BENDUHS',
+            'status' => 'Active',
+        ]);
+
+        $mockRos = Mockery::mock('overload:'.RouterosAPI::class);
+        $mockRos->shouldReceive('connect')->andReturn(true);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/getall', Mockery::any())->andReturn([
+            ['.id' => '*1', 'password' => 'secret123'],
+        ]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/remove', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/active/getall', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/user/print', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/user/add', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/user/enable', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/active/print', Mockery::any())->andReturn([]);
+
+        $response = $this->actingAs($this->user)->post('/admin/customer/update', [
+            'idpel' => 'P-0424',
+            'name' => 'BenduHS',
+            'paket' => 'Paket Hotspot 5M',
+            'status' => 'Active',
+        ]);
+
+        $response->assertRedirect('/admin/customer/edit/P-0424')
+            ->assertSessionHas('success');
+
+        $this->assertSame('Paket Hotspot 5M', DB::table('orders')->where('idpel', 'P-0424')->value('paket'));
+        $this->assertSame('hotspot', DB::table('orders')->where('idpel', 'P-0424')->value('mode'));
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_customer_update_data_switches_hotspot_to_pppoe(): void
+    {
+        $routerId = DB::table('router')->insertGetId([
+            'nama' => 'Main Router',
+            'ip' => '127.0.0.1',
+            'username' => 'admin',
+            'password' => legacy_encrypt('pass'),
+        ]);
+
+        DB::table('services')->insert([
+            'paket' => 'Paket PPPoE 10M',
+            'ppp_profile' => 'profile_pppoe10m',
+            'status' => 'Tersedia',
+            'mode' => 'pppoe',
+        ]);
+
+        DB::table('orders')->insert([
+            'idpel' => 'P-0425',
+            'nama' => 'BenduPPPoE',
+            'paket' => 'Paket Hotspot 5M',
+            'id_router' => (string) $routerId,
+            'mode' => 'hotspot',
+            'pppoe_user' => 'BENDUPPPOE',
+            'status' => 'Active',
+        ]);
+
+        $mockRos = Mockery::mock('overload:'.RouterosAPI::class);
+        $mockRos->shouldReceive('connect')->andReturn(true);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/user/print', Mockery::any())->andReturn([
+            ['.id' => '*1', 'password' => 'secret456'],
+        ]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/user/remove', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ip/hotspot/active/print', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/getall', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/add', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/secret/enable', Mockery::any())->andReturn([]);
+        $mockRos->shouldReceive('comm')->with('/ppp/active/getall', Mockery::any())->andReturn([]);
+
+        $response = $this->actingAs($this->user)->post('/admin/customer/update', [
+            'idpel' => 'P-0425',
+            'name' => 'BenduPPPoE',
+            'paket' => 'Paket PPPoE 10M',
+            'status' => 'Active',
+        ]);
+
+        $response->assertRedirect('/admin/customer/edit/P-0425')
+            ->assertSessionHas('success');
+
+        $this->assertSame('Paket PPPoE 10M', DB::table('orders')->where('idpel', 'P-0425')->value('paket'));
+        $this->assertSame('pppoe', DB::table('orders')->where('idpel', 'P-0425')->value('mode'));
+    }
 }
