@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'level:admin,developer'])->prefix('admin')->group(function () {
     Route::get('karyawan', [AdminAttendanceController::class, 'employees']);
     Route::post('karyawan/add', [AdminAttendanceController::class, 'storeEmployee']);
+    Route::post('karyawan/update/{id}', [AdminAttendanceController::class, 'updateEmployee']);
     Route::post('karyawan/password/{id}', [AdminAttendanceController::class, 'resetPassword']);
     Route::post('karyawan/status/{id}', [AdminAttendanceController::class, 'toggleEmployee']);
+    Route::post('karyawan/delete/{id}', [AdminAttendanceController::class, 'deleteEmployee']);
 
     Route::get('absensi/rekap', [AdminAttendanceController::class, 'report']);
     Route::get('absensi/rekap/export', [AdminAttendanceController::class, 'exportCsv']);

@@ -66,25 +66,39 @@
                                                 @endif
                                             </td>
                                             <td>
-                                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#pass-{{ $row->id }}"><i class="uil uil-lock"></i> Password</button>
+                                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#edit-{{ $row->id }}"><i class="uil uil-edit"></i> Edit</button>
                                                 <form action="{{ url('admin/karyawan/status/'.$row->id) }}" method="POST" class="d-inline">
                                                     @csrf
                                                     <button type="submit" class="btn btn-sm btn-warning"><i class="uil uil-sync"></i> {{ $row->status_account === 'Active' ? 'Nonaktifkan' : 'Aktifkan' }}</button>
                                                 </form>
+                                                <form action="{{ url('admin/karyawan/delete/'.$row->id) }}" method="POST" class="d-inline delete-karyawan-form" data-name="{{ $row->nama }}">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-danger"><i class="uil uil-trash"></i> Hapus</button>
+                                                </form>
                                             </td>
 
-                                            <div class="modal fade" id="pass-{{ $row->id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal fade" id="edit-{{ $row->id }}" tabindex="-1" aria-hidden="true">
                                                 <div class="modal-dialog modal-dialog-centered">
                                                     <div class="modal-content">
                                                         <div class="modal-header">
-                                                            <h6 class="modal-title">Ganti Password - {{ $row->nama }}</h6>
+                                                            <h6 class="modal-title">Edit Karyawan - {{ $row->nama }}</h6>
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                         </div>
-                                                        <form action="{{ url('admin/karyawan/password/'.$row->id) }}" method="POST">
+                                                        <form action="{{ url('admin/karyawan/update/'.$row->id) }}" method="POST">
                                                             @csrf
                                                             <div class="modal-body">
-                                                                <label class="form-label">Password Baru</label>
-                                                                <input type="text" name="password" class="form-control" placeholder="Masukan password baru" required>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label">Nama</label>
+                                                                    <input type="text" name="nama" class="form-control" value="{{ $row->nama }}" maxlength="50" required>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label">Email</label>
+                                                                    <input type="email" name="email" class="form-control" value="{{ $row->email }}" maxlength="40" required>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label">Password Baru</label>
+                                                                    <input type="password" name="password" class="form-control" minlength="4" autocomplete="new-password" placeholder="Kosongkan jika tidak ingin mengganti password">
+                                                                </div>
                                                             </div>
                                                             <div class="modal-footer">
                                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kembali</button>
@@ -141,4 +155,29 @@
             </div>
         </div>
     </div>
+@endsection
+
+@section('scripts')
+    <script>
+        document.querySelectorAll('.delete-karyawan-form').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                Swal.fire({
+                    title: 'Hapus Karyawan?',
+                    text: 'Data ' + (this.dataset.name || 'karyawan') + ' dan seluruh riwayat absensinya akan dihapus permanen.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Hapus',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#f46a6a',
+                    cancelButtonColor: '#74788d'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.submit();
+                    }
+                });
+            });
+        });
+    </script>
 @endsection

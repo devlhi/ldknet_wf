@@ -9,8 +9,10 @@ use App\Models\User;
 use App\Models\Website;
 use App\Services\NewAccountMailer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -72,6 +74,45 @@ class AttendanceController extends Controller
         return redirect('admin/karyawan')->with('success', ['Berhasil menambahkan karyawan baru']);
     }
 
+    public function updateEmployee(Request $request, $id)
+    {
+        $employee = User::where('id', $id)->where('level', 'technician')->first();
+
+        if (! $employee) {
+            return redirect('admin/karyawan')->with('auth_errors', ['Karyawan tidak ditemukan']);
+        }
+
+        try {
+            $data = $request->validate([
+                'nama' => 'required|string|max:50',
+                'email' => [
+                    'required',
+                    'email',
+                    'max:40',
+                    Rule::unique('users', 'email')->ignore($employee->id),
+                ],
+                'password' => 'nullable|string|min:4',
+            ], [
+                'email.unique' => 'Email sudah terdaftar',
+            ]);
+        } catch (ValidationException $e) {
+            return redirect('admin/karyawan')
+                ->with('auth_errors', array_merge(...array_values($e->errors())));
+        }
+
+        $updates = [
+            'nama' => $data['nama'],
+            'email' => $data['email'],
+        ];
+        if (($data['password'] ?? '') !== '') {
+            $updates['password'] = Hash::make($data['password']);
+        }
+
+        $employee->update($updates);
+
+        return redirect('admin/karyawan')->with('success', ['Data karyawan berhasil diperbarui']);
+    }
+
     public function resetPassword(Request $request, $id)
     {
         try {
@@ -90,6 +131,39 @@ class AttendanceController extends Controller
         $employee->update(['password' => Hash::make((string) $request->input('password'))]);
 
         return redirect('admin/karyawan')->with('success', ['Password karyawan berhasil diperbarui']);
+    }
+
+    public function deleteEmployee($id)
+    {
+        $employee = User::where('id', $id)->where('level', 'technician')->first();
+
+        if (! $employee) {
+            return redirect('admin/karyawan')->with('auth_errors', ['Karyawan tidak ditemukan']);
+        }
+
+        $photoNames = HrAttendance::where('user_id', $employee->id)
+            ->get(['foto_in', 'foto_out'])
+            ->flatMap(fn (HrAttendance $attendance) => [$attendance->foto_in, $attendance->foto_out])
+            ->filter()
+            ->unique()
+            ->values();
+
+        DB::transaction(function () use ($employee): void {
+            HrAttendance::where('user_id', $employee->id)->delete();
+            $employee->delete();
+        });
+
+        foreach ($photoNames as $photoName) {
+            $photoName = (string) $photoName;
+            if ($photoName === basename($photoName)) {
+                $path = public_path('data/absensi/'.$photoName);
+                if (is_file($path) && ! @unlink($path)) {
+                    Log::warning("Gagal menghapus foto absensi karyawan: {$photoName}");
+                }
+            }
+        }
+
+        return redirect('admin/karyawan')->with('success', ['Data karyawan berhasil dihapus']);
     }
 
     public function toggleEmployee($id)
